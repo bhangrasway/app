@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bhangra Sway Cremona - Studio Management System</title>
     <link rel="icon" type="image/png" href="logo.png">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -592,8 +593,6 @@
                 <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
                     <div id="studentsCount" style="font-weight:600; color:#333;">Loaded students: 0</div>
                     <button onclick="reloadStudents()" style="background:#3498db; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer;">Reload</button>
-                    <button onclick="document.getElementById('importFileInput').click()" style="background:#2ecc71; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer;">Import CSV</button>
-                    <input type="file" id="importFileInput" accept=".csv,text/csv" style="display:none" onchange="handleImportFile(event)">
                 </div>
                 <form onsubmit="addStudent(event)" style="max-width: 900px;">
                     <div class="form-row">
@@ -678,21 +677,11 @@
                                 <th style="padding:12px;">Batch</th>
                                 <th style="padding:12px;">Monthly Fee (€)</th>
                                 <th style="padding:12px;">Join Date</th>
-                                <th style="padding:12px;">Attendance</th>
-                                <th style="padding:12px;">Status</th>
                                 <th style="padding:12px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="studentsTableBody"></tbody>
                     </table>
-                </div>
-
-                <div id="studentsList" style="display:none"></div>
-
-                <!-- Student Detail View -->
-                <div id="studentDetail" class="tab-content" style="display:none; padding:20px 0;">
-                    <button onclick="backToStudents()" style="background:#95a5a6;color:white;padding:8px 12px;border-radius:6px;border:none;cursor:pointer;margin-bottom:12px;">← Back to Students</button>
-                    <div id="studentDetailContent"></div>
                 </div>
             </div>
 
@@ -719,9 +708,6 @@
 
                 <h3 style="color: #27ae60; margin-bottom: 15px;">✓ PAID</h3>
                 <div id="paidStudentsList"></div>
-
-                <h3 style="color: #333; margin-top: 30px; margin-bottom: 12px;">All Students (quick view)</h3>
-                <div id="allStudentsPayments" style="margin-bottom:18px;"></div>
 
                 <h3 style="color: #e74c3c; margin-top: 30px; margin-bottom: 15px;">✗ NOT PAID</h3>
                 <div id="unpaidStudentsList"></div>
@@ -809,12 +795,11 @@
                 <div class="backup-section">
                     <h3>💾 Backup & Restore Data</h3>
                     <div class="backup-info">
-                        <strong>📌 How it works:</strong> Create a backup of all your data (students, attendance, payments, expenses) to save locally. Restore from a backup file to recover your data on any device or browser.
+                        <strong>📌 How it works:</strong> Create a backup of all your data (students, attendance, payments, expenses) to save locally. Restore from a backup file to recover your data.
                     </div>
                     <div class="backup-buttons">
                         <button class="btn-backup" onclick="downloadAllData()">📥 Download Backup</button>
                         <button class="btn-restore" onclick="document.getElementById('restoreFileInput').click()">📤 Restore Backup</button>
-                        <button class="btn-clear" onclick="clearAllData()">🗑️ Clear All Data</button>
                     </div>
                     <input type="file" id="restoreFileInput" accept=".json" style="display:none" onchange="handleRestoreFile(event)">
                     <div class="backup-info" style="border-left-color: #27ae60;">
@@ -867,9 +852,22 @@
     <button id="goTopBtn" onclick="scrollToTop()">↑</button>
 
     <script>
+        // ===== SUPABASE CONFIGURATION =====
+        const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL'; // Replace with your Supabase URL
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your Supabase anon key
+        
+        const { createClient } = window.supabase;
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         // LOGIN AUTHENTICATION
         const VALID_USERNAME = 'waheguru';
         const VALID_PASSWORD = 'jindjaan';
+
+        let students = [];
+        let attendance = {};
+        let expenses = [];
+        let feesPaid = {};
+        let currentEditingStudentId = null;
 
         function handleLogin(event) {
             event.preventDefault();
@@ -903,8 +901,7 @@
         function showApp() {
             document.getElementById('loginPage').style.display = 'none';
             document.getElementById('appPage').style.display = 'block';
-            displayStudents();
-            updateLastBackupInfo();
+            loadAllData();
         }
 
         function checkAuthentication() {
@@ -916,83 +913,343 @@
             }
         }
 
-        window.addEventListener('load', checkAuthentication);
-
-        // Initialize date inputs
-        document.getElementById('attendanceDate').valueAsDate = new Date();
-        document.getElementById('joinDate').valueAsDate = new Date();
-        document.getElementById('expenseDate').valueAsDate = new Date();
-        document.getElementById('reportDate').valueAsDate = new Date();
-        const now = new Date();
-        document.getElementById('feeMonth').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        document.getElementById('paymentMonth').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        // Load data from localStorage
-        const sampleStudents = [
-            { id: 1001, name: 'Kumar Sahil', parentName: 'Lal Bhajan', phone: '3896009003', age: 27, address: 'Via Enrico Fermi 2 Morni', codiceFiscale: 'KMRSHL98L30Z222M', batch: 'Advanced', monthlyFees: 50, joinDate: '2024-01-15' },
-            { id: 1002, name: 'Jasman Singh', parentName: 'Iqbal Singh', phone: '3534161791', age: 16, address: 'Via Cantone Solata 2', codiceFiscale: 'SNGJMN09S60D1500', batch: 'Advanced', monthlyFees: 40, joinDate: '2024-02-10' },
-            { id: 1003, name: 'Manpreet Kaur', parentName: 'Harjinder Singh', phone: '3533958818', age: 12, address: 'Via Bernardo Aquilino', codiceFiscale: 'KRAMPR13P57E884Q', batch: 'Intermediate', monthlyFees: 35, joinDate: '2024-01-20' },
-            { id: 1004, name: 'Karnjot Singh', parentName: 'Nirmal Singh', phone: '3886556507', age: 20, address: 'Via Gerolamo Savoldo 4', codiceFiscale: 'SNGKJ05P21Z222X', batch: 'Advanced', monthlyFees: 45, joinDate: '2024-03-05' },
-            { id: 1005, name: 'Veronica Raj', parentName: 'Deepak Raj', phone: '3911054247', age: 9, address: 'Via Nazario Sauro 14', codiceFiscale: 'RJAVNC16M68G535P', batch: 'Beginner', monthlyFees: 30, joinDate: '2024-02-01' },
-            { id: 1006, name: 'Sandeep Kaur', parentName: 'Sarbjeet Kaur', phone: '3898746331', age: 25, address: 'Via Donatori di Sangue 1', codiceFiscale: 'KRASDP00P49Z222W', batch: 'Advanced', monthlyFees: 50, joinDate: '2024-01-10' },
-            { id: 1007, name: 'Avneet Kaur', parentName: 'Sukhvinder Kaur', phone: '3534054230', age: 23, address: 'Via Dosso Alto n73', codiceFiscale: 'KRAVNT02L56Z222O', batch: 'Intermediate', monthlyFees: 40, joinDate: '2024-01-25' },
-        ];
-
-        let students = JSON.parse(localStorage.getItem('students')) || [];
-        if (!students || students.length === 0) {
-            students = sampleStudents.slice();
-            localStorage.setItem('students', JSON.stringify(students));
-        }
-        let attendance = JSON.parse(localStorage.getItem('attendance')) || {};
-        let expenses = JSON.parse(localStorage.getItem('expenses')) || [];
-        let feesPaid = JSON.parse(localStorage.getItem('feesPaid')) || {};
-
-        (function autoImportStudents() {
+        // ===== SUPABASE DATA FUNCTIONS =====
+        async function loadAllData() {
             try {
-                const raw = localStorage.getItem('students');
-                if ((students.length === 0) && raw) {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        students = parsed;
-                        localStorage.setItem('students', JSON.stringify(students));
-                    }
+                // Load students
+                const { data: studentsData, error: studentsError } = await supabase
+                    .from('students')
+                    .select('*');
+                
+                if (studentsError) throw studentsError;
+                students = studentsData || [];
+
+                // Load attendance
+                const { data: attendanceData, error: attendanceError } = await supabase
+                    .from('attendance')
+                    .select('*');
+                
+                if (attendanceError) throw attendanceError;
+                attendance = {};
+                if (attendanceData) {
+                    attendanceData.forEach(record => {
+                        const dateKey = record.attendanceDate;
+                        if (!attendance[dateKey]) attendance[dateKey] = {};
+                        attendance[dateKey][record.studentId] = record.isPresent;
+                    });
                 }
-            } catch (e) {
-                // ignore parse errors
+
+                // Load expenses
+                const { data: expensesData, error: expensesError } = await supabase
+                    .from('expenses')
+                    .select('*');
+                
+                if (expensesError) throw expensesError;
+                expenses = expensesData || [];
+
+                // Load fees paid
+                const { data: feesPaidData, error: feesPaidError } = await supabase
+                    .from('feesPaid')
+                    .select('*');
+                
+                if (feesPaidError) throw feesPaidError;
+                feesPaid = {};
+                if (feesPaidData) {
+                    feesPaidData.forEach(record => {
+                        const key = `${record.studentId}_${record.month}`;
+                        feesPaid[key] = record.isPaid;
+                    });
+                }
+
+                displayStudents();
+                updateLastBackupInfo();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                alert('Error loading data. Please check your Supabase connection.');
             }
-        })();
-
-        // BACKUP & RESTORE FUNCTIONS
-        function downloadAllData() {
-            const data = {
-                students: JSON.parse(localStorage.getItem('students')) || [],
-                attendance: JSON.parse(localStorage.getItem('attendance')) || {},
-                feesPaid: JSON.parse(localStorage.getItem('feesPaid')) || {},
-                expenses: JSON.parse(localStorage.getItem('expenses')) || [],
-                timestamp: new Date().toISOString()
-            };
-            
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `bhangra-sway-backup-${new Date().toISOString().split('T')[0]}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-
-            // Update backup info
-            const backupTime = new Date().toLocaleString();
-            localStorage.setItem('lastBackupTime', backupTime);
-            updateLastBackupInfo();
-            showSuccessMessage('✓ Backup downloaded successfully!');
         }
 
-        function handleRestoreFile(event) {
+        async function addStudent(event) {
+            event.preventDefault();
+            
+            const studentData = {
+                name: document.getElementById('studentName').value,
+                parentName: document.getElementById('parentName').value,
+                phone: document.getElementById('studentPhone').value,
+                age: parseInt(document.getElementById('studentAge').value) || null,
+                address: document.getElementById('studentAddress').value,
+                codiceFiscale: document.getElementById('codiceFiscale').value,
+                batch: document.getElementById('studentBatch').value,
+                monthlyFees: parseFloat(document.getElementById('monthlyFees').value),
+                joinDate: document.getElementById('joinDate').value
+            };
+
+            try {
+                if (currentEditingStudentId) {
+                    // Update existing student
+                    const { error } = await supabase
+                        .from('students')
+                        .update(studentData)
+                        .eq('id', currentEditingStudentId);
+                    
+                    if (error) throw error;
+                    showSuccessMessage('✓ Student updated successfully!');
+                    currentEditingStudentId = null;
+                } else {
+                    // Insert new student
+                    const { error } = await supabase
+                        .from('students')
+                        .insert([studentData]);
+                    
+                    if (error) throw error;
+                    showSuccessMessage('✓ Student added successfully!');
+                }
+
+                document.getElementById('studentName').value = '';
+                document.getElementById('parentName').value = '';
+                document.getElementById('studentPhone').value = '';
+                document.getElementById('studentAge').value = '';
+                document.getElementById('studentAddress').value = '';
+                document.getElementById('codiceFiscale').value = '';
+                document.getElementById('studentBatch').value = '';
+                document.getElementById('monthlyFees').value = '';
+                document.getElementById('joinDate').valueAsDate = new Date();
+                document.getElementById('submitBtn').textContent = 'Register Student';
+                document.getElementById('cancelBtn').style.display = 'none';
+
+                await loadAllData();
+            } catch (error) {
+                console.error('Error adding/updating student:', error);
+                alert('Error saving student: ' + error.message);
+            }
+        }
+
+        function displayStudents() {
+            document.getElementById('studentsCount').textContent = `Loaded students: ${students.length}`;
+            renderStudentsTable();
+        }
+
+        function renderStudentsTable() {
+            const searchTerm = document.getElementById('studentSearch').value.toLowerCase();
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '';
+
+            const filteredStudents = students.filter(student =>
+                student.name.toLowerCase().includes(searchTerm) ||
+                student.parentName.toLowerCase().includes(searchTerm) ||
+                student.batch.toLowerCase().includes(searchTerm)
+            );
+
+            if (filteredStudents.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">No students found</td></tr>';
+                return;
+            }
+
+            filteredStudents.forEach(student => {
+                const row = document.createElement('tr');
+                row.style.borderBottom = '1px solid #eee';
+                row.innerHTML = `
+                    <td style="padding:12px;">${student.name}</td>
+                    <td style="padding:12px;">${student.parentName}</td>
+                    <td style="padding:12px;">${student.phone || '-'}</td>
+                    <td style="padding:12px;">${student.batch}</td>
+                    <td style="padding:12px;">€${student.monthlyFees.toFixed(2)}</td>
+                    <td style="padding:12px;">${student.joinDate}</td>
+                    <td style="padding:12px;">
+                        <button onclick="editStudent(${student.id})" class="btn-small" style="background:#3498db;">Edit</button>
+                        <button onclick="deleteStudent(${student.id})" class="btn-small btn-delete">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function editStudent(studentId) {
+            const student = students.find(s => s.id === studentId);
+            if (!student) return;
+
+            currentEditingStudentId = studentId;
+            document.getElementById('studentName').value = student.name;
+            document.getElementById('parentName').value = student.parentName;
+            document.getElementById('studentPhone').value = student.phone || '';
+            document.getElementById('studentAge').value = student.age || '';
+            document.getElementById('studentAddress').value = student.address || '';
+            document.getElementById('codiceFiscale').value = student.codiceFiscale || '';
+            document.getElementById('studentBatch').value = student.batch;
+            document.getElementById('monthlyFees').value = student.monthlyFees;
+            document.getElementById('joinDate').value = student.joinDate;
+            document.getElementById('submitBtn').textContent = 'Update Student';
+            document.getElementById('cancelBtn').style.display = 'inline-block';
+            
+            window.scrollTo(0, 0);
+        }
+
+        function cancelEdit() {
+            currentEditingStudentId = null;
+            document.getElementById('studentName').value = '';
+            document.getElementById('parentName').value = '';
+            document.getElementById('studentPhone').value = '';
+            document.getElementById('studentAge').value = '';
+            document.getElementById('studentAddress').value = '';
+            document.getElementById('codiceFiscale').value = '';
+            document.getElementById('studentBatch').value = '';
+            document.getElementById('monthlyFees').value = '';
+            document.getElementById('joinDate').valueAsDate = new Date();
+            document.getElementById('submitBtn').textContent = 'Register Student';
+            document.getElementById('cancelBtn').style.display = 'none';
+        }
+
+        async function deleteStudent(studentId) {
+            if (!confirm('Are you sure you want to delete this student?')) return;
+
+            try {
+                const { error } = await supabase
+                    .from('students')
+                    .delete()
+                    .eq('id', studentId);
+                
+                if (error) throw error;
+                showSuccessMessage('✓ Student deleted successfully!');
+                await loadAllData();
+            } catch (error) {
+                console.error('Error deleting student:', error);
+                alert('Error deleting student: ' + error.message);
+            }
+        }
+
+        async function reloadStudents() {
+            await loadAllData();
+            showSuccessMessage('✓ Students reloaded!');
+        }
+
+        async function saveAttendance() {
+            const attendanceDate = document.getElementById('attendanceDate').value;
+            const checkboxes = document.querySelectorAll('.attendance-checkbox');
+            
+            try {
+                for (const checkbox of checkboxes) {
+                    const studentId = parseInt(checkbox.dataset.studentId);
+                    const isPresent = checkbox.checked;
+
+                    // Delete existing record for this date and student
+                    await supabase
+                        .from('attendance')
+                        .delete()
+                        .eq('studentId', studentId)
+                        .eq('attendanceDate', attendanceDate);
+
+                    // Insert new attendance record
+                    const { error } = await supabase
+                        .from('attendance')
+                        .insert([{
+                            studentId: studentId,
+                            attendanceDate: attendanceDate,
+                            isPresent: isPresent
+                        }]);
+                    
+                    if (error) throw error;
+                }
+
+                showSuccessMessage('✓ Attendance saved successfully!');
+                await loadAllData();
+            } catch (error) {
+                console.error('Error saving attendance:', error);
+                alert('Error saving attendance: ' + error.message);
+            }
+        }
+
+        async function addExpense(event) {
+            event.preventDefault();
+
+            const expenseData = {
+                description: document.getElementById('expenseDesc').value,
+                amount: parseFloat(document.getElementById('expenseAmount').value),
+                expenseDate: document.getElementById('expenseDate').value
+            };
+
+            try {
+                const { error } = await supabase
+                    .from('expenses')
+                    .insert([expenseData]);
+                
+                if (error) throw error;
+                showSuccessMessage('✓ Expense added successfully!');
+                
+                document.getElementById('expenseDesc').value = '';
+                document.getElementById('expenseAmount').value = '';
+                document.getElementById('expenseDate').valueAsDate = new Date();
+
+                await loadAllData();
+            } catch (error) {
+                console.error('Error adding expense:', error);
+                alert('Error adding expense: ' + error.message);
+            }
+        }
+
+        async function markFeesPaid(studentId, month) {
+            try {
+                const key = `${studentId}_${month}`;
+                
+                // Delete existing record
+                await supabase
+                    .from('feesPaid')
+                    .delete()
+                    .eq('studentId', studentId)
+                    .eq('month', month);
+
+                // Insert new record
+                const { error } = await supabase
+                    .from('feesPaid')
+                    .insert([{
+                        studentId: studentId,
+                        month: month,
+                        isPaid: true,
+                        paidDate: new Date().toISOString()
+                    }]);
+                
+                if (error) throw error;
+                await loadAllData();
+                updatePaymentsDisplay();
+            } catch (error) {
+                console.error('Error marking fees paid:', error);
+                alert('Error marking fees paid: ' + error.message);
+            }
+        }
+
+        async function downloadAllData() {
+            try {
+                const data = {
+                    students: students,
+                    attendance: attendance,
+                    feesPaid: feesPaid,
+                    expenses: expenses,
+                    timestamp: new Date().toISOString()
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bhangra-sway-backup-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                const backupTime = new Date().toLocaleString();
+                sessionStorage.setItem('lastBackupTime', backupTime);
+                updateLastBackupInfo();
+                showSuccessMessage('✓ Backup downloaded successfully!');
+            } catch (error) {
+                console.error('Error downloading backup:', error);
+                alert('Error creating backup: ' + error.message);
+            }
+        }
+
+        async function handleRestoreFile(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
                     
@@ -1001,85 +1258,64 @@
                         return;
                     }
 
-                    if (confirm('⚠️ This will replace all your current data. Are you sure?')) {
-                        localStorage.setItem('students', JSON.stringify(data.students));
-                        localStorage.setItem('attendance', JSON.stringify(data.attendance));
-                        localStorage.setItem('feesPaid', JSON.stringify(data.feesPaid));
-                        localStorage.setItem('expenses', JSON.stringify(data.expenses));
-                        
-                        // Reload data
-                        students = data.students;
-                        attendance = data.attendance;
-                        feesPaid = data.feesPaid;
-                        expenses = data.expenses;
-                        
-                        showSuccessMessage('✓ Data restored successfully! Reloading...');
-                        setTimeout(() => {
-                            location.reload();
-                        }, 2000);
+                    if (!confirm('⚠️ This will replace all current data. Continue?')) return;
+
+                    // Clear and restore students
+                    await supabase.from('students').delete().neq('id', 0);
+                    if (data.students.length > 0) {
+                        await supabase.from('students').insert(data.students);
                     }
-                } catch (err) {
-                    alert('❌ Invalid backup file! Please select a valid backup file.');
-                    console.error(err);
+
+                    // Clear and restore attendance
+                    await supabase.from('attendance').delete().neq('id', 0);
+                    const attendanceRecords = [];
+                    for (const [date, dateAttendance] of Object.entries(data.attendance)) {
+                        for (const [studentId, isPresent] of Object.entries(dateAttendance)) {
+                            attendanceRecords.push({
+                                studentId: parseInt(studentId),
+                                attendanceDate: date,
+                                isPresent: isPresent
+                            });
+                        }
+                    }
+                    if (attendanceRecords.length > 0) {
+                        await supabase.from('attendance').insert(attendanceRecords);
+                    }
+
+                    // Clear and restore expenses
+                    await supabase.from('expenses').delete().neq('id', 0);
+                    if (data.expenses.length > 0) {
+                        await supabase.from('expenses').insert(data.expenses);
+                    }
+
+                    // Clear and restore fees paid
+                    await supabase.from('feesPaid').delete().neq('id', 0);
+                    const feesPaidRecords = [];
+                    for (const [key, isPaid] of Object.entries(data.feesPaid)) {
+                        const [studentId, month] = key.split('_');
+                        feesPaidRecords.push({
+                            studentId: parseInt(studentId),
+                            month: month,
+                            isPaid: isPaid
+                        });
+                    }
+                    if (feesPaidRecords.length > 0) {
+                        await supabase.from('feesPaid').insert(feesPaidRecords);
+                    }
+
+                    showSuccessMessage('✓ Data restored successfully!');
+                    await loadAllData();
+                } catch (error) {
+                    console.error('Error restoring backup:', error);
+                    alert('❌ Error restoring backup: ' + error.message);
                 }
             };
             reader.readAsText(file);
-            event.target.value = '';
-        }
-
-        function clearAllData() {
-            if (confirm('⚠️ WARNING: This will delete ALL data (students, attendance, payments, expenses). Are you sure?')) {
-                if (confirm('🚨 This action cannot be undone. Are you absolutely sure?')) {
-                    localStorage.removeItem('students');
-                    localStorage.removeItem('attendance');
-                    localStorage.removeItem('feesPaid');
-                    localStorage.removeItem('expenses');
-                    
-                    students = [];
-                    attendance = {};
-                    feesPaid = {};
-                    expenses = [];
-                    
-                    showSuccessMessage('✓ All data cleared! Reloading...');
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2000);
-                }
-            }
         }
 
         function updateLastBackupInfo() {
-            const lastBackupTime = localStorage.getItem('lastBackupTime');
-            const infoEl = document.getElementById('lastBackupInfo');
-            if (lastBackupTime) {
-                infoEl.textContent = `Last backup created on ${lastBackupTime}`;
-            } else {
-                infoEl.textContent = 'No backup created yet';
-            }
-        }
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-
-            document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
-
-            if (tabName === 'students') {
-                displayStudents();
-            } else if (tabName === 'payments') {
-                displayPayments();
-            } else if (tabName === 'attendance') {
-                displayAttendanceForm();
-            } else if (tabName === 'fees') {
-                displayFeesTab();
-            } else if (tabName === 'reports') {
-                displayReports();
-            }
+            const lastBackupTime = sessionStorage.getItem('lastBackupTime') || 'No backup created yet';
+            document.getElementById('lastBackupInfo').textContent = lastBackupTime;
         }
 
         function showSuccessMessage(message) {
@@ -1091,755 +1327,318 @@
             }, 3000);
         }
 
-        function addStudent(e) {
-            e.preventDefault();
-
-            const studentData = {
-                name: document.getElementById('studentName').value,
-                parentName: document.getElementById('parentName').value,
-                phone: document.getElementById('studentPhone').value,
-                age: document.getElementById('studentAge').value,
-                address: document.getElementById('studentAddress').value,
-                codiceFiscale: document.getElementById('codiceFiscale').value,
-                batch: document.getElementById('studentBatch').value,
-                monthlyFees: parseFloat(document.getElementById('monthlyFees').value),
-                joinDate: document.getElementById('joinDate').value
-            };
-
-            if (window.editingStudentId) {
-                const index = students.findIndex(s => s.id === window.editingStudentId);
-                if (index > -1) {
-                    students[index] = { ...students[index], ...studentData };
-                    showSuccessMessage(`✓ Student "${studentData.name}" updated successfully!`);
-                    window.editingStudentId = null;
-                    document.getElementById('submitBtn').textContent = 'Register Student';
-                    document.getElementById('cancelBtn').style.display = 'none';
-                }
-            } else {
-                const student = {
-                    id: Date.now(),
-                    ...studentData
-                };
-                students.push(student);
-                showSuccessMessage(`✓ Student "${student.name}" registered successfully!`);
-            }
-
-            localStorage.setItem('students', JSON.stringify(students));
-            e.target.reset();
-            document.getElementById('joinDate').valueAsDate = new Date();
-            displayStudents();
-        }
-
-        function deleteStudent(id) {
-            if (confirm('Are you sure you want to delete this student?')) {
-                students = students.filter(s => s.id !== id);
-                localStorage.setItem('students', JSON.stringify(students));
-                displayStudents();
-                showSuccessMessage('✓ Student deleted successfully!');
-            }
-        }
-
-        function reloadStudents() {
-            students = JSON.parse(localStorage.getItem('students')) || [];
-            displayStudents();
-            displayPayments();
-            displayFeesTab();
-        }
-
-        function getMonthKey(date) {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            return `${y}-${m}`;
-        }
-
-        function parseDateString(dateStr) {
-            if (!dateStr) return null;
-            const parts = dateStr.split('-').map(Number);
-            if (parts.length !== 3 || parts.some(isNaN)) return null;
-            return new Date(parts[0], parts[1] - 1, parts[2]);
-        }
-
-        function addDays(date, days) {
-            const result = new Date(date.getTime());
-            result.setDate(result.getDate() + days);
-            return result;
-        }
-
-        function formatDate(date) {
-            if (!date || isNaN(date.getTime())) return 'N/A';
-            return date.toISOString().slice(0, 10);
-        }
-
-        function formatMonthKey(monthKey) {
-            return formatDate(new Date(`${monthKey}-01`));
-        }
-
-        function getPaymentRecordDate(record, monthKey) {
-            if (!record) return null;
-            if (typeof record === 'object' && record.date) return record.date;
-            return `${monthKey}-01`;
-        }
-
-        function toggleFeesPaid(studentId, month) {
-            const key = `${studentId}_${month}`;
-            const currentlyPaid = !!feesPaid[key];
-            setPaymentStatus(studentId, month, !currentlyPaid);
-            displayFeesTab();
-            displayStudents();
-        }
-
-        function displayPayments() {
-            const month = document.getElementById('paymentMonth').value;
-            let monthToUse;
-            if (month && month.length >= 7) {
-                monthToUse = month.slice(0,7);
-            } else {
-                const pm = document.getElementById('paymentMonth');
-                const pmDate = pm && pm.valueAsDate ? pm.valueAsDate : null;
-                if (pmDate && !isNaN(pmDate.getTime())) {
-                    monthToUse = getMonthKey(pmDate);
-                } else {
-                    monthToUse = getMonthKey(new Date());
-                }
-            }
-            const monthLabelEl = document.getElementById('paymentsMonthLabel');
-            if (monthLabelEl) monthLabelEl.textContent = `Showing payments for: ${monthToUse}`;
-            const paidContainer = document.getElementById('paidStudentsList');
-            const unpaidContainer = document.getElementById('unpaidStudentsList');
-            const noDataMsg = document.getElementById('noPaymentDataMsg');
-            const paidCountEl = document.getElementById('paidCount');
-            const unpaidCountEl = document.getElementById('unpaidCount');
-
-            if (students.length === 0) {
-                paidContainer.innerHTML = '';
-                unpaidContainer.innerHTML = '';
-                noDataMsg.style.display = 'block';
-                paidCountEl.textContent = '0';
-                unpaidCountEl.textContent = '0';
-                return;
-            }
-
-            noDataMsg.style.display = 'none';
-
-            let paidStudents = [];
-            let unpaidStudents = [];
-
-            students.forEach(student => {
-                if (student.joinDate) {
-                    const joinMonth = getMonthYear(student.joinDate);
-                    if (joinMonth > monthToUse) return;
-                }
-
-                const key = `${student.id}_${monthToUse}`;
-                const isPaid = feesPaid[key];
-
-                const studentCard = `
-                    <div class="student-card" style="margin-bottom: 15px;">
-                        <div class="student-info">
-                            <div class="student-name">${student.name}</div>
-                            <div class="student-details">
-                                👨‍👩‍👧 Parent: ${student.parentName} | 📱 ${student.phone || 'N/A'}
-                            </div>
-                            <div class="student-details">
-                                💰 €${student.monthlyFees.toFixed(2)} | 📚 ${student.batch}
-                            </div>
-                        </div>
-                        <div class="student-actions">
-                            <button class="btn-small" onclick="togglePaymentStatus(${student.id}, '${monthToUse}')" style="background: #f39c12; cursor: pointer;">
-                                ${isPaid ? 'Mark Unpaid' : 'Mark Paid'}
-                            </button>
-                        </div>
-                    </div>
-                `;
-
-                if (isPaid) {
-                    paidStudents.push(studentCard);
-                } else {
-                    unpaidStudents.push(studentCard);
-                }
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
             });
-
-            paidCountEl.textContent = paidStudents.length;
-            unpaidCountEl.textContent = unpaidStudents.length;
-
-            paidContainer.innerHTML = paidStudents.length > 0 ? paidStudents.join('') : '<div class="empty-message">No paid payments this month</div>';
-            unpaidContainer.innerHTML = unpaidStudents.length > 0 ? unpaidStudents.join('') : '<div class="empty-message">All students have paid!</div>';
-
-            const allContainer = document.getElementById('allStudentsPayments');
-            allContainer.innerHTML = students.filter(student => {
-                if (student.joinDate) {
-                    const joinMonth = getMonthYear(student.joinDate);
-                    return joinMonth <= monthToUse;
-                }
-                return true;
-            }).map(student => {
-                const key = `${student.id}_${monthToUse}`;
-                const isPaid = feesPaid[key];
-                return `
-                    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px; border:1px solid #eee; border-radius:8px; margin-bottom:8px;">
-                        <div>
-                            <div style="font-weight:700;">${student.name}</div>
-                            <div style="color:#666; font-size:0.9em;">${student.parentName} • €${student.monthlyFees.toFixed(2)} • ${student.batch}</div>
-                        </div>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <div class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}" style="padding:6px 10px; border-radius:6px;">${isPaid ? 'PAID' : 'PENDING'}</div>
-                            <button class="btn-small" onclick="togglePaymentStatus(${student.id}, '${monthToUse}')">${isPaid ? 'Mark Unpaid' : 'Mark Paid'}</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function renderStudentsTable() {
-            const tbody = document.getElementById('studentsTableBody');
-            const query = document.getElementById('studentSearch')?.value?.toLowerCase() || '';
-            if (!students || students.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="padding:12px;">No students. Add students above.</td></tr>';
-                return;
-            }
-
-            const rows = students.filter(s => {
-                if (!query) return true;
-                return (s.name || '').toLowerCase().includes(query) || (s.parentName||'').toLowerCase().includes(query) || (s.batch||'').toLowerCase().includes(query);
-            }).map(student => {
-                let attendanceCount = 0;
-                Object.keys(attendance).forEach(k => {
-                    const [id, date] = k.split('_');
-                    if (parseInt(id) === student.id && attendance[k]) attendanceCount++;
-                });
-                const currentMonth = getMonthKey(new Date());
-                const paid = feesPaid[`${student.id}_${currentMonth}`] ? 'PAID' : 'PENDING';
-                return `
-                    <tr>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">${student.name}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">${student.parentName || ''}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">${student.phone || ''}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">${student.batch || ''}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">€${(student.monthlyFees||0).toFixed(2)}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">${student.joinDate || ''}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">${attendanceCount}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">${paid}</td>
-                        <td style="padding:10px; border-bottom:1px solid #eee;">
-                            <button class="btn-small" onclick="showStudentDetail(${student.id})">View</button>
-                            <button class="btn-small btn-delete" onclick="deleteStudent(${student.id})">Delete</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-
-            tbody.innerHTML = rows;
-        }
-
-        function showStudentDetail(id) {
-            const student = students.find(s => s.id === id);
-            if (!student) return alert('Student not found');
-            document.getElementById('studentsTableContainer').style.display = 'none';
-            document.getElementById('studentDetail').style.display = 'block';
-            document.getElementById('studentsList').style.display = 'none';
-            document.getElementById('studentDetailContent').innerHTML = renderStudentDetailHTML(student);
-            renderStudentPayments(id);
-            renderStudentAttendance(id);
-        }
-
-        function backToStudents() {
-            document.getElementById('studentDetail').style.display = 'none';
-            document.getElementById('studentsTableContainer').style.display = 'block';
-            document.getElementById('studentsList').style.display = 'none';
-        }
-
-        function renderStudentDetailHTML(student) {
-            return `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h2 style="margin:0">${student.name}</h2>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn-small" onclick="editStudent(${student.id});">Edit Student</button>
-                        <button class="btn-small btn-delete" onclick="deleteStudent(${student.id}); backToStudents();">Delete</button>
-                    </div>
-                </div>
-                <div style="display:flex; gap:24px; margin-bottom:12px;">
-                    <div><strong>Parent:</strong> ${student.parentName || 'N/A'}</div>
-                    <div><strong>Phone:</strong> ${student.phone || 'N/A'}</div>
-                    <div><strong>Batch:</strong> ${student.batch || 'N/A'}</div>
-                </div>
-                <div style="margin-bottom:12px;"><strong>Address:</strong> ${student.address || 'N/A'} • <strong>Codice Fiscale:</strong> ${student.codiceFiscale || 'N/A'}</div>
-                <div style="margin-bottom:12px;"><strong>Monthly Fee:</strong> €${(student.monthlyFees||0).toFixed(2)} • <strong>Join Date:</strong> ${student.joinDate || ''}</div>
-                <h3>Payment History</h3>
-                <div id="studentPaymentsHistory"></div>
-                <h3 style="margin-top:18px;">Attendance Records</h3>
-                <div id="studentAttendanceList"></div>
-            `;
-        }
-
-        function renderStudentPayments(studentId) {
-            const container = document.getElementById('studentPaymentsHistory');
-            const student = students.find(s => s.id === studentId) || {};
-            const joinDate = student.joinDate ? new Date(student.joinDate) : new Date();
-            const startDate = isNaN(joinDate.getTime()) ? new Date() : new Date(joinDate.getFullYear(), joinDate.getMonth(), 1);
-            const nowDate = new Date();
-            const months = [];
-            const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-            const endDate = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1);
-            while (cursor <= endDate) {
-                months.push(getMonthKey(cursor));
-                cursor.setMonth(cursor.getMonth() + 1);
-            }
-            Object.keys(feesPaid).forEach(k => {
-                if (k.startsWith(`${studentId}_`)) {
-                    const monthPart = k.substring((`${studentId}_`).length);
-                    if (months.indexOf(monthPart) === -1) months.push(monthPart);
-                }
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
             });
-            months.sort();
-            if (months.length === 0) {
-                container.innerHTML = '<div class="empty-message">No payment history available.</div>';
-                return;
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            if (tabName === 'attendance') {
+                displayAttendanceTab();
+            } else if (tabName === 'payments') {
+                updatePaymentsDisplay();
+            } else if (tabName === 'fees') {
+                displayFeesTab();
+            } else if (tabName === 'reports') {
+                displayReports();
             }
-            const rows = months.map(monthKey => {
-                const isPaid = feesPaid[`${studentId}_${monthKey}`];
-                return `
-                    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px; border:1px solid #eee; border-radius:6px; margin-bottom:8px;">
-                        <div>
-                            <strong>${monthKey}</strong>
-                        </div>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">${isPaid ? '✓ PAID' : '✗ PENDING'}</span>
-                            <button class="btn-small" onclick="togglePaymentStatus(${studentId}, '${monthKey}'); renderStudentPayments(${studentId});" style="background:#f39c12;">${isPaid ? 'Mark Unpaid' : 'Mark Paid'}</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            container.innerHTML = rows;
         }
 
-        function renderStudentAttendance(studentId) {
-            const container = document.getElementById('studentAttendanceList');
-            const dates = Object.keys(attendance).filter(k => k.startsWith(`${studentId}_`)).map(k => k.substring(`${studentId}_`.length));
-            dates.sort().reverse();
-            if (dates.length === 0) {
-                container.innerHTML = '<div class="empty-message">No attendance records.</div>';
-                return;
-            }
-            const rows = dates.map(date => {
-                return `<div style="padding:8px; border-bottom:1px solid #eee;">✓ ${date}</div>`;
-            }).join('');
-            container.innerHTML = rows;
-        }
+        function displayAttendanceTab() {
+            const attendanceDate = document.getElementById('attendanceDate').value;
+            const batchFilter = document.getElementById('attendanceBatchFilter').value;
+            const grid = document.getElementById('attendanceGrid');
+            grid.innerHTML = '';
 
-        function editStudent(id) {
-            const student = students.find(s => s.id === id);
-            if (!student) return alert('Student not found');
+            const filteredStudents = batchFilter === 'All' 
+                ? students 
+                : students.filter(s => s.batch === batchFilter);
 
-            window.editingStudentId = id;
-            
-            document.getElementById('studentName').value = student.name;
-            document.getElementById('studentAge').value = student.age || '';
-            document.getElementById('parentName').value = student.parentName;
-            document.getElementById('studentPhone').value = student.phone || '';
-            document.getElementById('studentAddress').value = student.address || '';
-            document.getElementById('codiceFiscale').value = student.codiceFiscale || '';
-            document.getElementById('studentBatch').value = student.batch;
-            document.getElementById('monthlyFees').value = student.monthlyFees;
-            document.getElementById('joinDate').value = student.joinDate;
-            
-            document.getElementById('submitBtn').textContent = 'Update Student';
-            document.getElementById('cancelBtn').style.display = 'inline-block';
-            
-            document.querySelector('form').scrollIntoView({ behavior: 'smooth' });
-            
-            backToStudents();
-        }
-
-        function cancelEdit() {
-            window.editingStudentId = null;
-            document.getElementById('submitBtn').textContent = 'Register Student';
-            document.getElementById('cancelBtn').style.display = 'none';
-            document.querySelector('form').reset();
-            document.getElementById('joinDate').valueAsDate = new Date();
-        }
-
-        function handleImportFile(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const csv = e.target.result;
-                const lines = csv.split('\n').map(line => line.trim()).filter(line => line);
-                
-                if (lines.length < 2) {
-                    alert('CSV file must contain header and at least one data row');
-                    return;
-                }
-
-                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-                const expectedHeaders = ['name', 'parentname', 'phone', 'age', 'address', 'codicefiscale', 'batch', 'monthlyfees', 'joindate'];
-                
-                const hasAllHeaders = expectedHeaders.every(eh => headers.includes(eh));
-                if (!hasAllHeaders) {
-                    alert(`CSV must have headers: ${expectedHeaders.join(', ')}`);
-                    return;
-                }
-
-                const importedStudents = [];
-                for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(',').map(v => v.trim());
-                    if (values.every(v => v === '')) continue;
-
-                    const nameIdx = headers.indexOf('name');
-                    const parentNameIdx = headers.indexOf('parentname');
-                    const phoneIdx = headers.indexOf('phone');
-                    const ageIdx = headers.indexOf('age');
-                    const addressIdx = headers.indexOf('address');
-                    const codiceFiscaleIdx = headers.indexOf('codicefiscale');
-                    const batchIdx = headers.indexOf('batch');
-                    const monthlyFeesIdx = headers.indexOf('monthlyfees');
-                    const joinDateIdx = headers.indexOf('joindate');
-
-                    const student = {
-                        id: Date.now() + i,
-                        name: values[nameIdx] || '',
-                        parentName: values[parentNameIdx] || '',
-                        phone: values[phoneIdx] || '',
-                        age: values[ageIdx] || '',
-                        address: values[addressIdx] || '',
-                        codiceFiscale: values[codiceFiscaleIdx] || '',
-                        batch: values[batchIdx] || '',
-                        monthlyFees: parseFloat(values[monthlyFeesIdx]) || 0,
-                        joinDate: values[joinDateIdx] || ''
-                    };
-                    importedStudents.push(student);
-                }
-
-                if (importedStudents.length === 0) {
-                    alert('No valid students found in CSV');
-                    return;
-                }
-
-                students = [...students, ...importedStudents];
-                localStorage.setItem('students', JSON.stringify(students));
-                
-                showSuccessMessage(`✓ Successfully imported ${importedStudents.length} students!`);
-                displayStudents();
-                
-                event.target.value = '';
-            };
-            reader.readAsText(file);
-        }
-
-        function displayStudents() {
-            document.getElementById('studentsCount').textContent = `Loaded students: ${students.length}`;
-            renderStudentsTable();
-        }
-
-        function displayAttendanceForm() {
-            const container = document.getElementById('attendanceGrid');
-            const filterBatch = document.getElementById('attendanceBatchFilter').value;
-
-            if (students.length === 0) {
+            if (filteredStudents.length === 0) {
                 document.getElementById('noStudentsMsg').style.display = 'block';
-                container.innerHTML = '';
+                grid.innerHTML = '';
                 return;
             }
 
             document.getElementById('noStudentsMsg').style.display = 'none';
 
-            const filteredStudents = filterBatch === 'All' 
-                ? students 
-                : students.filter(s => s.batch === filterBatch);
+            const dateAttendance = attendance[attendanceDate] || {};
 
-            const attendanceDate = document.getElementById('attendanceDate').value;
-            const html = filteredStudents.map(student => {
-                const key = `${student.id}_${attendanceDate}`;
-                const isPresent = !!attendance[key];
-
-                return `
-                    <div class="attendance-card">
-                        <div class="attendance-student-name">${student.name}</div>
-                        <label class="checkbox-label">
-                            <input type="checkbox" class="attendance-checkbox" ${isPresent ? 'checked' : ''} 
-                                onchange="attendance['${key}'] = this.checked; localStorage.setItem('attendance', JSON.stringify(attendance));">
-                            <span>Present</span>
-                        </label>
-                    </div>
+            filteredStudents.forEach(student => {
+                const isPresent = dateAttendance[student.id] || false;
+                const card = document.createElement('div');
+                card.className = 'attendance-card';
+                card.innerHTML = `
+                    <div class="attendance-student-name">${student.name}</div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="attendance-checkbox" 
+                               data-student-id="${student.id}" 
+                               ${isPresent ? 'checked' : ''}>
+                        Present
+                    </label>
                 `;
-            }).join('');
-
-            container.innerHTML = html;
+                grid.appendChild(card);
+            });
         }
 
         function markAllPresent() {
-            const attendanceDate = document.getElementById('attendanceDate').value;
-            const filterBatch = document.getElementById('attendanceBatchFilter').value;
-            const filteredStudents = filterBatch === 'All' 
-                ? students 
-                : students.filter(s => s.batch === filterBatch);
-
-            filteredStudents.forEach(student => {
-                const key = `${student.id}_${attendanceDate}`;
-                attendance[key] = true;
+            document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+                checkbox.checked = true;
             });
-
-            localStorage.setItem('attendance', JSON.stringify(attendance));
-            displayAttendanceForm();
         }
 
         function markAllAbsent() {
-            const attendanceDate = document.getElementById('attendanceDate').value;
-            const filterBatch = document.getElementById('attendanceBatchFilter').value;
-            const filteredStudents = filterBatch === 'All' 
-                ? students 
-                : students.filter(s => s.batch === filterBatch);
+            document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        }
 
-            filteredStudents.forEach(student => {
-                const key = `${student.id}_${attendanceDate}`;
-                attendance[key] = false;
+        function updatePaymentsDisplay() {
+            const month = document.getElementById('paymentMonth').value;
+            const paidList = document.getElementById('paidStudentsList');
+            const unpaidList = document.getElementById('unpaidStudentsList');
+            const allPaymentsList = document.getElementById('allStudentsPayments');
+
+            paidList.innerHTML = '';
+            unpaidList.innerHTML = '';
+            allPaymentsList.innerHTML = '';
+
+            let paidCount = 0, unpaidCount = 0;
+
+            students.forEach(student => {
+                const key = `${student.id}_${month}`;
+                const isPaid = feesPaid[key] || false;
+
+                const card = document.createElement('div');
+                card.className = 'student-card';
+                card.innerHTML = `
+                    <div class="student-info">
+                        <div class="student-name">${student.name}</div>
+                        <div class="student-details">Parent: ${student.parentName}</div>
+                        <div class="student-details">Fee: €${student.monthlyFees.toFixed(2)}</div>
+                    </div>
+                    <button onclick="markFeesPaid(${student.id}, '${month}')" 
+                            style="background: ${isPaid ? '#27ae60' : '#e74c3c'}; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;">
+                        ${isPaid ? '✓ Paid' : 'Mark Paid'}
+                    </button>
+                `;
+
+                if (isPaid) {
+                    paidList.appendChild(card);
+                    paidCount++;
+                } else {
+                    unpaidList.appendChild(card);
+                    unpaidCount++;
+                }
+
+                // Add to all payments list
+                const allCard = document.createElement('div');
+                allCard.style.cssText = 'display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; align-items: center;';
+                allCard.innerHTML = `
+                    <div>
+                        <strong>${student.name}</strong> (${student.batch})
+                        <div style="color: #666; font-size: 0.9em;">€${student.monthlyFees.toFixed(2)}</div>
+                    </div>
+                    <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">
+                        ${isPaid ? '✓ PAID' : '✗ PENDING'}
+                    </span>
+                `;
+                allPaymentsList.appendChild(allCard);
             });
 
-            localStorage.setItem('attendance', JSON.stringify(attendance));
-            displayAttendanceForm();
-        }
+            document.getElementById('paidCount').textContent = paidCount;
+            document.getElementById('unpaidCount').textContent = unpaidCount;
 
-        function saveAttendance() {
-            localStorage.setItem('attendance', JSON.stringify(attendance));
-            showSuccessMessage('✓ Attendance saved successfully!');
-        }
-
-        function setPaymentStatus(studentId, month, isPaid) {
-            const key = `${studentId}_${month}`;
-            if (isPaid) {
-                feesPaid[key] = true;
+            if (paidCount === 0 && unpaidCount === 0) {
+                document.getElementById('noPaymentDataMsg').style.display = 'block';
             } else {
-                delete feesPaid[key];
+                document.getElementById('noPaymentDataMsg').style.display = 'none';
             }
-            localStorage.setItem('feesPaid', JSON.stringify(feesPaid));
-        }
-
-        function togglePaymentStatus(studentId, month) {
-            const key = `${studentId}_${month}`;
-            const currentlyPaid = !!feesPaid[key];
-            setPaymentStatus(studentId, month, !currentlyPaid);
-            displayPayments();
         }
 
         function displayFeesTab() {
             const month = document.getElementById('feeMonth').value;
-            let monthToUse;
-            if (month && month.length >= 7) {
-                monthToUse = month.slice(0, 7);
-            } else {
-                const fm = document.getElementById('feeMonth');
-                const fmDate = fm && fm.valueAsDate ? fm.valueAsDate : null;
-                if (fmDate && !isNaN(fmDate.getTime())) {
-                    monthToUse = getMonthKey(fmDate);
-                } else {
-                    monthToUse = getMonthKey(new Date());
-                }
-            }
+            const feesList = document.getElementById('feesList');
+            const expensesList = document.getElementById('expensesList');
 
-            const container = document.getElementById('feesList');
+            feesList.innerHTML = '';
+            expensesList.innerHTML = '';
+
             if (students.length === 0) {
                 document.getElementById('noFeesMsg').style.display = 'block';
-                container.innerHTML = '';
-            } else {
-                document.getElementById('noFeesMsg').style.display = 'none';
-                const fees = students.map(student => {
-                    const key = `${student.id}_${monthToUse}`;
-                    const isPaid = feesPaid[key];
-                    const totalFees = student.monthlyFees || 0;
-
-                    return `
-                        <div style="display:flex; align-items:center; justify-content:space-between; padding:15px; border:1px solid #eee; border-radius:8px; margin-bottom:10px;">
-                            <div>
-                                <div style="font-weight:700;">${student.name}</div>
-                                <div style="color:#666; font-size:0.9em;">${student.parentName} • €${totalFees.toFixed(2)} • ${student.batch}</div>
-                            </div>
-                            <div style="display:flex; gap:10px; align-items:center;">
-                                <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">${isPaid ? 'PAID' : 'PENDING'}</span>
-                                <button class="btn-small" onclick="toggleFeesPaid(${student.id}, '${monthToUse}');" style="background:#f39c12;">${isPaid ? 'Mark Unpaid' : 'Mark Paid'}</button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-                container.innerHTML = fees;
+                return;
             }
+            document.getElementById('noFeesMsg').style.display = 'none';
 
-            const totalStudents = students.length;
-            const paidStudents = students.filter(s => feesPaid[`${s.id}_${monthToUse}`]).length;
-            const pendingStudents = totalStudents - paidStudents;
-            const totalIncome = students.reduce((sum, s) => {
-                if (feesPaid[`${s.id}_${monthToUse}`]) {
-                    return sum + (s.monthlyFees || 0);
-                }
-                return sum;
-            }, 0);
+            let totalStudentFees = 0;
+            students.forEach(student => {
+                const key = `${student.id}_${month}`;
+                const isPaid = feesPaid[key] || false;
+                
+                const card = document.createElement('div');
+                card.className = 'student-card';
+                card.innerHTML = `
+                    <div class="student-info">
+                        <div class="student-name">${student.name}</div>
+                        <div class="student-details">Batch: ${student.batch}</div>
+                        <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">
+                            ${isPaid ? '✓ Paid' : '✗ Unpaid'}
+                        </span>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.3em; font-weight: bold; color: #333;">€${student.monthlyFees.toFixed(2)}</div>
+                    </div>
+                `;
+                feesList.appendChild(card);
+                
+                if (isPaid) totalStudentFees += student.monthlyFees;
+            });
+
+            const monthExpenses = expenses.filter(e => e.expenseDate.startsWith(month));
+            let totalExpenses = 0;
+
+            monthExpenses.forEach(expense => {
+                const card = document.createElement('div');
+                card.style.cssText = 'display: flex; justify-content: space-between; padding: 15px; background: #f8f9fa; border-radius: 6px; margin-bottom: 12px; border: 1px solid #eee;';
+                card.innerHTML = `
+                    <div>
+                        <div style="font-weight: 600; color: #333;">${expense.description}</div>
+                        <div style="color: #666; font-size: 0.9em;">${expense.expenseDate}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.2em; font-weight: bold; color: #e74c3c;">€${expense.amount.toFixed(2)}</div>
+                    </div>
+                `;
+                expensesList.appendChild(card);
+                totalExpenses += expense.amount;
+            });
 
             const statsContainer = document.getElementById('feesStatsContainer');
             statsContainer.innerHTML = `
-                <div class="stat-box" style="background: #3498db;">
-                    <div class="stat-number">${totalStudents}</div>
-                    <div class="stat-label">Total Students</div>
-                </div>
                 <div class="stat-box" style="background: #27ae60;">
-                    <div class="stat-number">${paidStudents}</div>
-                    <div class="stat-label">Fees Paid</div>
+                    <div class="stat-number">€${totalStudentFees.toFixed(2)}</div>
+                    <div class="stat-label">Fees Collected</div>
                 </div>
                 <div class="stat-box" style="background: #e74c3c;">
-                    <div class="stat-number">${pendingStudents}</div>
-                    <div class="stat-label">Pending</div>
+                    <div class="stat-number">€${totalExpenses.toFixed(2)}</div>
+                    <div class="stat-label">Total Expenses</div>
                 </div>
-                <div class="stat-box" style="background: #f39c12;">
-                    <div class="stat-number">€${totalIncome.toFixed(2)}</div>
-                    <div class="stat-label">Income This Month</div>
+                <div class="stat-box" style="background: #3498db;">
+                    <div class="stat-number">€${(totalStudentFees - totalExpenses).toFixed(2)}</div>
+                    <div class="stat-label">Net Income</div>
                 </div>
             `;
-        }
-
-        function addExpense(e) {
-            e.preventDefault();
-
-            const expense = {
-                id: Date.now(),
-                description: document.getElementById('expenseDesc').value,
-                amount: parseFloat(document.getElementById('expenseAmount').value),
-                date: document.getElementById('expenseDate').value
-            };
-
-            expenses.push(expense);
-            localStorage.setItem('expenses', JSON.stringify(expenses));
-
-            showSuccessMessage(`✓ Expense "${expense.description}" added successfully!`);
-            e.target.reset();
-            document.getElementById('expenseDate').valueAsDate = new Date();
-            displayFeesTab();
         }
 
         function displayReports() {
             const reportDate = document.getElementById('reportDate').value;
             const reportRange = document.getElementById('reportRange').value;
 
-            let startDate, endDate;
-            const currentDate = new Date(reportDate);
+            let fromDate, toDate;
 
             if (reportRange === 'day') {
-                startDate = new Date(currentDate);
-                endDate = new Date(currentDate);
+                fromDate = toDate = reportDate;
             } else if (reportRange === 'week') {
-                startDate = new Date(currentDate);
-                startDate.setDate(startDate.getDate() - startDate.getDay());
-                endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + 6);
+                const d = new Date(reportDate);
+                fromDate = new Date(d.setDate(d.getDate() - 7)).toISOString().split('T')[0];
+                toDate = reportDate;
             } else if (reportRange === 'month') {
-                startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-                endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                const d = new Date(reportDate);
+                fromDate = new Date(d.setDate(d.getDate() - 30)).toISOString().split('T')[0];
+                toDate = reportDate;
             } else if (reportRange === 'custom') {
-                startDate = new Date(document.getElementById('reportFrom').value);
-                endDate = new Date(document.getElementById('reportTo').value);
+                fromDate = document.getElementById('reportFrom').value;
+                toDate = document.getElementById('reportTo').value;
             }
 
-            let attendanceRecords = {};
-            Object.keys(attendance).forEach(key => {
-                const [studentId, date] = key.split('_');
-                const attendanceDate = new Date(date);
-                if (attendanceDate >= startDate && attendanceDate <= endDate && attendance[key]) {
-                    if (!attendanceRecords[studentId]) attendanceRecords[studentId] = 0;
-                    attendanceRecords[studentId]++;
-                }
-            });
+            const reportAttendance = Object.entries(attendance).filter(([date]) => date >= fromDate && date <= toDate);
+            const reportExpenses = expenses.filter(e => e.expenseDate >= fromDate && e.expenseDate <= toDate);
 
-            const expenseData = expenses.filter(exp => {
-                const expDate = new Date(exp.date);
-                return expDate >= startDate && expDate <= endDate;
-            });
+            let totalAttendanceDays = 0, totalStudentAttendance = 0;
+            const attendanceMap = {};
 
-            const totalExpenses = expenseData.reduce((sum, exp) => sum + exp.amount, 0);
+            reportAttendance.forEach(([date, dayAttendance]) => {
+                totalAttendanceDays++;
+                Object.values(dayAttendance).forEach(isPresent => {
+                    if (isPresent) totalStudentAttendance++;
+                });
+            });
 
             const statsContainer = document.getElementById('statsContainer');
-            const totalAttendanceRecords = Object.values(attendanceRecords).reduce((sum, count) => sum + count, 0);
+            const summary = document.getElementById('reportsSummary');
+
+            if (reportAttendance.length === 0 && reportExpenses.length === 0) {
+                document.getElementById('noReportsMsg').style.display = 'block';
+                statsContainer.innerHTML = '';
+                summary.innerHTML = '';
+                return;
+            }
+
+            document.getElementById('noReportsMsg').style.display = 'none';
 
             statsContainer.innerHTML = `
-                <div class="stat-box" style="background: #9b59b6;">
-                    <div class="stat-number">${totalAttendanceRecords}</div>
+                <div class="stat-box">
+                    <div class="stat-number">${totalAttendanceDays}</div>
+                    <div class="stat-label">Classes Held</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">${totalStudentAttendance}</div>
                     <div class="stat-label">Attendance Records</div>
                 </div>
-                <div class="stat-box" style="background: #e74c3c;">
-                    <div class="stat-number">€${totalExpenses.toFixed(2)}</div>
+                <div class="stat-box">
+                    <div class="stat-number">€${reportExpenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</div>
                     <div class="stat-label">Total Expenses</div>
                 </div>
             `;
 
-            const reportsList = document.getElementById('reportsList');
-            const attendanceHtml = Object.keys(attendanceRecords).map(studentId => {
-                const student = students.find(s => s.id === parseInt(studentId));
-                if (!student) return '';
-                return `
-                    <div style="padding:10px; border:1px solid #eee; border-radius:6px; margin-bottom:8px;">
-                        <strong>${student.name}</strong> - ${attendanceRecords[studentId]} classes attended
-                    </div>
-                `;
-            }).join('');
-
-            const expensesHtml = expenseData.map(exp => {
-                return `
-                    <div style="padding:10px; border:1px solid #eee; border-radius:6px; margin-bottom:8px;">
-                        <strong>${exp.description}</strong> - €${exp.amount.toFixed(2)} on ${exp.date}
-                    </div>
-                `;
-            }).join('');
-
-            const summaryHtml = `
-                <h3>Attendance Summary</h3>
-                ${attendanceHtml || '<div class="empty-message">No attendance records</div>'}
-                <h3 style="margin-top: 20px;">Expenses Summary</h3>
-                ${expensesHtml || '<div class="empty-message">No expenses recorded</div>'}
-            `;
-
-            reportsList.innerHTML = summaryHtml;
+            summary.innerHTML = `<h3 style="margin-top: 20px; margin-bottom: 12px;">Report Period: ${fromDate} to ${toDate}</h3>`;
         }
 
-        function getMonthYear(dateStr) {
-            if (!dateStr) return '';
-            const parts = dateStr.split('-');
-            if (parts.length >= 2) {
-                return `${parts[0]}-${parts[1]}`;
-            }
-            return '';
-        }
+        // Initialize
+        window.addEventListener('load', checkAuthentication);
 
-        function scrollToTop() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        // Initialize date inputs
+        document.getElementById('attendanceDate').valueAsDate = new Date();
+        document.getElementById('joinDate').valueAsDate = new Date();
+        document.getElementById('expenseDate').valueAsDate = new Date();
+        document.getElementById('reportDate').valueAsDate = new Date();
+        const now = new Date();
+        document.getElementById('feeMonth').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        document.getElementById('paymentMonth').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        // Event listeners
-        document.getElementById('attendanceBatchFilter').addEventListener('change', displayAttendanceForm);
-        document.getElementById('attendanceDate').addEventListener('change', displayAttendanceForm);
-        document.getElementById('paymentMonth').addEventListener('change', displayPayments);
-        document.getElementById('feeMonth').addEventListener('change', displayFeesTab);
+        // Report range handler
         document.getElementById('reportRange').addEventListener('change', function() {
-            const customRangeFrom = document.getElementById('reportCustomRange');
-            const customRangeTo = document.getElementById('reportCustomRangeTo');
-            if (this.value === 'custom') {
-                customRangeFrom.style.display = 'block';
-                customRangeTo.style.display = 'block';
-            } else {
-                customRangeFrom.style.display = 'none';
-                customRangeTo.style.display = 'none';
-            }
+            const isCustom = this.value === 'custom';
+            document.getElementById('reportCustomRange').style.display = isCustom ? 'block' : 'none';
+            document.getElementById('reportCustomRangeTo').style.display = isCustom ? 'block' : 'none';
         });
 
-        // Scroll to top button
-        window.addEventListener('scroll', function() {
-            const btn = document.getElementById('goTopBtn');
-            if (window.pageYOffset > 300) {
-                btn.style.display = 'flex';
-            } else {
-                btn.style.display = 'none';
-            }
-        });
+        // Attendance batch filter
+        document.getElementById('attendanceBatchFilter').addEventListener('change', displayAttendanceTab);
 
-        const goTopBtn = document.getElementById('goTopBtn');
-        if (goTopBtn) {
-            goTopBtn.addEventListener('click', scrollToTop);
+        // Payment month change
+        document.getElementById('paymentMonth').addEventListener('change', updatePaymentsDisplay);
+
+        // Fee month change
+        document.getElementById('feeMonth').addEventListener('change', displayFeesTab);
+
+        // Scroll to top
+        function scrollToTop() {
+            window.scrollTo(0, 0);
         }
+
+        window.addEventListener('scroll', function() {
+            const goTopBtn = document.getElementById('goTopBtn');
+            if (window.scrollY > 300) {
+                goTopBtn.style.display = 'flex';
+            } else {
+                goTopBtn.style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html>
