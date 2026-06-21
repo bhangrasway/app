@@ -20,81 +20,6 @@
             padding: 20px;
         }
 
-        /* LOGIN PAGE STYLES */
-        .login-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        .login-box {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 40px;
-            width: 100%;
-            max-width: 400px;
-        }
-
-        .login-box h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 1.8em;
-        }
-
-        .login-box p {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 0.9em;
-        }
-
-        .login-form {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .login-form label {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
-            margin-top: 15px;
-        }
-
-        .login-form input {
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 1em;
-            transition: border-color 0.3s;
-        }
-
-        .login-form input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .login-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 600;
-            margin-top: 25px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-
         .error-message {
             color: #e74c3c;
             text-align: center;
@@ -146,23 +71,6 @@
         header h1 {
             font-size: 2.5em;
             margin-bottom: 5px;
-        }
-
-        .logout-btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            padding: 8px 16px;
-            border: 2px solid white;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .logout-btn:hover {
-            background: white;
-            color: #667eea;
-            border-color: white;
         }
 
         .tabs {
@@ -540,30 +448,7 @@
     </style>
 </head>
 <body>
-    <!-- LOGIN PAGE -->
-    <div id="loginPage" class="login-container" style="display: flex;">
-        <div class="login-box">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <img src="logo.png" alt="Bhangra Sway Logo" style="height: 80px; width: auto; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.2);">
-            </div>
-            <h1>Bhangra Sway Cremona</h1>
-            <p>Studio Management System</p>
-            <div class="error-message" id="loginError"></div>
-            <form class="login-form" onsubmit="handleLogin(event)">
-                <label for="username">Username</label>
-                <input type="text" id="username" required placeholder="Enter username">
-                
-                <label for="password">Password</label>
-                <input type="password" id="password" required placeholder="Enter password">
-                
-                <button type="submit" class="login-btn">Sign In</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MAIN APP -->
-    <div id="appPage" style="display: none;">
-        <div class="container">
+    <div class="container">
             <header>
                 <div class="header-left">
                     <img src="logo.png" alt="Bhangra Sway Logo" style="height: 80px; width: auto; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.2);">
@@ -573,7 +458,7 @@
                     <p style="margin: 5px 0 0 0;">Studio Management System</p>
                 </div>
                 <div class="header-right">
-                    <button class="logout-btn" onclick="handleLogout()">Logout</button>
+                    <span style="padding: 8px 14px; border: 2px solid white; border-radius: 6px; font-weight: 600;">Direct Supabase Mode</span>
                 </div>
             </header>
 
@@ -583,6 +468,17 @@
                 <button class="tab-btn" onclick="switchTab('attendance')">Attendance</button>
                 <button class="tab-btn" onclick="switchTab('fees')">Fees & Income</button>
                 <button class="tab-btn" onclick="switchTab('reports')">Reports</button>
+            </div>
+
+            <div style="margin: 16px 30px 0; padding: 14px; border-radius: 8px; border: 1px solid #e1e5ee; background: #f8f9fc;">
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <strong>Supabase Connection:</strong>
+                    <span id="connectionStatus">Not tested</span>
+                    <button type="button" onclick="testSupabaseConnection()">Test Connection</button>
+                </div>
+                <div id="connectionInfo" style="margin-top: 8px; color: #555; font-size: 0.95em;">
+                    Ready to build and test studio management features directly with Supabase.
+                </div>
             </div>
 
             <!-- STUDENTS TAB -->
@@ -846,7 +742,6 @@
                     No attendance records or expense data available.
                 </div>
             </div>
-        </div>
     </div>
 
     <button id="goTopBtn" onclick="scrollToTop()">↑</button>
@@ -859,58 +754,35 @@
         const { createClient } = window.supabase;
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // LOGIN AUTHENTICATION
-        const VALID_USERNAME = 'waheguru';
-        const VALID_PASSWORD = 'jindjaan';
-
         let students = [];
         let attendance = {};
         let expenses = [];
         let feesPaid = {};
         let currentEditingStudentId = null;
 
-        function handleLogin(event) {
-            event.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorMsg = document.getElementById('loginError');
+        async function testSupabaseConnection() {
+            const statusEl = document.getElementById('connectionStatus');
+            const infoEl = document.getElementById('connectionInfo');
+            statusEl.textContent = 'Testing...';
+            statusEl.style.color = '#555';
 
-            if (username === VALID_USERNAME && password === VALID_PASSWORD) {
-                sessionStorage.setItem('authenticated', 'true');
-                errorMsg.classList.remove('show');
-                showApp();
-            } else {
-                errorMsg.textContent = 'Invalid username or password!';
-                errorMsg.classList.add('show');
+            try {
+                const { error } = await supabase.from('students').select('id').limit(1);
+                if (error) throw error;
+
+                statusEl.textContent = 'Connected ✓';
+                statusEl.style.color = '#27ae60';
+                infoEl.textContent = 'Supabase connection is healthy. You can now build and test studio data features directly.';
+            } catch (error) {
+                statusEl.textContent = 'Connection failed ✗';
+                statusEl.style.color = '#e74c3c';
+                infoEl.textContent = `Connection error: ${error.message}. Verify Supabase URL/key and required tables (students, attendance, expenses, fees_paid).`;
             }
         }
 
-        function handleLogout() {
-            sessionStorage.removeItem('authenticated');
-            showLoginPage();
-        }
-
-        function showLoginPage() {
-            document.getElementById('loginPage').style.display = 'flex';
-            document.getElementById('appPage').style.display = 'none';
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
-            document.getElementById('loginError').classList.remove('show');
-        }
-
-        function showApp() {
-            document.getElementById('loginPage').style.display = 'none';
-            document.getElementById('appPage').style.display = 'block';
-            loadAllData();
-        }
-
-        function checkAuthentication() {
-            const isAuthenticated = sessionStorage.getItem('authenticated') === 'true';
-            if (!isAuthenticated) {
-                showLoginPage();
-            } else {
-                showApp();
-            }
+        async function initializeApp() {
+            await testSupabaseConnection();
+            await loadAllData();
         }
 
         // ===== SUPABASE DATA FUNCTIONS =====
@@ -949,7 +821,7 @@
 
                 // Load fees paid
                 const { data: feesPaidData, error: feesPaidError } = await supabase
-                    .from('feesPaid')
+                    .from('fees_paid')
                     .select('*');
                 
                 if (feesPaidError) throw feesPaidError;
@@ -1192,14 +1064,14 @@
                 
                 // Delete existing record
                 await supabase
-                    .from('feesPaid')
+                    .from('fees_paid')
                     .delete()
                     .eq('studentId', studentId)
                     .eq('month', month);
 
                 // Insert new record
                 const { error } = await supabase
-                    .from('feesPaid')
+                    .from('fees_paid')
                     .insert([{
                         studentId: studentId,
                         month: month,
@@ -1289,7 +1161,7 @@
                     }
 
                     // Clear and restore fees paid
-                    await supabase.from('feesPaid').delete().neq('id', 0);
+                    await supabase.from('fees_paid').delete().neq('id', 0);
                     const feesPaidRecords = [];
                     for (const [key, isPaid] of Object.entries(data.feesPaid)) {
                         const [studentId, month] = key.split('_');
@@ -1300,7 +1172,7 @@
                         });
                     }
                     if (feesPaidRecords.length > 0) {
-                        await supabase.from('feesPaid').insert(feesPaidRecords);
+                        await supabase.from('fees_paid').insert(feesPaidRecords);
                     }
 
                     showSuccessMessage('✓ Data restored successfully!');
@@ -1401,11 +1273,9 @@
             const month = document.getElementById('paymentMonth').value;
             const paidList = document.getElementById('paidStudentsList');
             const unpaidList = document.getElementById('unpaidStudentsList');
-            const allPaymentsList = document.getElementById('allStudentsPayments');
 
             paidList.innerHTML = '';
             unpaidList.innerHTML = '';
-            allPaymentsList.innerHTML = '';
 
             let paidCount = 0, unpaidCount = 0;
 
@@ -1435,19 +1305,6 @@
                     unpaidCount++;
                 }
 
-                // Add to all payments list
-                const allCard = document.createElement('div');
-                allCard.style.cssText = 'display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; align-items: center;';
-                allCard.innerHTML = `
-                    <div>
-                        <strong>${student.name}</strong> (${student.batch})
-                        <div style="color: #666; font-size: 0.9em;">€${student.monthlyFees.toFixed(2)}</div>
-                    </div>
-                    <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">
-                        ${isPaid ? '✓ PAID' : '✗ PENDING'}
-                    </span>
-                `;
-                allPaymentsList.appendChild(allCard);
             });
 
             document.getElementById('paidCount').textContent = paidCount;
@@ -1599,7 +1456,7 @@
         }
 
         // Initialize
-        window.addEventListener('load', checkAuthentication);
+        window.addEventListener('load', initializeApp);
 
         // Initialize date inputs
         document.getElementById('attendanceDate').valueAsDate = new Date();
