@@ -794,7 +794,7 @@
 
                 <button onclick="markAllPresent()" style="margin-right: 10px;">Mark All Present</button>
                 <button onclick="markAllAbsent()" style="background: #e74c3c;">Mark All Absent</button>
-                <button onclick="saveAttendance()" style="margin-left: 10px; background: #27ae60;">Save Attendance</button>
+                <button id="saveAttendanceBtn" onclick="saveAttendance()" style="margin-left: 10px; background: #27ae60;">Save Attendance</button>
 
                 <div id="attendanceGridContainer" style="margin-top:20px;">
                     <div class="attendance-list" id="attendanceGrid" style="margin-top: 20px;"></div>
@@ -835,7 +835,7 @@
                         <label for="expenseDate">Date *</label>
                         <input type="date" id="expenseDate" required>
                     </div>
-                    <button type="submit">Add Expense</button>
+                    <button type="submit" id="addExpenseBtn">Add Expense</button>
                 </form>
 
                 <h3 style="margin-top: 30px;">Monthly Expenses</h3>
@@ -1422,7 +1422,14 @@
 
         async function addStudent(event) {
             event.preventDefault();
-            
+
+            const btn = document.getElementById('submitBtn');
+            if (!btn) { console.error('Submit button not found in addStudent function'); return; }
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            let succeeded = false;
             const studentData = {
                 name: document.getElementById('studentName').value,
                 parentName: document.getElementById('parentName').value,
@@ -1456,13 +1463,16 @@
                 document.getElementById('studentBatch').value = '';
                 document.getElementById('monthlyFees').value = '';
                 document.getElementById('joinDate').valueAsDate = new Date();
-                document.getElementById('submitBtn').textContent = 'Register Student';
                 document.getElementById('cancelBtn').style.display = 'none';
 
                 await loadAllData();
+                succeeded = true;
             } catch (error) {
                 console.error('Error adding/updating student:', error);
                 alert('Error saving student: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = succeeded ? 'Register Student' : originalText;
             }
         }
 
@@ -1942,7 +1952,13 @@
                 alert('Please select an attendance date.');
                 return;
             }
-            
+
+            const btn = document.getElementById('saveAttendanceBtn');
+            if (!btn) { console.error('Save Attendance button not found in saveAttendance function'); return; }
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
             try {
                 const attendanceRecords = Array.from(checkboxes).map((checkbox) => ({
                     studentId: parseInt(checkbox.dataset.studentId, 10),
@@ -1961,11 +1977,20 @@
             } catch (error) {
                 console.error('Error saving attendance:', error);
                 alert('Error saving attendance: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
         }
 
         async function addExpense(event) {
             event.preventDefault();
+
+            const btn = document.getElementById('addExpenseBtn');
+            if (!btn) { console.error('Add Expense button not found in addExpense function'); return; }
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
 
             const expenseData = {
                 description: document.getElementById('expenseDesc').value,
@@ -1985,6 +2010,9 @@
             } catch (error) {
                 console.error('Error adding expense:', error);
                 alert('Error adding expense: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
         }
 
@@ -2014,7 +2042,12 @@
             }
         }
 
-        async function markFeesPaid(studentId, month) {
+        async function markFeesPaid(studentId, month, btn) {
+            const originalText = btn ? btn.textContent : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Saving...';
+            }
             try {
                 const safeMonth = /^\d{4}-\d{2}$/.test(String(month || ''))
                     ? String(month)
@@ -2043,6 +2076,11 @@
             } catch (error) {
                 console.error('Error marking fees paid:', error);
                 alert('Error marking fees paid: ' + error.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
             }
         }
 
@@ -2430,7 +2468,7 @@
                         <div class="student-details">Parent: ${student.parentName}</div>
                         <div class="student-details">Fee: €${student.monthlyFees.toFixed(2)}</div>
                     </div>
-                    <button onclick="markFeesPaid(${student.id}, '${month}')" 
+                    <button onclick="markFeesPaid(${student.id}, '${month}', this)" 
                             style="background: ${isPaid ? '#27ae60' : '#e74c3c'}; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;">
                         ${isPaid ? '✓ Paid' : 'Mark Paid'}
                     </button>
