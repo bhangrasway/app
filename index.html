@@ -1213,6 +1213,22 @@
             return { response, data };
         }
 
+        function isStaticHostMode() {
+            return window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
+        }
+
+        function getLocalAuthState() {
+            return localStorage.getItem('studioLocalAuth') === 'true';
+        }
+
+        function setLocalAuthState(isAuthenticated) {
+            if (isAuthenticated) {
+                localStorage.setItem('studioLocalAuth', 'true');
+            } else {
+                localStorage.removeItem('studioLocalAuth');
+            }
+        }
+
         async function handleLogin(event) {
             event.preventDefault();
             const username = document.getElementById('username').value.trim();
@@ -1223,6 +1239,24 @@
             errorMsg.classList.remove('show');
             loginButton.disabled = true;
             loginButton.textContent = 'Signing in...';
+
+            if (isStaticHostMode()) {
+                const validUsername = username === 'admin';
+                const validPassword = password === 'jindjaan';
+
+                loginButton.disabled = false;
+                loginButton.textContent = 'Sign In';
+
+                if (!(validUsername && validPassword)) {
+                    errorMsg.textContent = 'Invalid username or password.';
+                    errorMsg.classList.add('show');
+                    return;
+                }
+
+                setLocalAuthState(true);
+                showApp();
+                return;
+            }
 
             try {
                 const { response, data } = await apiRequest('/api/login', {
@@ -1249,6 +1283,12 @@
         }
 
         async function handleLogout() {
+            if (isStaticHostMode()) {
+                setLocalAuthState(false);
+                showLoginPage();
+                return;
+            }
+
             try {
                 const { response, data } = await apiRequest('/api/logout', {
                     method: 'POST'
@@ -1281,6 +1321,15 @@
         }
 
         async function checkAuthentication() {
+            if (isStaticHostMode()) {
+                if (getLocalAuthState()) {
+                    showApp();
+                } else {
+                    showLoginPage();
+                }
+                return;
+            }
+
             try {
                 const { response, data } = await apiRequest('/api/session');
 
