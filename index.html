@@ -405,6 +405,72 @@
             display: block;
         }
 
+        /* BACKUP & RESTORE STYLES */
+        .backup-section {
+            background: #f8f9fa;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .backup-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.2em;
+        }
+
+        .backup-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .btn-backup {
+            background: #27ae60;
+            padding: 12px 24px;
+            font-size: 1em;
+        }
+
+        .btn-backup:hover {
+            box-shadow: 0 10px 20px rgba(39, 174, 96, 0.3);
+        }
+
+        .btn-restore {
+            background: #3498db;
+            padding: 12px 24px;
+            font-size: 1em;
+        }
+
+        .btn-restore:hover {
+            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn-clear {
+            background: #e74c3c;
+            padding: 12px 24px;
+            font-size: 1em;
+        }
+
+        .btn-clear:hover {
+            box-shadow: 0 10px 20px rgba(231, 76, 60, 0.3);
+        }
+
+        .backup-info {
+            background: white;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            color: #555;
+        }
+
+        .backup-info strong {
+            color: #333;
+        }
+
         @media (max-width: 768px) {
             .form-row {
                 grid-template-columns: 1fr;
@@ -440,6 +506,14 @@
 
             .header-right {
                 text-align: center;
+            }
+
+            .backup-buttons {
+                flex-direction: column;
+            }
+
+            .backup-buttons button {
+                width: 100%;
             }
         }
         /* Go to top button */
@@ -731,6 +805,27 @@
             <div id="reports" class="tab-content">
                 <h2>Attendance & Financial Reports</h2>
 
+                <!-- BACKUP & RESTORE SECTION -->
+                <div class="backup-section">
+                    <h3>💾 Backup & Restore Data</h3>
+                    <div class="backup-info">
+                        <strong>📌 How it works:</strong> Create a backup of all your data (students, attendance, payments, expenses) to save locally. Restore from a backup file to recover your data on any device or browser.
+                    </div>
+                    <div class="backup-buttons">
+                        <button class="btn-backup" onclick="downloadAllData()">📥 Download Backup</button>
+                        <button class="btn-restore" onclick="document.getElementById('restoreFileInput').click()">📤 Restore Backup</button>
+                        <button class="btn-clear" onclick="clearAllData()">🗑️ Clear All Data</button>
+                    </div>
+                    <input type="file" id="restoreFileInput" accept=".json" style="display:none" onchange="handleRestoreFile(event)">
+                    <div class="backup-info" style="border-left-color: #27ae60;">
+                        <strong>✓ Last Backup Info:</strong> <span id="lastBackupInfo">No backup created yet</span>
+                    </div>
+                </div>
+
+                <hr style="margin: 30px 0; border: none; border-top: 2px solid #eee;">
+
+                <h2>Reports Overview</h2>
+
                 <div style="display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end; margin-bottom:20px;">
                     <div style="min-width:220px;">
                         <label for="reportDate">Report Date</label>
@@ -809,6 +904,7 @@
             document.getElementById('loginPage').style.display = 'none';
             document.getElementById('appPage').style.display = 'block';
             displayStudents();
+            updateLastBackupInfo();
         }
 
         function checkAuthentication() {
@@ -865,6 +961,102 @@
                 // ignore parse errors
             }
         })();
+
+        // BACKUP & RESTORE FUNCTIONS
+        function downloadAllData() {
+            const data = {
+                students: JSON.parse(localStorage.getItem('students')) || [],
+                attendance: JSON.parse(localStorage.getItem('attendance')) || {},
+                feesPaid: JSON.parse(localStorage.getItem('feesPaid')) || {},
+                expenses: JSON.parse(localStorage.getItem('expenses')) || [],
+                timestamp: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bhangra-sway-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            // Update backup info
+            const backupTime = new Date().toLocaleString();
+            localStorage.setItem('lastBackupTime', backupTime);
+            updateLastBackupInfo();
+            showSuccessMessage('✓ Backup downloaded successfully!');
+        }
+
+        function handleRestoreFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    if (!data.students || !data.attendance || !data.feesPaid || !data.expenses) {
+                        alert('❌ Invalid backup file format!');
+                        return;
+                    }
+
+                    if (confirm('⚠️ This will replace all your current data. Are you sure?')) {
+                        localStorage.setItem('students', JSON.stringify(data.students));
+                        localStorage.setItem('attendance', JSON.stringify(data.attendance));
+                        localStorage.setItem('feesPaid', JSON.stringify(data.feesPaid));
+                        localStorage.setItem('expenses', JSON.stringify(data.expenses));
+                        
+                        // Reload data
+                        students = data.students;
+                        attendance = data.attendance;
+                        feesPaid = data.feesPaid;
+                        expenses = data.expenses;
+                        
+                        showSuccessMessage('✓ Data restored successfully! Reloading...');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    }
+                } catch (err) {
+                    alert('❌ Invalid backup file! Please select a valid backup file.');
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function clearAllData() {
+            if (confirm('⚠️ WARNING: This will delete ALL data (students, attendance, payments, expenses). Are you sure?')) {
+                if (confirm('🚨 This action cannot be undone. Are you absolutely sure?')) {
+                    localStorage.removeItem('students');
+                    localStorage.removeItem('attendance');
+                    localStorage.removeItem('feesPaid');
+                    localStorage.removeItem('expenses');
+                    
+                    students = [];
+                    attendance = {};
+                    feesPaid = {};
+                    expenses = [];
+                    
+                    showSuccessMessage('✓ All data cleared! Reloading...');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                }
+            }
+        }
+
+        function updateLastBackupInfo() {
+            const lastBackupTime = localStorage.getItem('lastBackupTime');
+            const infoEl = document.getElementById('lastBackupInfo');
+            if (lastBackupTime) {
+                infoEl.textContent = `Last backup created on ${lastBackupTime}`;
+            } else {
+                infoEl.textContent = 'No backup created yet';
+            }
+        }
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => {
@@ -1146,6 +1338,7 @@
             document.getElementById('studentsList').style.display = 'none';
             document.getElementById('studentDetailContent').innerHTML = renderStudentDetailHTML(student);
             renderStudentPayments(id);
+            renderStudentAttendance(id);
         }
 
         function backToStudents() {
@@ -1221,13 +1414,13 @@
         function renderStudentAttendance(studentId) {
             const container = document.getElementById('studentAttendanceList');
             const dates = Object.keys(attendance).filter(k => k.startsWith(`${studentId}_`)).map(k => k.substring(`${studentId}_`.length));
-            dates.sort();
+            dates.sort().reverse();
             if (dates.length === 0) {
                 container.innerHTML = '<div class="empty-message">No attendance records.</div>';
                 return;
             }
             const rows = dates.map(date => {
-                return `<div style="padding:8px; border-bottom:1px solid #eee;">${date}</div>`;
+                return `<div style="padding:8px; border-bottom:1px solid #eee;">✓ ${date}</div>`;
             }).join('');
             container.innerHTML = rows;
         }
