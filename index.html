@@ -1832,27 +1832,27 @@
                 card.innerHTML = `
                     <div style="min-width:0;">
                         <div style="font-weight:800; font-size:1.08em; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${student.name}</div>
-                        <div style="color:#1a1a1a; font-size:0.85em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || '—'} &nbsp;·&nbsp; 📞 ${student.phone || '—'}</div>
-                        <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:7px;">
-                            <span style="background:${batchColor}22; color:${batchColor}; border:1px solid ${batchColor}44; border-radius:20px; padding:2px 9px; font-size:0.78em; font-weight:700;">${student.batch}</span>
-                            <span style="color:#1a1a1a; font-size:0.82em;">€${student.monthlyFees.toFixed(2)}</span>
+                        <div style="color:#1a1a1a; font-size:0.95em; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || '—'} &nbsp;·&nbsp; 📞 ${student.phone || '—'}</div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                            <span style="background:${batchColor}22; color:${batchColor}; border:1px solid ${batchColor}44; border-radius:20px; padding:3px 10px; font-size:0.88em; font-weight:700;">${student.batch}</span>
+                            <span style="color:#1a1a1a; font-size:0.92em;">€${student.monthlyFees.toFixed(2)}</span>
                             ${ageLabel}
                             ${cfLabel}
-                            <span style="color:#444; font-size:0.8em;">📅 ${student.joinDate}</span>
-                            <span style="color:#444; font-size:0.8em;">🏃 ${attendanceCount}</span>
+                            <span style="color:#444; font-size:0.9em;">📅 ${student.joinDate}</span>
+                            <span style="color:#444; font-size:0.9em;">🏃 ${attendanceCount}</span>
                         </div>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start; white-space:nowrap; font-size:0.82em;">
-                        <span style="color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; font-size:0.72em;">Current</span>
+                    <div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start; white-space:nowrap; font-size:0.88em;">
+                        <span style="color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; font-size:0.75em;">Current</span>
                         <span style="color:#444; background:#f5f5f5; border-radius:4px; padding:2px 8px;">${currentCycleLabel}</span>
-                        <span style="color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; font-size:0.72em; margin-top:4px;">Next</span>
+                        <span style="color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; font-size:0.75em; margin-top:4px;">Next</span>
                         <span style="color:#3498db; background:#eaf4fd; border-radius:4px; padding:2px 8px;">${nextPayLabel}</span>
                         <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}" style="margin-top:4px;">${isPaid ? '✓ PAID' : '⏳ PENDING'}</span>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:5px;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:130px;">
                         <button onclick="showStudentDetail(${student.id})" class="btn-small" style="background:#27ae60;">View</button>
                         <button onclick="editStudent(${student.id})" class="btn-small" style="background:#3498db;">Edit</button>
-                        ${student.phone ? `<a href="https://wa.me/${student.phone.replace(/\D/g,'')}" target="_blank" class="btn-small" style="background:#25D366; color:white; text-decoration:none; text-align:center;">💬 WA</a>` : ''}
+                        ${student.phone ? `<a href="https://wa.me/${student.phone.replace(/\D/g,'')}" target="_blank" class="btn-small" style="background:#25D366; color:white; text-decoration:none; text-align:center;">💬 WA</a>` : '<span></span>'}
                         <button onclick="deleteStudent(${student.id})" class="btn-small btn-delete">Delete</button>
                     </div>
                 `;
