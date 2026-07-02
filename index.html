@@ -693,11 +693,11 @@
                 <h2 style="margin-top: 40px;">Registered Students</h2>
                 <div style="display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; margin-bottom:14px;">
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Search</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Search</label>
                         <input id="studentSearch" placeholder="Name, parent, batch…" oninput="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd; min-width:220px;">
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Batch</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Batch</label>
                         <select id="filterBatch" onchange="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
                             <option value="">All Batches</option>
                             <option value="Beginner">Beginner</option>
@@ -707,7 +707,7 @@
                         </select>
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Status</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Status</label>
                         <select id="filterStatus" onchange="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
                             <option value="">All</option>
                             <option value="paid">Paid</option>
@@ -715,15 +715,15 @@
                         </select>
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Joined from</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Joined from</label>
                         <input type="date" id="filterJoinFrom" onchange="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Joined to</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Joined to</label>
                         <input type="date" id="filterJoinTo" onchange="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Sort by Join Date</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Sort by Join Date</label>
                         <select id="sortJoinDate" onchange="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
                             <option value="">Default</option>
                             <option value="desc">Newest first</option>
@@ -754,7 +754,7 @@
                 <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;">
                     <div style="background:#fff; border:1px solid #eee; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.06);">
                         <div id="totalCount" style="font-size:2em; font-weight:700; color:#333;">0</div>
-                        <div style="font-size:0.85em; color:#888; margin-top:4px;">Total Students</div>
+                        <div style="font-size:0.85em; color:#333; margin-top:4px;">Total Students</div>
                     </div>
                     <div style="background:#27ae60; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                         <div id="paidCount" style="font-size:2em; font-weight:700; color:#fff;">0</div>
@@ -779,7 +779,7 @@
                 <div style="margin-bottom:28px;">
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
                         <span style="background:#e67e22; color:#fff; border-radius:6px; padding:3px 10px; font-weight:700; font-size:0.85em;">OVERDUE</span>
-                        <span style="color:#888; font-size:0.9em;">Cycle ended — payment not received</span>
+                        <span style="color:#333; font-size:0.9em;">Cycle ended — payment not received</span>
                     </div>
                     <div id="overdueStudentsList"></div>
                 </div>
@@ -788,7 +788,7 @@
                 <div style="margin-bottom:28px;">
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
                         <span style="background:#e74c3c; color:#fff; border-radius:6px; padding:3px 10px; font-weight:700; font-size:0.85em;">PENDING</span>
-                        <span style="color:#888; font-size:0.9em;">Current cycle unpaid</span>
+                        <span style="color:#333; font-size:0.9em;">Current cycle unpaid</span>
                     </div>
                     <div id="unpaidStudentsList"></div>
                 </div>
@@ -797,7 +797,7 @@
                 <div>
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
                         <span style="background:#27ae60; color:#fff; border-radius:6px; padding:3px 10px; font-weight:700; font-size:0.85em;">PAID</span>
-                        <span style="color:#888; font-size:0.9em;">Settled for current cycle</span>
+                        <span style="color:#333; font-size:0.9em;">Settled for current cycle</span>
                     </div>
                     <div id="paidStudentsList"></div>
                 </div>
@@ -814,11 +814,11 @@
 
                 <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Search student</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Search student</label>
                         <input id="attendanceSearch" placeholder="Name or parent…" oninput="displayAttendanceTab()" style="padding:9px 12px; border-radius:6px; border:1px solid #ddd; min-width:220px;">
                     </div>
                     <div>
-                        <label for="attendanceBatchFilter" style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">Filter by Batch</label>
+                        <label for="attendanceBatchFilter" style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Filter by Batch</label>
                         <select id="attendanceBatchFilter" onchange="displayAttendanceTab()" style="padding:9px 12px; border-radius:6px; border:1px solid #ddd;">
                         <option value="All">All Batches</option>
                         <option value="Beginner">Beginner</option>
@@ -861,7 +861,7 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin: 10px 0 16px;">
                     <div>
                         <h2 style="margin:0;">Income & Expense</h2>
-                        <div style="color:#666; margin-top:4px;">Current month payment overview and cash flow</div>
+                        <div style="color:#1a1a1a; margin-top:4px;">Current month payment overview and cash flow</div>
                     </div>
                 </div>
 
@@ -897,11 +897,11 @@
                 <h3 style="margin-top: 40px;">💳 Payment History</h3>
                 <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">From</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">From</label>
                         <input type="date" id="payHistFrom" onchange="renderPaymentHistory()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.82em;color:#888;margin-bottom:3px;">To</label>
+                        <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">To</label>
                         <input type="date" id="payHistTo" onchange="renderPaymentHistory()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
                     </div>
                     <button onclick="document.getElementById('payHistFrom').value='';document.getElementById('payHistTo').value='';renderPaymentHistory();" style="background:#95a5a6;color:white;padding:8px 12px;border-radius:6px;border:none;cursor:pointer;">Show All</button>
@@ -915,11 +915,11 @@
 
                 <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; margin-bottom:20px;">
                     <div>
-                        <label style="display:block;font-size:0.85em;color:#888;margin-bottom:4px;">From</label>
+                        <label style="display:block;font-size:0.85em;color:#333;margin-bottom:4px;">From</label>
                         <input type="date" id="reportFrom" style="padding:10px 12px; border-radius:6px; border:1px solid #ddd;">
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.85em;color:#888;margin-bottom:4px;">To</label>
+                        <label style="display:block;font-size:0.85em;color:#333;margin-bottom:4px;">To</label>
                         <input type="date" id="reportTo" style="padding:10px 12px; border-radius:6px; border:1px solid #ddd;">
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -945,7 +945,7 @@
                     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
                         <div>
                             <h2 style="margin:0;">🏛️ Tax Records</h2>
-                            <div style="color:#666; font-size:0.9em; margin-top:4px;">Track tax payments and doctor certificates per student</div>
+                            <div style="color:#1a1a1a; font-size:0.9em; margin-top:4px;">Track tax payments and doctor certificates per student</div>
                         </div>
                         <input id="taxSearch" placeholder="Search student…" oninput="renderTaxRecords()" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; min-width:220px;">
                     </div>
@@ -1008,7 +1008,7 @@
                 (s.codiceFiscale||'').toLowerCase().includes(term)
             );
             if (list.length === 0) {
-                container.innerHTML = '<div style="color:#999;padding:16px;">No students found.</div>';
+                container.innerHTML = '<div style="color:#444;padding:16px;">No students found.</div>';
                 return;
             }
             container.innerHTML = list.map(s => {
@@ -1027,7 +1027,7 @@
                                 ${rec.paid ? '<span style="background:#d4edda;color:#155724;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">✓ TAX PAID</span>' : '<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">PENDING</span>'}
                                 ${rec.hasDoctor ? '<span style="background:#d1ecf1;color:#0c5460;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">🩺 Doctor ✓</span>' : ''}
                             </div>
-                            <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px; font-size:0.84em; color:#555;">
+                            <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px; font-size:0.84em; color:#1a1a1a;">
                                 <span>👤 ${s.parentName || '—'}</span>
                                 <span>📞 ${s.phone || '—'}</span>
                                 ${age > 0 ? `<span style="color:${ageColor}; font-weight:700;">Age: ${age}</span>` : ''}
@@ -1828,18 +1828,18 @@
                 const age = Number(student.age || 0);
                 const ageColor = age > 0 && age < 18 ? '#e74c3c' : '#27ae60';
                 const ageLabel = age > 0 ? `<span style="color:${ageColor}; font-weight:700; font-size:0.8em;">${age}y ${age < 18 ? '🔴' : '🟢'}</span>` : '';
-                const cfLabel = student.codiceFiscale ? `<span style="color:#888; font-size:0.78em; font-family:monospace;">${student.codiceFiscale}</span>` : '';
+                const cfLabel = student.codiceFiscale ? `<span style="color:#333; font-size:0.78em; font-family:monospace;">${student.codiceFiscale}</span>` : '';
                 card.innerHTML = `
                     <div style="min-width:0;">
                         <div style="font-weight:800; font-size:1.08em; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${student.name}</div>
-                        <div style="color:#666; font-size:0.85em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || '—'} &nbsp;·&nbsp; 📞 ${student.phone || '—'}</div>
+                        <div style="color:#1a1a1a; font-size:0.85em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || '—'} &nbsp;·&nbsp; 📞 ${student.phone || '—'}</div>
                         <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:7px;">
                             <span style="background:${batchColor}22; color:${batchColor}; border:1px solid ${batchColor}44; border-radius:20px; padding:2px 9px; font-size:0.78em; font-weight:700;">${student.batch}</span>
-                            <span style="color:#555; font-size:0.82em;">€${student.monthlyFees.toFixed(2)}</span>
+                            <span style="color:#1a1a1a; font-size:0.82em;">€${student.monthlyFees.toFixed(2)}</span>
                             ${ageLabel}
                             ${cfLabel}
-                            <span style="color:#999; font-size:0.8em;">📅 ${student.joinDate}</span>
-                            <span style="color:#999; font-size:0.8em;">🏃 ${attendanceCount}</span>
+                            <span style="color:#444; font-size:0.8em;">📅 ${student.joinDate}</span>
+                            <span style="color:#444; font-size:0.8em;">🏃 ${attendanceCount}</span>
                         </div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start; white-space:nowrap; font-size:0.82em;">
@@ -1952,7 +1952,7 @@
             modal.innerHTML = `
                 <div style="background:#fff;border-radius:12px;padding:28px 28px 22px;max-width:340px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);">
                     <h3 style="margin:0 0 6px;">Extend Plan</h3>
-                    <p style="margin:0 0 16px;color:#555;font-size:0.93em;">Student: <strong>${student.name}</strong></p>
+                    <p style="margin:0 0 16px;color:#1a1a1a;font-size:0.93em;">Student: <strong>${student.name}</strong></p>
                     <label style="display:block;font-weight:600;margin-bottom:6px;">New Next Payment Date</label>
                     <input type="date" id="extendPlanDateInput" value="${current || ''}" style="width:100%;padding:9px 10px;border:1px solid #ccc;border-radius:7px;font-size:1em;box-sizing:border-box;margin-bottom:18px;">
                     <div style="display:flex;gap:10px;justify-content:flex-end;">
@@ -3292,8 +3292,8 @@
                 card.className = 'attendance-card';
                 card.innerHTML = `
                     <div class="attendance-student-name">${student.name}</div>
-                    <div style="font-size:0.85em; color:#666; margin-top:2px;">Parent: ${student.parentName || 'N/A'}</div>
-                    <div style="font-size:0.82em; color:#888; margin-top:1px;">${student.address || ''}</div>
+                    <div style="font-size:0.85em; color:#1a1a1a; margin-top:2px;">Parent: ${student.parentName || 'N/A'}</div>
+                    <div style="font-size:0.82em; color:#333; margin-top:1px;">${student.address || ''}</div>
                     <label class="checkbox-label">
                         <input type="checkbox" class="attendance-checkbox" 
                                data-student-id="${student.id}" 
@@ -3406,9 +3406,9 @@
                                 <span onclick="switchTab('students'); setTimeout(() => showStudentDetail(${student.id}), 100);" style="font-weight:700; font-size:1.12em; color:#3498db; cursor:pointer; text-decoration:underline;">${student.name}</span>
                                 ${overdueTag}${overrideTag}
                             </div>
-                            <div style="color:#555; font-size:0.92em; margin-bottom:3px;">👤 ${student.parentName}</div>
-                            <div style="color:#555; font-size:0.92em; margin-bottom:3px;">💰 <strong style="color:#27ae60;">€${Number(student.monthlyFees||0).toFixed(2)}</strong> / month</div>
-                            <div style="color:#555; font-size:0.92em;">📅 ${cycleLabel}</div>
+                            <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">👤 ${student.parentName}</div>
+                            <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">💰 <strong style="color:#27ae60;">€${Number(student.monthlyFees||0).toFixed(2)}</strong> / month</div>
+                            <div style="color:#1a1a1a; font-size:0.92em;">📅 ${cycleLabel}</div>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
                             ${isOverdue ? extendBtn : ''}
@@ -3547,8 +3547,8 @@
                                         <span onclick="switchTab('students'); setTimeout(() => showStudentDetail(${student.id}), 100);" style="font-weight:700; font-size:1.05em; color:#3498db; cursor:pointer; text-decoration:underline;">${student.name}</span>
                                         ${statusTag}
                                     </div>
-                                    <div style="color:#555; font-size:0.9em;">👤 ${student.parentName}</div>
-                                    <div style="color:#555; font-size:0.9em; margin-top:2px;">📅 ${cycleLabel2}</div>
+                                    <div style="color:#1a1a1a; font-size:0.9em;">👤 ${student.parentName}</div>
+                                    <div style="color:#1a1a1a; font-size:0.9em; margin-top:2px;">📅 ${cycleLabel2}</div>
                                 </div>
                                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
                                     <div style="font-size:1.2em; font-weight:800; color:#e67e22;">€${Number(student.monthlyFees || 0).toFixed(2)}</div>
@@ -3570,7 +3570,7 @@
                         card.innerHTML = `
                             <div>
                                 <div style="font-weight:600; color:#333;">${expense.description}</div>
-                                <div style="color:#666; font-size:0.9em;">${expense.expenseDate}</div>
+                                <div style="color:#1a1a1a; font-size:0.9em;">${expense.expenseDate}</div>
                             </div>
                             <div style="text-align:right;">
                                 <div style="font-size:1.2em; font-weight:bold; color:#e74c3c;">€${Number(expense.amount || 0).toFixed(2)}</div>
@@ -3613,7 +3613,7 @@
             );
 
             if (records.length === 0) {
-                container.innerHTML = '<div style="color:#999;padding:16px;">No payment records found for this period.</div>';
+                container.innerHTML = '<div style="color:#444;padding:16px;">No payment records found for this period.</div>';
                 return;
             }
 
@@ -3657,8 +3657,8 @@
                     html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#f8f9fa;border:1px solid #eee;border-left:4px solid #27ae60;border-radius:8px;margin-bottom:6px;">
                         <div>
                             <div ${clickable}>${name}</div>
-                            ${parentName ? `<div style="font-size:0.85em;color:#888;">👤 ${parentName}</div>` : ''}
-                            <div style="font-size:0.85em;color:#666;">📅 Cycle: ${cycleLabel}</div>
+                            ${parentName ? `<div style="font-size:0.85em;color:#333;">👤 ${parentName}</div>` : ''}
+                            <div style="font-size:0.85em;color:#1a1a1a;">📅 Cycle: ${cycleLabel}</div>
                         </div>
                         <div style="font-size:1.1em;font-weight:800;color:#27ae60;">€${fee}</div>
                     </div>`;
@@ -3693,7 +3693,7 @@
 
             if (!fromDate || !toDate) {
                 document.getElementById('statsContainer').innerHTML = '';
-                document.getElementById('reportsSummary').innerHTML = '<div style="color:#999;padding:16px;">Please select a From and To date.</div>';
+                document.getElementById('reportsSummary').innerHTML = '<div style="color:#444;padding:16px;">Please select a From and To date.</div>';
                 return;
             }
 
