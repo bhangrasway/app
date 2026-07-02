@@ -1852,6 +1852,7 @@
                     <div style="display:flex; flex-direction:column; gap:5px;">
                         <button onclick="showStudentDetail(${student.id})" class="btn-small" style="background:#27ae60;">View</button>
                         <button onclick="editStudent(${student.id})" class="btn-small" style="background:#3498db;">Edit</button>
+                        ${student.phone ? `<a href="https://wa.me/${student.phone.replace(/\D/g,'')}" target="_blank" class="btn-small" style="background:#25D366; color:white; text-decoration:none; text-align:center;">💬 WA</a>` : ''}
                         <button onclick="deleteStudent(${student.id})" class="btn-small btn-delete">Delete</button>
                     </div>
                 `;
