@@ -523,8 +523,8 @@
             <p>Studio Management System</p>
             <div class="error-message" id="loginError"></div>
             <form class="login-form" onsubmit="handleLogin(event)">
-                <label for="username">Username</label>
-                <input type="text" id="username" required placeholder="Enter username" autocomplete="username">
+                <label for="email">Email</label>
+                <input type="email" id="email" required placeholder="Enter email" autocomplete="email">
                 
                 <label for="password">Password</label>
                 <input type="password" id="password" required placeholder="Enter password" autocomplete="current-password">
@@ -1457,25 +1457,9 @@
             return { response, data };
         }
 
-        function isStaticHostMode() {
-            return window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
-        }
-
-        function getLocalAuthState() {
-            return localStorage.getItem('studioLocalAuth') === 'true';
-        }
-
-        function setLocalAuthState(isAuthenticated) {
-            if (isAuthenticated) {
-                localStorage.setItem('studioLocalAuth', 'true');
-            } else {
-                localStorage.removeItem('studioLocalAuth');
-            }
-        }
-
         async function handleLogin(event) {
             event.preventDefault();
-            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const errorMsg = document.getElementById('loginError');
             const loginButton = event.target.querySelector('button[type="submit"]');
@@ -1484,76 +1468,29 @@
             loginButton.disabled = true;
             loginButton.textContent = 'Signing in...';
 
-            if (isStaticHostMode()) {
-                const validUsername = username === 'admin';
-                const validPassword = password === 'jindjaan';
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
-                loginButton.disabled = false;
-                loginButton.textContent = 'Sign In';
+            loginButton.disabled = false;
+            loginButton.textContent = 'Sign In';
 
-                if (!(validUsername && validPassword)) {
-                    errorMsg.textContent = 'Invalid username or password.';
-                    errorMsg.classList.add('show');
-                    return;
-                }
-
-                setLocalAuthState(true);
-                showApp();
+            if (error) {
+                errorMsg.textContent = 'Invalid email or password.';
+                errorMsg.classList.add('show');
                 return;
             }
 
-            try {
-                const { response, data } = await apiRequest('/api/login', {
-                    method: 'POST',
-                    body: JSON.stringify({ username, password })
-                });
-
-                loginButton.disabled = false;
-                loginButton.textContent = 'Sign In';
-
-                if (!response.ok || !data.authenticated) {
-                    errorMsg.textContent = data.error || 'Invalid username or password.';
-                    errorMsg.classList.add('show');
-                    return;
-                }
-
-                showApp();
-            } catch (error) {
-                loginButton.disabled = false;
-                loginButton.textContent = 'Sign In';
-                errorMsg.textContent = 'Login server is not running. Start server.py and reload the page.';
-                errorMsg.classList.add('show');
-            }
+            showApp();
         }
 
         async function handleLogout() {
-            if (isStaticHostMode()) {
-                setLocalAuthState(false);
-                showLoginPage();
-                return;
-            }
-
-            try {
-                const { response, data } = await apiRequest('/api/logout', {
-                    method: 'POST'
-                });
-
-                if (!response.ok) {
-                    alert(data.error || 'Unable to log out right now.');
-                    return;
-                }
-
-                showLoginPage();
-            } catch (error) {
-                alert('Login server is not running. Start server.py and reload the page.');
-                return;
-            }
+            await supabaseClient.auth.signOut();
+            showLoginPage();
         }
 
         function showLoginPage() {
             document.getElementById('loginPage').style.display = 'flex';
             document.getElementById('appPage').style.display = 'none';
-            document.getElementById('username').value = '';
+            document.getElementById('email').value = '';
             document.getElementById('password').value = '';
             document.getElementById('loginError').classList.remove('show');
         }
@@ -1565,29 +1502,11 @@
         }
 
         async function checkAuthentication() {
-            if (isStaticHostMode()) {
-                if (getLocalAuthState()) {
-                    showApp();
-                } else {
-                    showLoginPage();
-                }
-                return;
-            }
-
-            try {
-                const { response, data } = await apiRequest('/api/session');
-
-                if (!response.ok || !data.authenticated) {
-                    showLoginPage();
-                    return;
-                }
-
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
                 showApp();
-            } catch (error) {
-                const errorMsg = document.getElementById('loginError');
+            } else {
                 showLoginPage();
-                errorMsg.textContent = 'Login server is not running. Start server.py and reload the page.';
-                errorMsg.classList.add('show');
             }
         }
 
