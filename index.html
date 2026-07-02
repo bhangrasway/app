@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bhangra Sway Cremona - Studio Management</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -574,10 +575,6 @@
                 <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
                     <div id="studentsCount" style="font-weight:600; color:#333;">Loaded students: 0</div>
                     <button onclick="reloadStudents()" style="background:#3498db; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer;">Reload</button>
-                    <button onclick="document.getElementById('importFileInput').click()" style="background:#2ecc71; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer;">Import CSV</button>
-                    <input type="file" id="importFileInput" accept=".csv,text/csv" style="display:none" onchange="handleImportFile(event)">
-                    <button onclick="document.getElementById('importFeesFileInput').click()" style="background:#8e44ad; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer;">📋 Import Fees from CSV</button>
-                    <input type="file" id="importFeesFileInput" accept=".csv,text/csv" style="display:none" onchange="handleImportFeesFromCsv(event)">
                 </div>
                 <form onsubmit="addStudent(event)" style="max-width:900px;">
 
@@ -942,12 +939,20 @@
 
                 <!-- TAX PAID SECTION -->
                 <div>
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
                         <div>
                             <h2 style="margin:0;">🏛️ Tax Records</h2>
-                            <div style="color:#1a1a1a; font-size:0.9em; margin-top:4px;">Track tax payments and doctor certificates per student</div>
+                            <div style="color:#555; font-size:0.9em; margin-top:4px;">Click a student to view or add tax payments · PDFs stored in Supabase</div>
                         </div>
                         <input id="taxSearch" placeholder="Search student…" oninput="renderTaxRecords()" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; min-width:220px;">
+                    </div>
+                    <!-- PDF Stats bar -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; background:#f0f4ff; border:1px solid #d0deff; border-radius:8px; padding:10px 16px; margin-bottom:16px;">
+                        <span id="pdfStatsBar" style="font-size:0.88em; color:#2c5aa0; font-weight:600;">📁 Loading…</span>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button id="downloadAllBtn" onclick="downloadAllTaxPdfs()" style="padding:6px 14px; background:#2c3e50; color:white; border:none; border-radius:6px; cursor:pointer; font-size:0.85em; font-weight:600;">⬇ Download All PDFs</button>
+                            <button id="deleteAllPdfsBtn" onclick="deleteAllTaxPdfs()" style="padding:6px 14px; background:#c0392b; color:white; border:none; border-radius:6px; cursor:pointer; font-size:0.85em; font-weight:600;">🗑 Delete All PDFs</button>
+                        </div>
                     </div>
                     <div id="taxRecordsList"></div>
                 </div>
@@ -958,13 +963,13 @@
                 <div class="backup-section">
                     <h3>💾 Backup & Restore Data</h3>
                     <div class="backup-info">
-                        <strong>📌 How it works:</strong> Download an Excel file with all students, payments and expenses. Restore from a JSON backup file to recover your data.
+                        <strong>📌 How it works:</strong> Download an Excel file with all students, payments and expenses. Use "Full Backup" to also download all PDFs (tax documents + doctor certificates) as a ZIP. Restore from a JSON backup file to recover your data.
                     </div>
                     <div class="backup-buttons">
-                        <button class="btn-backup" onclick="downloadAllData()">📥 Download Excel Backup</button>
+                        <button class="btn-backup" onclick="downloadFullBackupWithPdfs()" style="background:linear-gradient(135deg,#1a6ea8,#2980b9);">📦 Full Backup (Data + PDFs)</button>
                         <button class="btn-restore" onclick="document.getElementById('restoreFileInput').click()">📤 Restore Backup</button>
                     </div>
-                    <input type="file" id="restoreFileInput" accept=".csv,.json,.txt,text/csv,text/plain,application/json" style="display:none" onchange="handleRestoreFile(event)">
+                    <input type="file" id="restoreFileInput" accept=".zip,.json,.csv,.txt" style="display:none" onchange="handleRestoreFile(event)">
                     <div class="backup-info" style="border-left-color: #27ae60;">
                         <strong>✓ Last Backup Info:</strong> <span id="lastBackupInfo">No backup created yet</span>
                     </div>
@@ -973,15 +978,76 @@
         </div>
     </div>
 
+    <!-- TAX MODAL -->
+    <div id="taxModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this) closeTaxModal()">
+      <div style="background:#fff; border-radius:16px; width:100%; max-width:720px; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); display:flex; flex-direction:column;">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#1a1a2e,#16213e); color:white; padding:20px 24px; border-radius:16px 16px 0 0; display:flex; justify-content:space-between; align-items:flex-start; flex-shrink:0;">
+          <div>
+            <div id="taxModalTitle" style="font-size:1.2em; font-weight:800;"></div>
+            <div id="taxModalSubtitle" style="font-size:0.82em; color:#aaa; margin-top:4px;"></div>
+            <div id="taxModalInfo" style="font-size:0.8em; color:#bbb; margin-top:6px; display:flex; flex-wrap:wrap; gap:10px;"></div>
+          </div>
+          <button onclick="closeTaxModal()" style="background:rgba(255,255,255,0.15); border:none; color:white; font-size:1em; cursor:pointer; border-radius:6px; padding:6px 14px; flex-shrink:0; font-weight:600;">✕ Close</button>
+        </div>
+        <!-- Doctor cert -->
+        <div style="padding:14px 24px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:12px; flex-wrap:wrap; flex-shrink:0;">
+          <input type="checkbox" id="taxDoctorCheck" onchange="toggleDoctorCertificate(this.checked)" style="width:16px;height:16px;">
+          <label for="taxDoctorCheck" style="cursor:pointer; font-size:0.92em; font-weight:600;">🩺 Doctor Certificate on file</label>
+          <div id="doctorPdfControls" style="display:flex; align-items:center; gap:6px; margin-left:4px;"></div>
+        </div>
+        <!-- Payments list -->
+        <div style="padding:16px 24px; flex:1;">
+          <div style="font-weight:700; margin-bottom:10px; font-size:0.82em; color:#888; text-transform:uppercase; letter-spacing:0.5px;">📋 Payment History</div>
+          <div id="taxPaymentsList"></div>
+        </div>
+        <!-- Add payment form -->
+        <div style="padding:16px 24px; background:#f8f9fa; border-top:2px solid #e9ecef; border-radius:0 0 16px 16px; flex-shrink:0;">
+          <div style="font-weight:700; margin-bottom:12px; font-size:0.82em; color:#333; text-transform:uppercase; letter-spacing:0.5px;">➕ Add New Payment</div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+            <div>
+              <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">PAID DATE *</label>
+              <input type="date" id="newPayDate" style="padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+            </div>
+            <div>
+              <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">TAX FILE NO</label>
+              <input type="text" id="newTaxFileNo" placeholder="e.g. TF-12345" style="padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em; width:155px;">
+            </div>
+            <div>
+              <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">PDF (Agenzia Entrate)</label>
+              <label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; background:#fff; border:1.5px solid #ddd; border-radius:6px; cursor:pointer; font-size:0.82em; color:#555; white-space:nowrap;">
+                📎 <span id="newPdfLabel">Choose PDF…</span>
+                <input type="file" id="newPdfFile" accept=".pdf,application/pdf" style="display:none;" onchange="document.getElementById('newPdfLabel').textContent = this.files[0]?.name || 'Choose PDF…'">
+              </label>
+            </div>
+            <button id="addPayBtn" onclick="addTaxPayment()" style="padding:9px 22px; background:#27ae60; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.95em; white-space:nowrap;">+ Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <button id="goTopBtn" onclick="scrollToTop()">↑</button>
 
     <script>
         // ===== TAX RECORDS =====
+        const TAX_BUCKET = 'tax-pdfs';
+
         function getTaxRecord(studentId) {
             try {
                 const all = JSON.parse(localStorage.getItem('taxRecords') || '{}');
-                return all[String(studentId)] || { paidDate: '', nextPayDate: '', hasDoctor: false, paid: false };
-            } catch { return { paidDate: '', nextPayDate: '', hasDoctor: false, paid: false }; }
+                const r = all[String(studentId)];
+                if (!r) return { payments: [], hasDoctor: false };
+                // Migrate old format (paid/paidDate/taxFileNo/nextPayDate)
+                if (r.paid !== undefined && !r.payments) {
+                    const migrated = {
+                        hasDoctor: r.hasDoctor || false,
+                        payments: r.paidDate ? [{ id: 'legacy_' + studentId, date: r.paidDate, taxFileNo: r.taxFileNo || '', pdfPath: '', pdfName: '' }] : []
+                    };
+                    setTaxRecord(studentId, migrated);
+                    return migrated;
+                }
+                return { payments: r.payments || [], hasDoctor: r.hasDoctor || false, doctorPdfPath: r.doctorPdfPath || '', doctorPdfName: r.doctorPdfName || '' };
+            } catch { return { payments: [], hasDoctor: false }; }
         }
 
         function setTaxRecord(studentId, record) {
@@ -992,10 +1058,326 @@
             } catch {}
         }
 
-        function updateTaxField(studentId, field, value) {
+        let currentTaxStudentId = null;
+
+        function openTaxModal(studentId) {
+            currentTaxStudentId = studentId;
+            renderTaxModal();
+            document.getElementById('taxModal').style.display = 'flex';
+        }
+
+        function closeTaxModal() {
+            document.getElementById('taxModal').style.display = 'none';
+            currentTaxStudentId = null;
+            document.getElementById('newPayDate').value = '';
+            document.getElementById('newTaxFileNo').value = '';
+            document.getElementById('newPdfFile').value = '';
+            document.getElementById('newPdfLabel').textContent = 'Choose PDF…';
+            renderTaxRecords();
+        }
+
+        function renderTaxModal() {
+            const s = students.find(x => x.id === currentTaxStudentId);
+            if (!s) return;
+            const rec = getTaxRecord(s.id);
+            document.getElementById('taxModalTitle').textContent = s.name;
+            document.getElementById('taxModalSubtitle').textContent = [s.parentName, s.phone, s.codiceFiscale ? 'CF: ' + s.codiceFiscale : ''].filter(Boolean).join(' · ');
+            // Extra info line
+            const lastFeeRec = getLatestPaymentRecord(s.id);
+            const lastFeeDate = lastFeeRec ? (lastFeeRec.paiddate ?? lastFeeRec.paidDate ?? lastFeeRec.paid_date ?? '') : '';
+            const infoEl = document.getElementById('taxModalInfo');
+            infoEl.innerHTML = [
+                s.age ? `🎂 Age: <strong>${s.age}</strong>` : '',
+                s.address ? `📍 ${s.address}` : '',
+                lastFeeDate ? `💶 Last fee paid: <strong>${String(lastFeeDate).slice(0,10)}</strong>` : '💶 No fee payment on record'
+            ].filter(Boolean).map(t => `<span style="background:rgba(255,255,255,0.08); padding:2px 8px; border-radius:4px;">${t}</span>`).join('');
+            document.getElementById('taxDoctorCheck').checked = rec.hasDoctor;
+            // Doctor PDF controls
+            const dpCtrl = document.getElementById('doctorPdfControls');
+            if (rec.doctorPdfName) {
+                dpCtrl.innerHTML = `<button onclick="viewDoctorPdf()" style="background:#2980b9;color:white;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.78em;white-space:nowrap;">👁 View</button><button onclick="deleteDoctorPdf()" style="background:#e67e22;color:white;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.78em;white-space:nowrap;">🗑 Remove</button><span style="font-size:0.78em;color:#555;">${rec.doctorPdfName}</span>`;
+            } else {
+                dpCtrl.innerHTML = `<label style="display:inline-flex;align-items:center;gap:4px;background:#f0f0f0;border:1.5px dashed #aaa;color:#555;border-radius:6px;padding:3px 9px;cursor:pointer;font-size:0.78em;font-weight:600;white-space:nowrap;">📎 Upload PDF<input type="file" accept=".pdf,application/pdf" style="display:none;" onchange="uploadDoctorPdf(this)"></label>`;
+            }
+            const phone = (s.phone || '').replace(/\D/g, '');
+            const list = document.getElementById('taxPaymentsList');
+            if (!rec.payments.length) {
+                list.innerHTML = '<div style="color:#888; padding:20px; text-align:center; font-size:0.9em;">No payments yet. Add one below ↓</div>';
+                return;
+            }
+            list.innerHTML = rec.payments.map((p, i) => `
+                <div style="display:flex; flex-wrap:nowrap; align-items:center; gap:6px; padding:8px 12px; background:${i%2===0?'#f9fafb':'#fff'}; border-radius:8px; margin-bottom:6px; border:1px solid #e8e8e8; overflow-x:auto;">
+                    <span style="font-size:0.76em; font-weight:700; color:#999; flex-shrink:0;">#${i+1}</span>
+                    <span style="font-size:0.85em; white-space:nowrap; flex-shrink:0;"><strong>📅</strong> ${p.date || '—'}</span>
+                    <span style="font-size:0.8em; font-family:monospace; background:#f0f0f0; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0;">${p.taxFileNo || '—'}</span>
+                    <span style="flex:1; font-size:0.85em; min-width:0;">
+                        ${p.pdfName
+                            ? `<button onclick="viewTaxPdf('${p.pdfPath}')" style="background:#2980b9;color:white;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.78em;white-space:nowrap;">👁 View PDF</button>`
+                            : `<label style="display:inline-flex;align-items:center;gap:4px;background:#f0f0f0;border:1.5px dashed #aaa;color:#555;border-radius:6px;padding:3px 9px;cursor:pointer;font-size:0.78em;font-weight:600;white-space:nowrap;">📎 Upload PDF<input type="file" accept=".pdf,application/pdf" style="display:none;" onchange="uploadPdfForPayment('${p.id}',this)"></label>`}
+                    </span>
+                    ${phone && p.pdfName ? `<button onclick="sendTaxPdfWhatsApp(${s.id},'${p.id}')" style="background:#25D366;color:white;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.78em;white-space:nowrap;flex-shrink:0;">💬 WA</button>` : ''}
+                    ${p.pdfName ? `<button onclick="deletePdfAttachment('${p.id}')" style="background:#e67e22;color:white;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.78em;white-space:nowrap;flex-shrink:0;">🗑 PDF</button>` : ''}
+                    <button onclick="deleteTaxPayment('${p.id}')" style="background:#e74c3c;color:white;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.78em;white-space:nowrap;flex-shrink:0;">🗑 Record</button>
+                </div>
+            `).join('');
+        }
+
+        async function uploadPdfForPayment(paymentId, input) {
+            const file = input.files[0];
+            if (!file) return;
+            const rec = getTaxRecord(currentTaxStudentId);
+            const p = rec.payments.find(x => x.id === paymentId);
+            if (!p) return;
+            const filePath = `student_${currentTaxStudentId}/${paymentId}.pdf`;
+            const { error } = await supabaseClient.storage.from(TAX_BUCKET).upload(filePath, file, { contentType: 'application/pdf', upsert: true });
+            if (error) { alert('Upload failed: ' + error.message); return; }
+            p.pdfPath = filePath;
+            p.pdfName = file.name;
+            setTaxRecord(currentTaxStudentId, rec);
+            renderTaxModal();
+            updatePdfStats();
+        }
+
+        function toggleDoctorCertificate(checked) {
+            if (!currentTaxStudentId) return;
+            const rec = getTaxRecord(currentTaxStudentId);
+            rec.hasDoctor = checked;
+            setTaxRecord(currentTaxStudentId, rec);
+        }
+
+        async function uploadDoctorPdf(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const filePath = `student_${currentTaxStudentId}/doctor_cert.pdf`;
+            const { error } = await supabaseClient.storage.from(TAX_BUCKET).upload(filePath, file, { contentType: 'application/pdf', upsert: true });
+            if (error) { alert('Upload failed: ' + error.message); return; }
+            const rec = getTaxRecord(currentTaxStudentId);
+            rec.doctorPdfPath = filePath;
+            rec.doctorPdfName = file.name;
+            rec.hasDoctor = true;
+            setTaxRecord(currentTaxStudentId, rec);
+            renderTaxModal();
+            updatePdfStats();
+        }
+
+        async function viewDoctorPdf() {
+            const rec = getTaxRecord(currentTaxStudentId);
+            if (!rec.doctorPdfPath) return;
+            const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(rec.doctorPdfPath, 120);
+            if (error) { alert('Could not open PDF: ' + error.message); return; }
+            window.open(data.signedUrl, '_blank');
+        }
+
+        async function deleteDoctorPdf() {
+            if (!confirm('Remove doctor certificate PDF?')) return;
+            const rec = getTaxRecord(currentTaxStudentId);
+            if (!rec.doctorPdfPath) return;
+            const { error } = await supabaseClient.storage.from(TAX_BUCKET).remove([rec.doctorPdfPath]);
+            if (error) { alert('Delete failed: ' + error.message); return; }
+            rec.doctorPdfPath = '';
+            rec.doctorPdfName = '';
+            setTaxRecord(currentTaxStudentId, rec);
+            renderTaxModal();
+            updatePdfStats();
+        }
+
+        async function addTaxPayment() {
+            const btn = document.getElementById('addPayBtn');
+            const date = document.getElementById('newPayDate').value;
+            const taxFileNo = document.getElementById('newTaxFileNo').value.trim();
+            const pdfInput = document.getElementById('newPdfFile');
+            if (!date) { alert('Please enter the payment date.'); return; }
+            btn.disabled = true; btn.textContent = 'Saving…';
+            const paymentId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+            const payment = { id: paymentId, date, taxFileNo, pdfPath: '', pdfName: '' };
+            if (pdfInput.files[0]) {
+                const file = pdfInput.files[0];
+                const filePath = `student_${currentTaxStudentId}/${paymentId}.pdf`;
+                const { error } = await supabaseClient.storage.from(TAX_BUCKET).upload(filePath, file, { contentType: 'application/pdf', upsert: false });
+                if (error) { alert('PDF upload failed: ' + error.message); btn.disabled = false; btn.textContent = '+ Add'; return; }
+                payment.pdfPath = filePath;
+                payment.pdfName = file.name;
+            }
+            const rec = getTaxRecord(currentTaxStudentId);
+            rec.payments.push(payment);
+            setTaxRecord(currentTaxStudentId, rec);
+            document.getElementById('newPayDate').value = '';
+            document.getElementById('newTaxFileNo').value = '';
+            pdfInput.value = '';
+            document.getElementById('newPdfLabel').textContent = 'Choose PDF…';
+            btn.disabled = false; btn.textContent = '+ Add';
+            renderTaxModal();
+            updatePdfStats();
+        }
+
+        async function deleteTaxPayment(paymentId) {
+            if (!confirm('Delete this payment record?')) return;
+            const rec = getTaxRecord(currentTaxStudentId);
+            const p = rec.payments.find(x => x.id === paymentId);
+            if (p && p.pdfPath) await supabaseClient.storage.from(TAX_BUCKET).remove([p.pdfPath]);
+            rec.payments = rec.payments.filter(x => x.id !== paymentId);
+            setTaxRecord(currentTaxStudentId, rec);
+            renderTaxModal();
+            updatePdfStats();
+        }
+
+        async function deletePdfAttachment(paymentId) {
+            if (!confirm('Delete the attached PDF?')) return;
+            const rec = getTaxRecord(currentTaxStudentId);
+            const p = rec.payments.find(x => x.id === paymentId);
+            if (!p || !p.pdfPath) return;
+            const { error } = await supabaseClient.storage.from(TAX_BUCKET).remove([p.pdfPath]);
+            if (error) { alert('Delete failed: ' + error.message); return; }
+            p.pdfPath = ''; p.pdfName = '';
+            setTaxRecord(currentTaxStudentId, rec);
+            renderTaxModal();
+            updatePdfStats();
+        }
+
+        async function viewTaxPdf(pdfPath) {
+            const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(pdfPath, 120);
+            if (error) { alert('Could not open PDF: ' + error.message); return; }
+            window.open(data.signedUrl, '_blank');
+        }
+
+        async function sendTaxPdfWhatsApp(studentId, paymentId) {
+            const s = students.find(x => x.id === studentId);
             const rec = getTaxRecord(studentId);
-            rec[field] = value;
-            setTaxRecord(studentId, rec);
+            const p = rec.payments.find(x => x.id === paymentId);
+            if (!s || !p) return;
+            let pdfUrl = '';
+            if (p.pdfPath) {
+                const { data } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(p.pdfPath, 3600);
+                if (data) pdfUrl = data.signedUrl;
+            }
+            const phone = (s.phone || '').replace(/\D/g, '');
+            const msg = `Gentile ${s.parentName || s.name},\n\nAllego il documento fiscale (${p.taxFileNo || 'N/A'}) del ${p.date || ''}.\n${pdfUrl ? 'PDF: ' + pdfUrl : ''}\n\nBhangra Sway Cremona`;
+            window.open(`https://wa.me/39${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        async function updatePdfStats() {
+            const el = document.getElementById('pdfStatsBar');
+            if (!el) return;
+            try {
+                const { data: folders } = await supabaseClient.storage.from(TAX_BUCKET).list('', { limit: 500 });
+                if (!folders || !folders.length) { el.textContent = '📁 0 PDFs · 0.00 MB used'; return; }
+                let totalFiles = 0, totalBytes = 0;
+                for (const folder of folders) {
+                    const { data: files } = await supabaseClient.storage.from(TAX_BUCKET).list(folder.name, { limit: 500 });
+                    if (files) { totalFiles += files.length; files.forEach(f => { if (f.metadata && f.metadata.size) totalBytes += f.metadata.size; }); }
+                }
+                const mb = (totalBytes / (1024 * 1024)).toFixed(2);
+                el.textContent = `📁 ${totalFiles} PDF${totalFiles !== 1 ? 's' : ''} stored · ${mb} MB used`;
+            } catch { el.textContent = '📁 Stats unavailable'; }
+        }
+
+        async function downloadAllTaxPdfs() {
+            const btn = document.getElementById('downloadAllBtn');
+            btn.disabled = true; btn.textContent = '⏳ Preparing ZIP…';
+            try {
+                const { data: folders } = await supabaseClient.storage.from(TAX_BUCKET).list('', { limit: 500 });
+                if (!folders || !folders.length) { alert('No PDFs stored.'); btn.disabled = false; btn.textContent = '⬇ Download All PDFs'; return; }
+                const zip = new JSZip();
+                const docFolder = zip.folder('Doctor Certificates');
+                const taxFolder = zip.folder('Tax Documents');
+                for (const folder of folders) {
+                    const studentId = folder.name.replace('student_', '');
+                    const student = students.find(s => String(s.id) === String(studentId));
+                    const studentName = student ? student.name.replace(/[^a-zA-Z0-9 _-]/g, '') : folder.name;
+                    const { data: files } = await supabaseClient.storage.from(TAX_BUCKET).list(folder.name, { limit: 500 });
+                    if (!files) continue;
+                    for (const file of files) {
+                        const path = `${folder.name}/${file.name}`;
+                        const { data: blob } = await supabaseClient.storage.from(TAX_BUCKET).download(path);
+                        if (!blob) continue;
+                        if (file.name === 'doctor_cert.pdf') {
+                            docFolder.file(`${studentName}.pdf`, blob);
+                        } else {
+                            taxFolder.file(`${studentName}_${file.name}`, blob);
+                        }
+                    }
+                }
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a'); a.href = url; a.download = 'tax_pdfs.zip'; a.click();
+                URL.revokeObjectURL(url);
+            } catch(e) { alert('Download failed: ' + e.message); }
+            btn.disabled = false; btn.textContent = '⬇ Download All PDFs';
+        }
+
+        async function deleteAllTaxPdfs() {
+            if (!confirm('Delete ALL PDFs from Supabase? This cannot be undone. Consider downloading a backup first.')) return;
+            const btn = document.getElementById('deleteAllPdfsBtn');
+            btn.disabled = true; btn.textContent = '⏳ Deleting…';
+            try {
+                const { data: folders } = await supabaseClient.storage.from(TAX_BUCKET).list('', { limit: 500 });
+                if (!folders || !folders.length) { alert('No PDFs to delete.'); btn.disabled = false; btn.textContent = '🗑 Delete All PDFs'; return; }
+                const allPaths = [];
+                for (const folder of folders) {
+                    const { data: files } = await supabaseClient.storage.from(TAX_BUCKET).list(folder.name, { limit: 500 });
+                    if (files) files.forEach(f => allPaths.push(`${folder.name}/${f.name}`));
+                }
+                if (allPaths.length) await supabaseClient.storage.from(TAX_BUCKET).remove(allPaths);
+                // Clear pdf references from localStorage
+                const all = JSON.parse(localStorage.getItem('taxRecords') || '{}');
+                Object.keys(all).forEach(id => {
+                    if (all[id].payments) all[id].payments.forEach(p => { p.pdfPath = ''; p.pdfName = ''; });
+                    all[id].doctorPdfPath = ''; all[id].doctorPdfName = '';
+                });
+                localStorage.setItem('taxRecords', JSON.stringify(all));
+                alert(`Deleted ${allPaths.length} PDF(s) successfully.`);
+                updatePdfStats();
+                if (currentTaxStudentId) renderTaxModal();
+                renderTaxRecords();
+            } catch(e) { alert('Delete failed: ' + e.message); }
+            btn.disabled = false; btn.textContent = '🗑 Delete All PDFs';
+        }
+
+        async function downloadFullBackupWithPdfs() {
+            const btn = event.currentTarget;
+            btn.disabled = true; btn.textContent = '⏳ Building backup…';
+            try {
+                const zip = new JSZip();
+                const dataFolder = zip.folder('data');
+                const docFolder = zip.folder('Doctor Certificates');
+                const taxFolder = zip.folder('Tax Documents');
+
+                // Save metadata
+                dataFolder.file('students.json', JSON.stringify(students, null, 2));
+                dataFolder.file('taxRecords.json', localStorage.getItem('taxRecords') || '{}');
+                dataFolder.file('feePayments.json', JSON.stringify(feePayments || [], null, 2));
+
+                // Download all PDFs from Supabase
+                const { data: folders } = await supabaseClient.storage.from(TAX_BUCKET).list('', { limit: 500 });
+                if (folders && folders.length) {
+                    for (const folder of folders) {
+                        const studentId = folder.name.replace('student_', '');
+                        const student = students.find(s => String(s.id) === String(studentId));
+                        const studentName = student ? student.name.replace(/[^a-zA-Z0-9 _-]/g, '') : folder.name;
+                        const { data: files } = await supabaseClient.storage.from(TAX_BUCKET).list(folder.name, { limit: 500 });
+                        if (!files) continue;
+                        for (const file of files) {
+                            const path = `${folder.name}/${file.name}`;
+                            const { data: blob } = await supabaseClient.storage.from(TAX_BUCKET).download(path);
+                            if (!blob) continue;
+                            if (file.name === 'doctor_cert.pdf') {
+                                docFolder.file(`${studentName}.pdf`, blob);
+                            } else {
+                                taxFolder.file(`${studentName}_${file.name}`, blob);
+                            }
+                        }
+                    }
+                }
+
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bhangra_full_backup_${new Date().toISOString().slice(0,10)}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch(e) { alert('Full backup failed: ' + e.message); }
+            btn.disabled = false; btn.textContent = '📦 Full Backup (Data + PDFs)';
         }
 
         function renderTaxRecords() {
@@ -1007,56 +1389,36 @@
                 (s.parentName||'').toLowerCase().includes(term) ||
                 (s.codiceFiscale||'').toLowerCase().includes(term)
             );
-            if (list.length === 0) {
-                container.innerHTML = '<div style="color:#444;padding:16px;">No students found.</div>';
-                return;
-            }
+            if (!list.length) { container.innerHTML = '<div style="color:#444;padding:16px;">No students found.</div>'; return; }
             container.innerHTML = list.map(s => {
                 const rec = getTaxRecord(s.id);
                 const age = Number(s.age || 0);
                 const ageColor = age > 0 && age < 18 ? '#e74c3c' : '#27ae60';
-                const borderColor = rec.paid ? '#27ae60' : '#eee';
-                const rowBg = rec.paid ? '#f0fdf4' : '#fff';
-                return `<div style="background:${rowBg}; border:1px solid ${borderColor}; border-left:5px solid ${borderColor}; border-radius:10px; padding:14px 18px; margin-bottom:10px;">
-
-                    <!-- Student info row -->
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-                        <div style="min-width:0;">
-                            <div style="font-weight:800; font-size:1.05em; color:#1a1a2e; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                                ${s.name}
-                                ${rec.paid ? '<span style="background:#d4edda;color:#155724;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">✓ TAX PAID</span>' : '<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">PENDING</span>'}
-                                ${rec.hasDoctor ? '<span style="background:#d1ecf1;color:#0c5460;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">🩺 Doctor ✓</span>' : ''}
-                            </div>
-                            <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px; font-size:0.84em; color:#1a1a1a;">
-                                <span>👤 ${s.parentName || '—'}</span>
-                                <span>📞 ${s.phone || '—'}</span>
-                                ${age > 0 ? `<span style="color:${ageColor}; font-weight:700;">Age: ${age}</span>` : ''}
-                                ${s.codiceFiscale ? `<span style="font-family:monospace; background:#f5f5f5; padding:1px 6px; border-radius:4px;">CF: ${s.codiceFiscale}</span>` : ''}
-                                ${s.address ? `<span>📍 ${s.address}</span>` : ''}
-                            </div>
+                const payCount = rec.payments.length;
+                const lastPay = payCount ? rec.payments[payCount - 1] : null;
+                const hasPdf = rec.payments.some(p => p.pdfName);
+                const borderColor = payCount > 0 ? '#27ae60' : '#ddd';
+                const rowBg = payCount > 0 ? '#f0fdf4' : '#fff';
+                return `<div style="background:${rowBg}; border:1px solid ${borderColor}; border-left:5px solid ${borderColor}; border-radius:10px; padding:14px 18px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div style="min-width:0; flex:1; cursor:pointer;" onclick="openTaxModal(${s.id})">
+                        <div style="font-weight:800; font-size:1.05em; color:#1a1a2e; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="color:#2980b9; text-decoration:underline;">${s.name}</span>
+                            ${payCount > 0 ? `<span style="background:#d4edda;color:#155724;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">✓ ${payCount} payment${payCount > 1 ? 's' : ''}</span>` : '<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">PENDING</span>'}
+                            ${rec.hasDoctor ? '<span style="background:#d1ecf1;color:#0c5460;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">🩺 Doctor ✓</span>' : ''}
+                            ${hasPdf ? '<span style="background:#e8f4fd;color:#1a6ea8;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">📎 PDF</span>' : ''}
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px; font-size:0.84em; color:#555;">
+                            <span>👤 ${s.parentName || '—'}</span>
+                            <span>📞 ${s.phone || '—'}</span>
+                            ${age > 0 ? `<span style="color:${ageColor}; font-weight:700;">Age: ${age}</span>` : ''}
+                            ${s.codiceFiscale ? `<span style="font-family:monospace; background:#f5f5f5; padding:1px 6px; border-radius:4px;">CF: ${s.codiceFiscale}</span>` : ''}
+                            ${lastPay ? `<span style="color:#27ae60; font-weight:600;">Last paid: ${lastPay.date}</span>` : ''}
                         </div>
                     </div>
-
-                    <!-- Tax fields row -->
-                    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding-top:10px; border-top:1px solid #eee;">
-                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer; margin:0;">
-                            <input type="checkbox" ${rec.paid ? 'checked' : ''} onchange="updateTaxField(${s.id},'paid',this.checked); renderTaxRecords();" style="width:16px;height:16px;"> Tax Paid
-                        </label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer; margin:0;">
-                            <input type="checkbox" ${rec.hasDoctor ? 'checked' : ''} onchange="updateTaxField(${s.id},'hasDoctor',this.checked); renderTaxRecords();" style="width:16px;height:16px;"> 🩺 Doctor Certificate
-                        </label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; margin:0;">
-                            Tax File No: <input type="text" value="${rec.taxFileNo || ''}" onchange="updateTaxField(${s.id},'taxFileNo',this.value)" placeholder="e.g. TF-12345" style="padding:4px 8px; border-radius:5px; border:1px solid #ddd; font-size:0.88em; width:130px;">
-                        </label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; margin:0;">
-                            Paid Date: <input type="date" value="${rec.paidDate || ''}" onchange="updateTaxField(${s.id},'paidDate',this.value)" style="padding:4px 8px; border-radius:5px; border:1px solid #ddd; font-size:0.88em;">
-                        </label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; margin:0;">
-                            Next Due: <input type="date" value="${rec.nextPayDate || ''}" onchange="updateTaxField(${s.id},'nextPayDate',this.value)" style="padding:4px 8px; border-radius:5px; border:1px solid #ddd; font-size:0.88em;">
-                        </label>
-                    </div>
+                    <button onclick="openTaxModal(${s.id})" title="Add / view payments" style="background:#27ae60;color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:1.5em;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;">+</button>
                 </div>`;
             }).join('');
+            updatePdfStats();
         }
 
         // ===== SUPABASE CONFIGURATION =====
@@ -1857,7 +2219,7 @@
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:130px;">
                         <button onclick="showStudentDetail(${student.id})" class="btn-small" style="background:#27ae60;">View</button>
                         <button onclick="editStudent(${student.id})" class="btn-small" style="background:#3498db;">Edit</button>
-                        ${student.phone ? `<a href="https://wa.me/${student.phone.replace(/\D/g,'')}" target="_blank" class="btn-small" style="background:#25D366; color:white; text-decoration:none; text-align:center;">💬 WA</a>` : '<span></span>'}
+                        ${student.phone ? `<a href="https://wa.me/39${student.phone.replace(/\D/g,'')}" target="_blank" class="btn-small" style="background:#25D366; color:white; text-decoration:none; text-align:center;">💬 WA</a>` : '<span></span>'}
                         <button onclick="deleteStudent(${student.id})" class="btn-small btn-delete">Delete</button>
                     </div>
                 `;
@@ -2898,6 +3260,66 @@
         async function handleRestoreFile(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // ===== ZIP (Full Backup) restore =====
+            if (file.name.toLowerCase().endsWith('.zip')) {
+                if (!confirm('\u26a0\ufe0f Restore from Full Backup ZIP? This will replace all current data and PDFs. Continue?')) { event.target.value = ''; return; }
+                try {
+                    const zip = await JSZip.loadAsync(file);
+
+                    // 1. Restore students
+                    let studentsData = [];
+                    const studentsFile = zip.file('data/students.json');
+                    if (studentsFile) {
+                        studentsData = JSON.parse(await studentsFile.async('text'));
+                        await supabaseClient.from('students').delete().neq('id', 0);
+                        if (studentsData.length) {
+                            const { data: ins, error } = await supabaseClient.from('students').upsert(studentsData, { onConflict: 'id' }).select();
+                            if (!error && ins) studentsData = ins;
+                        }
+                    }
+
+                    // 2. Restore taxRecords to localStorage (keyed by studentId — upsert by overwrite)
+                    const taxFile = zip.file('data/taxRecords.json');
+                    if (taxFile) localStorage.setItem('taxRecords', await taxFile.async('text'));
+
+                    // 3. Restore feePayments (delete first = no duplicates)
+                    const feeFile = zip.file('data/feePayments.json');
+                    if (feeFile) {
+                        const feeData = JSON.parse(await feeFile.async('text'));
+                        await supabaseClient.from('fees_paid').delete().neq('id', 0);
+                        if (feeData.length) await insertFeesPaidWithSchemaFallback(feeData);
+                    }
+
+                    // 4. Re-upload PDFs from ZIP to Supabase
+                    const taxRecordsRaw = JSON.parse(localStorage.getItem('taxRecords') || '{}');
+                    for (const [studentId, rec] of Object.entries(taxRecordsRaw)) {
+                        const student = studentsData.find(s => String(s.id) === String(studentId));
+                        const sanitizedName = student ? student.name.replace(/[^a-zA-Z0-9 _-]/g, '') : '';
+                        if (!sanitizedName) continue;
+                        // Doctor cert
+                        if (rec.doctorPdfPath) {
+                            const zf = zip.file(`Doctor Certificates/${sanitizedName}.pdf`);
+                            if (zf) { const blob = await zf.async('blob'); await supabaseClient.storage.from(TAX_BUCKET).upload(rec.doctorPdfPath, blob, { contentType: 'application/pdf', upsert: true }); }
+                        }
+                        // Tax payment PDFs
+                        for (const payment of (rec.payments || [])) {
+                            if (payment.pdfPath) {
+                                const pdfFilename = payment.pdfPath.split('/')[1];
+                                const zf = zip.file(`Tax Documents/${sanitizedName}_${pdfFilename}`);
+                                if (zf) { const blob = await zf.async('blob'); await supabaseClient.storage.from(TAX_BUCKET).upload(payment.pdfPath, blob, { contentType: 'application/pdf', upsert: true }); }
+                            }
+                        }
+                    }
+
+                    event.target.value = '';
+                    showSuccessMessage(`\u2713 Restored: ${studentsData.length} students, tax records, and PDFs.`);
+                    await loadAllData();
+                    renderTaxRecords();
+                    updatePdfStats();
+                } catch(e) { alert('Restore failed: ' + e.message); event.target.value = ''; }
+                return;
+            }
 
             function normalizeStudentMatchKey(student) {
                 const name = String(student.name || '').trim().toLowerCase();
