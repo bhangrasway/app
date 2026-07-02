@@ -1453,6 +1453,23 @@
                         order: () => failure,
                         limit: () => failure
                     };
+                },
+                auth: {
+                    signInWithPassword: () => Promise.resolve({ data: null, error: new Error('Supabase SDK failed to load. Reload the page.') }),
+                    signOut: () => Promise.resolve({ error: null }),
+                    getSession: () => Promise.resolve({ data: { session: null }, error: null })
+                },
+                storage: {
+                    from() {
+                        const failure = Promise.resolve({ data: null, error: new Error('Supabase SDK failed to load. Reload the page.') });
+                        return {
+                            upload: () => failure,
+                            download: () => failure,
+                            remove: () => failure,
+                            list: () => failure,
+                            createSignedUrl: () => failure
+                        };
+                    }
                 }
             };
 
