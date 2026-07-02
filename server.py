@@ -1,4 +1,5 @@
 import json
+import os
 import secrets
 import time
 from http import HTTPStatus
@@ -7,12 +8,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-HOST = "127.0.0.1"
-PORT = 8002
+HOST = "0.0.0.0"
+PORT = int(os.environ.get("PORT", 8002))
 SESSION_COOKIE = "studio_session"
 SESSION_TTL_SECONDS = 60 * 60 * 12
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "jindjaan"
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 SESSIONS = {}
 ROOT_DIR = Path(__file__).resolve().parent
 
