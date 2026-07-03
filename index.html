@@ -1212,9 +1212,10 @@
         async function viewDoctorPdf() {
             const rec = getTaxRecord(currentTaxStudentId);
             if (!rec.doctorPdfPath) return;
+            const win = window.open('', '_blank');
             const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(rec.doctorPdfPath, 120);
-            if (error) { alert('Could not open PDF: ' + error.message); return; }
-            window.open(data.signedUrl, '_blank');
+            if (error) { if (win) win.close(); alert('Could not open PDF: ' + error.message); return; }
+            if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
         }
 
         async function deleteDoctorPdf() {
@@ -1284,9 +1285,10 @@
         }
 
         async function viewTaxPdf(pdfPath) {
+            const win = window.open('', '_blank');
             const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(pdfPath, 120);
-            if (error) { alert('Could not open PDF: ' + error.message); return; }
-            window.open(data.signedUrl, '_blank');
+            if (error) { if (win) win.close(); alert('Could not open PDF: ' + error.message); return; }
+            if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
         }
 
         async function sendTaxPdfWhatsApp(studentId, paymentId) {
@@ -1294,6 +1296,7 @@
             const rec = getTaxRecord(studentId);
             const p = rec.payments.find(x => x.id === paymentId);
             if (!s || !p) return;
+            const win = window.open('', '_blank');
             let pdfUrl = '';
             if (p.pdfPath) {
                 const { data } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(p.pdfPath, 3600);
@@ -1301,7 +1304,8 @@
             }
             const phone = (s.phone || '').replace(/\D/g, '');
             const msg = `Gentile ${s.parentName || s.name},\n\nAllego il documento fiscale (${p.taxFileNo || 'N/A'}) del ${p.date || ''}.\n${pdfUrl ? 'PDF: ' + pdfUrl : ''}\n\nBhangra Sway Cremona`;
-            window.open(`https://wa.me/39${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+            const url = `https://wa.me/39${phone}?text=${encodeURIComponent(msg)}`;
+            if (win) win.location.href = url; else window.open(url, '_blank');
         }
 
         async function updatePdfStats() {
