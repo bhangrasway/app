@@ -1032,30 +1032,79 @@
         // ===== TAX RECORDS =====
         const TAX_BUCKET = 'tax-pdfs';
 
-        function getTaxRecord(studentId) {
+        // In-memory cache for tax records — loaded from Supabase on startup
+        let taxRecordsCache = {};
+
+        async function loadTaxRecords() {
             try {
-                const all = JSON.parse(localStorage.getItem('taxRecords') || '{}');
-                const r = all[String(studentId)];
-                if (!r) return { payments: [], hasDoctor: false };
-                // Migrate old format (paid/paidDate/taxFileNo/nextPayDate)
-                if (r.paid !== undefined && !r.payments) {
-                    const migrated = {
-                        hasDoctor: r.hasDoctor || false,
-                        payments: r.paidDate ? [{ id: 'legacy_' + studentId, date: r.paidDate, taxFileNo: r.taxFileNo || '', pdfPath: '', pdfName: '' }] : []
-                    };
-                    setTaxRecord(studentId, migrated);
-                    return migrated;
+                const { data, error } = await supabaseClient.from('tax_records').select('*');
+                if (error) {
+                    // Table may not exist yet — fall back to localStorage
+                    const local = JSON.parse(localStorage.getItem('taxRecords') || '{}');
+                    taxRecordsCache = local;
+                    return;
                 }
-                return { payments: r.payments || [], hasDoctor: r.hasDoctor || false, doctorPdfPath: r.doctorPdfPath || '', doctorPdfName: r.doctorPdfName || '' };
-            } catch { return { payments: [], hasDoctor: false }; }
+                taxRecordsCache = {};
+                (data || []).forEach(row => {
+                    taxRecordsCache[String(row.student_id)] = {
+                        payments: row.payments || [],
+                        hasDoctor: row.has_doctor || false,
+                        doctorPdfPath: row.doctor_pdf_path || '',
+                        doctorPdfName: row.doctor_pdf_name || ''
+                    };
+                });
+                // One-time migration: copy any localStorage data not yet in Supabase
+                const local = JSON.parse(localStorage.getItem('taxRecords') || '{}');
+                const supabaseIds = new Set((data || []).map(r => String(r.student_id)));
+                const toMigrate = Object.keys(local).filter(k => !supabaseIds.has(k));
+                for (const sid of toMigrate) {
+                    const r = local[sid];
+                    if (!r) continue;
+                    const record = {
+                        payments: r.payments || [],
+                        hasDoctor: r.hasDoctor || false,
+                        doctorPdfPath: r.doctorPdfPath || '',
+                        doctorPdfName: r.doctorPdfName || ''
+                    };
+                    taxRecordsCache[sid] = record;
+                    await _upsertTaxRecord(sid, record);
+                }
+                if (toMigrate.length > 0) localStorage.removeItem('taxRecords');
+            } catch {
+                taxRecordsCache = JSON.parse(localStorage.getItem('taxRecords') || '{}');
+            }
+        }
+
+        async function _upsertTaxRecord(studentId, record) {
+            try {
+                await supabaseClient.from('tax_records').upsert({
+                    student_id: Number(studentId),
+                    payments: record.payments || [],
+                    has_doctor: record.hasDoctor || false,
+                    doctor_pdf_path: record.doctorPdfPath || '',
+                    doctor_pdf_name: record.doctorPdfName || ''
+                }, { onConflict: 'student_id' });
+            } catch {}
+        }
+
+        function getTaxRecord(studentId) {
+            const r = taxRecordsCache[String(studentId)];
+            if (!r) return { payments: [], hasDoctor: false, doctorPdfPath: '', doctorPdfName: '' };
+            // Migrate old format (paid/paidDate/taxFileNo/nextPayDate)
+            if (r.paid !== undefined && !r.payments) {
+                const migrated = {
+                    hasDoctor: r.hasDoctor || false,
+                    payments: r.paidDate ? [{ id: 'legacy_' + studentId, date: r.paidDate, taxFileNo: r.taxFileNo || '', pdfPath: '', pdfName: '' }] : []
+                };
+                setTaxRecord(studentId, migrated);
+                return migrated;
+            }
+            return { payments: r.payments || [], hasDoctor: r.hasDoctor || false, doctorPdfPath: r.doctorPdfPath || '', doctorPdfName: r.doctorPdfName || '' };
         }
 
         function setTaxRecord(studentId, record) {
-            try {
-                const all = JSON.parse(localStorage.getItem('taxRecords') || '{}');
-                all[String(studentId)] = record;
-                localStorage.setItem('taxRecords', JSON.stringify(all));
-            } catch {}
+            taxRecordsCache[String(studentId)] = record;
+            _upsertTaxRecord(studentId, record); // async save to Supabase
         }
 
         let currentTaxStudentId = null;
@@ -1318,13 +1367,13 @@
                     if (files) files.forEach(f => allPaths.push(`${folder.name}/${f.name}`));
                 }
                 if (allPaths.length) await supabaseClient.storage.from(TAX_BUCKET).remove(allPaths);
-                // Clear pdf references from localStorage
-                const all = JSON.parse(localStorage.getItem('taxRecords') || '{}');
-                Object.keys(all).forEach(id => {
-                    if (all[id].payments) all[id].payments.forEach(p => { p.pdfPath = ''; p.pdfName = ''; });
-                    all[id].doctorPdfPath = ''; all[id].doctorPdfName = '';
-                });
-                localStorage.setItem('taxRecords', JSON.stringify(all));
+                // Clear pdf references from Supabase and in-memory cache
+                for (const id of Object.keys(taxRecordsCache)) {
+                    const rec = taxRecordsCache[id];
+                    if (rec.payments) rec.payments.forEach(p => { p.pdfPath = ''; p.pdfName = ''; });
+                    rec.doctorPdfPath = ''; rec.doctorPdfName = '';
+                    await _upsertTaxRecord(id, rec);
+                }
                 alert(`Deleted ${allPaths.length} PDF(s) successfully.`);
                 updatePdfStats();
                 if (currentTaxStudentId) renderTaxModal();
@@ -1344,7 +1393,7 @@
 
                 // Save metadata
                 dataFolder.file('students.json', JSON.stringify(students, null, 2));
-                dataFolder.file('taxRecords.json', localStorage.getItem('taxRecords') || '{}');
+                dataFolder.file('taxRecords.json', JSON.stringify(taxRecordsCache, null, 2));
                 dataFolder.file('feePayments.json', JSON.stringify(feePayments || [], null, 2));
 
                 // Download all PDFs from Supabase
@@ -1988,6 +2037,7 @@
                 }
 
                 displayStudents();
+                await loadTaxRecords();
                 updateLastBackupInfo();
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -3296,9 +3346,18 @@
                         }
                     }
 
-                    // 2. Restore taxRecords to localStorage (keyed by studentId — upsert by overwrite)
+                    // 2. Restore taxRecords to Supabase (clear first, then repopulate from backup)
+                    taxRecordsCache = {};
+                    await supabaseClient.from('tax_records').delete().neq('student_id', 0);
                     const taxFile = zip.file('data/taxRecords.json');
-                    if (taxFile) localStorage.setItem('taxRecords', await taxFile.async('text'));
+                    if (taxFile) {
+                        const taxRaw = JSON.parse(await taxFile.async('text'));
+                        for (const [sid, rec] of Object.entries(taxRaw)) {
+                            const record = { payments: rec.payments || [], hasDoctor: rec.hasDoctor || false, doctorPdfPath: rec.doctorPdfPath || '', doctorPdfName: rec.doctorPdfName || '' };
+                            taxRecordsCache[sid] = record;
+                            await _upsertTaxRecord(sid, record);
+                        }
+                    }
 
                     // 3. Restore feePayments (delete first = no duplicates)
                     const feeFile = zip.file('data/feePayments.json');
@@ -3309,7 +3368,7 @@
                     }
 
                     // 4. Re-upload PDFs from ZIP to Supabase
-                    const taxRecordsRaw = JSON.parse(localStorage.getItem('taxRecords') || '{}');
+                    const taxRecordsRaw = taxRecordsCache;
                     for (const [studentId, rec] of Object.entries(taxRecordsRaw)) {
                         const student = studentsData.find(s => String(s.id) === String(studentId));
                         const sanitizedName = student ? student.name.replace(/[^a-zA-Z0-9 _-]/g, '') : '';
