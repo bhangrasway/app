@@ -2247,14 +2247,11 @@
                 const isPaid = isStudentPaymentActive(student);
                 const batchColor = batchColors[student.batch] || '#667eea';
                 const joinDate = String(student.joinDate || '').slice(0, 10);
-                // Use cycle history so the current cycle end respects plan extensions
-                const cycleHistoryForCard = getStudentCycleHistory(student);
-                const lastCycleForCard = cycleHistoryForCard[cycleHistoryForCard.length - 1];
-                const currentCycleDates = lastCycleForCard
-                    ? { start: lastCycleForCard.startDate, end: lastCycleForCard.endDate }
-                    : getPaymentCycleDates(joinDate);
+                // CURRENT = the cycle containing today's date
+                const currentCycleDates = getTodayCycleDates(student);
                 const currentCycleLabel = currentCycleDates.start ? formatCycleLabel(currentCycleDates.start, currentCycleDates.end) : '—';
-                const nextCycleStart = getEffectiveNextCycleStart(student) || joinDate;
+                // NEXT = the cycle after the current one
+                const nextCycleStart = currentCycleDates.end ? addDaysToDate(currentCycleDates.end, 1) : (getEffectiveNextCycleStart(student) || joinDate);
                 const nextCycleDates = getPaymentCycleDates(nextCycleStart);
                 const nextPayLabel = nextCycleDates.start ? formatCycleLabel(nextCycleDates.start, nextCycleDates.end) : '—';
 
@@ -2537,6 +2534,23 @@
             const override = getNextPaymentOverride(student?.id);
             if (override) return override;
             return getNextCycleStart(student);
+        }
+
+        // Returns the payment cycle that contains today's date, derived from the join date schedule
+        function getTodayCycleDates(student) {
+            const joinDate = String(student?.joinDate || student?.join_date || '').slice(0, 10);
+            if (!joinDate) return { start: '', end: '' };
+            const now = new Date();
+            const join = new Date(joinDate + 'T00:00:00');
+            if (Number.isNaN(join.getTime())) return { start: '', end: '' };
+            const monthsElapsed = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth());
+            const cycleStart = addMonthsToDate(joinDate, monthsElapsed);
+            const cycleDates = getPaymentCycleDates(cycleStart);
+            // If today is past this cycle's end, advance one more month
+            if (cycleDates.end && now > new Date(cycleDates.end + 'T23:59:59')) {
+                return getPaymentCycleDates(addMonthsToDate(joinDate, monthsElapsed + 1));
+            }
+            return cycleDates;
         }
 
         function getUpcomingCycles(student, count = 2) {
