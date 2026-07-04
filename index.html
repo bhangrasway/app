@@ -3163,41 +3163,40 @@
                     : getSelectedPaymentMonth();
 
                 const student = students.find((entry) => entry.id === studentId);
-                const latestRecord = getLatestPaymentRecord(studentId);
-                const recordId = latestRecord?.id ?? latestRecord?.record_id ?? latestRecord?.recordId ?? null;
-                
-                const deleteQuery = supabaseClient.from('fees_paid').delete();
-                if (recordId !== null && recordId !== undefined) {
-                    await deleteQuery.eq('id', recordId);
-                } else {
-                    await deleteQuery.eq('studentid', studentId).eq('month', safeMonth);
-                }
 
                 if (!shouldBePaid) {
+                    // Mark unpaid: delete the latest paid record by its ID
+                    const latestRecord = getLatestPaymentRecord(studentId);
+                    const recordId = latestRecord?.id ?? latestRecord?.record_id ?? latestRecord?.recordId ?? null;
+                    const deleteQuery = supabaseClient.from('fees_paid').delete();
+                    if (recordId !== null && recordId !== undefined) {
+                        await deleteQuery.eq('id', recordId);
+                    } else {
+                        await deleteQuery.eq('studentid', studentId).eq('month', safeMonth);
+                    }
                     await loadAllData();
                     refreshStudentDetailView(studentId);
                     updatePaymentsDisplay();
                     return;
                 }
 
-                const joinDate = String(student?.joinDate || student?.join_date || new Date().toISOString().slice(0, 10)).slice(0, 10);
-                const cycleStart = latestRecord
-                    ? addMonthsToDate(String(latestRecord.paid_start_date ?? latestRecord.paidStartDate ?? joinDate).slice(0, 10), 1)
-                    : joinDate;
+                // Mark paid: delete only any existing record for THIS specific month (avoid duplicates)
+                await supabaseClient.from('fees_paid').delete()
+                    .eq('studentid', studentId).eq('month', safeMonth);
+
+                // Derive cycle dates directly from the month being paid
+                const cycleStart = `${safeMonth}-01`;
                 const cycleDates = getPaymentCycleDates(cycleStart);
                 const nextPaymentDate = cycleDates.end ? addDaysToDate(cycleDates.end, 1) : calculateNextPaymentDate(cycleStart);
-                try {
-                    await insertFeesPaidWithSchemaFallback([{
-                        studentid: studentId,
-                        month: safeMonth,
-                        ispaid: true,
-                        paiddate: new Date().toISOString(),
-                        paid_start_date: cycleDates.start,
-                        paid_end_date: cycleDates.end
-                    }]);
-                } catch (error) {
-                    throw error;
-                }
+
+                await insertFeesPaidWithSchemaFallback([{
+                    studentid: studentId,
+                    month: safeMonth,
+                    ispaid: true,
+                    paiddate: new Date().toISOString(),
+                    paid_start_date: cycleDates.start,
+                    paid_end_date: cycleDates.end
+                }]);
 
                 if (student) {
                     await updateStudentWithSchemaFallback(studentId, {
