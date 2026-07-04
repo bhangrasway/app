@@ -2560,11 +2560,11 @@
                     const now = new Date();
                     const start = new Date(`${startDate}T00:00:00`);
                     const end = new Date(`${endDate}T23:59:59`);
-                    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end) {
-                        return true;
-                    }
+                    // If explicit cycle dates exist, only use them — do not fall through to paiddate fallback
+                    return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end;
                 }
 
+                // Fallback: only when no explicit cycle dates exist
                 const paidDate = String(latestRecord.paiddate ?? latestRecord.paidDate ?? latestRecord.created_at ?? latestRecord.createdAt ?? '').slice(0, 10);
                 if (paidDate) {
                     const start = new Date(`${paidDate}T00:00:00`);
