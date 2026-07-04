@@ -2552,30 +2552,19 @@
         }
 
         function isStudentPaymentActive(student) {
-            const latestRecord = getLatestPaymentRecord(student.id);
-            if (latestRecord) {
-                const startDate = String(latestRecord.paid_start_date ?? latestRecord.paidStartDate ?? '').slice(0, 10);
-                const endDate = String(latestRecord.paid_end_date ?? latestRecord.paidEndDate ?? '').slice(0, 10);
-                if (startDate && endDate) {
-                    const now = new Date();
-                    const start = new Date(`${startDate}T00:00:00`);
-                    const end = new Date(`${endDate}T23:59:59`);
-                    // If explicit cycle dates exist, only use them — do not fall through to paiddate fallback
-                    return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end;
-                }
+            const cycleHistory = getStudentCycleHistory(student);
+            if (cycleHistory.length === 0) return false;
 
-                // Fallback: only when no explicit cycle dates exist
-                const paidDate = String(latestRecord.paiddate ?? latestRecord.paidDate ?? latestRecord.created_at ?? latestRecord.createdAt ?? '').slice(0, 10);
-                if (paidDate) {
-                    const start = new Date(`${paidDate}T00:00:00`);
-                    const end = new Date(`${addMonthsToDate(paidDate, 1)}T23:59:59`);
-                    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && new Date() >= start && new Date() <= end) {
-                        return true;
-                    }
-                }
-            }
+            const latestCycle = cycleHistory[cycleHistory.length - 1];
+            const startDate = latestCycle.startDate;
+            const endDate = latestCycle.endDate;
 
-            return false;
+            if (!startDate || !endDate) return false;
+
+            const now = new Date();
+            const start = new Date(`${startDate}T00:00:00`);
+            const end = new Date(`${endDate}T23:59:59`);
+            return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end;
         }
 
         function refreshNextPaymentDateFromJoinDate() {
