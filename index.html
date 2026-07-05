@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,6 +6,7 @@
     <title>Bhangra Sway Cremona - Studio Management</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -768,8 +769,17 @@
                 </div>
 
                 <!-- Search bar -->
-                <div style="margin-bottom:20px;">
+                <div style="margin-bottom:16px;">
                     <input id="paymentsSearch" placeholder="Search by student or parent name…" oninput="filterPaymentsList()" style="width:100%; max-width:400px; padding:9px 12px; border-radius:6px; border:1px solid #ddd; font-size:0.95em;">
+                </div>
+
+                <!-- Export Excel toolbar -->
+                <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span style="font-weight:700; color:#1d4ed8; font-size:0.95em;">📊 Export to Excel:</span>
+                    <button onclick="exportPaymentsExcel('all')" style="background:#1d4ed8;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">📋 All Students</button>
+                    <button onclick="exportPaymentsExcel('overdue')" style="background:#e67e22;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">🔴 Overdue</button>
+                    <button onclick="exportPaymentsExcel('unpaid')" style="background:#e74c3c;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">🟡 Pending</button>
+                    <button onclick="exportPaymentsExcel('paid')" style="background:#27ae60;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">🟢 Paid</button>
                 </div>
 
                 <!-- Overdue panel -->
@@ -1341,79 +1351,93 @@
                 .sort();
 
             const classesCount = recentAttendanceDates.length;
-            const formattedAttendanceDates = recentAttendanceDates.length > 0
+            const attendanceDates = recentAttendanceDates.length > 0
                 ? recentAttendanceDates.map(d => {
                     const dt = new Date(d + 'T00:00:00');
                     const day = String(dt.getDate()).padStart(2, '0');
                     const month = dt.toLocaleDateString('en-GB', { month: 'short' });
                     return `${day} ${month}`;
                   }).join(' • ')
-                : 'No classes recorded yet';
+                : 'No attendance records';
 
-            // Last payment record
+            // Payment data
             const cycleHistory = getStudentCycleHistory(student);
-            let lastPaymentSection = '';
+            const isPaid = isStudentPaymentActive(student);
+
+            let lastPaymentAmount = '0.00';
+            let lastPaymentDate = 'N/A';
+            let lastCycleStart = 'N/A';
+            let lastCycleEnd = 'N/A';
+
             if (cycleHistory.length > 0) {
                 const lastCycle = cycleHistory[cycleHistory.length - 1];
-                const lastAmount = Number(lastCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                lastPaymentAmount = Number(lastCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
                 const lastPaidDateRaw = String(lastCycle.record?.paiddate ?? lastCycle.record?.paidDate ?? lastCycle.record?.paid_date ?? '').slice(0, 10);
-                const lastPaidDate = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : 'N/A';
-                const lastCycleStart = lastCycle.startDate ? formatDisplayDate(lastCycle.startDate) : 'N/A';
-                const lastCycleEnd = lastCycle.endDate ? formatDisplayDate(lastCycle.endDate) : 'N/A';
-                lastPaymentSection = `💶 LAST PAYMENT RECORD\n\nAmount: €${lastAmount}\nPaid on: ${lastPaidDate}\nCycle: ${lastCycleStart} → ${lastCycleEnd}`;
-            } else {
-                lastPaymentSection = `💶 PAYMENT RECORD\n\nNo payment records found yet.`;
+                lastPaymentDate = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : 'N/A';
+                lastCycleStart = lastCycle.startDate ? formatDisplayDate(lastCycle.startDate) : 'N/A';
+                lastCycleEnd = lastCycle.endDate ? formatDisplayDate(lastCycle.endDate) : 'N/A';
             }
 
-            // Current payment status
-            const isPaid = isStudentPaymentActive(student);
-            let paymentStatusMessage = '';
+            let currentPaymentAmount = '0.00';
+            let currentPaymentDate = 'N/A';
+            let currentCycleStart = 'N/A';
+            let currentCycleEnd = 'N/A';
+            let paymentStatus = 'UNPAID';
 
-            if (isPaid) {
+            if (isPaid && cycleHistory.length > 0) {
                 const currentCycle = cycleHistory[cycleHistory.length - 1];
-                const currentAmount = Number(currentCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                currentPaymentAmount = Number(currentCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
                 const currentPaidDateRaw = String(currentCycle.record?.paiddate ?? currentCycle.record?.paidDate ?? currentCycle.record?.paid_date ?? '').slice(0, 10);
-                const currentPaidDate = currentPaidDateRaw ? formatDisplayDate(currentPaidDateRaw) : 'N/A';
-                const currentCycleStart = currentCycle.startDate ? formatDisplayDate(currentCycle.startDate) : 'N/A';
-                const currentCycleEnd = currentCycle.endDate ? formatDisplayDate(currentCycle.endDate) : 'N/A';
-                paymentStatusMessage = `✅ CURRENT MEMBERSHIP: ACTIVE\n\nCurrent Payment: €${currentAmount}\nPaid on: ${currentPaidDate}\nValid Until: ${currentCycleStart} → ${currentCycleEnd}\n\nYou're all set! Enjoy your classes! 🎉`;
+                currentPaymentDate = currentPaidDateRaw ? formatDisplayDate(currentPaidDateRaw) : 'N/A';
+                currentCycleStart = currentCycle.startDate ? formatDisplayDate(currentCycle.startDate) : 'N/A';
+                currentCycleEnd = currentCycle.endDate ? formatDisplayDate(currentCycle.endDate) : 'N/A';
+                paymentStatus = 'PAID';
             } else {
                 const currentCycleDates = getTodayCycleDates(student);
-                const cycleStartFmt = currentCycleDates.start ? formatDisplayDate(currentCycleDates.start) : 'N/A';
-                const cycleEndFmt = currentCycleDates.end ? formatDisplayDate(currentCycleDates.end) : 'N/A';
+                currentCycleStart = currentCycleDates.start ? formatDisplayDate(currentCycleDates.start) : 'N/A';
+                currentCycleEnd = currentCycleDates.end ? formatDisplayDate(currentCycleDates.end) : 'N/A';
                 const cycleDueEnd = currentCycleDates.end ? new Date(currentCycleDates.end + 'T23:59:59') : null;
-                const isOverdue = cycleDueEnd && new Date() > cycleDueEnd;
-
-                if (isOverdue) {
-                    paymentStatusMessage = `� Current Payment Cycle:\n${cycleStartFmt} → ${cycleEndFmt}\n\n😊 Friendly reminder 😊\n\nIf you haven't already completed your payment for this cycle, you can do so whenever it's convenient.\n\nThank you, and we look forward to seeing you in the next Bhangra class! 💃🕺❤️`;
-                } else {
-                    paymentStatusMessage = `🟡 PAYMENT PENDING\n\n${cycleStartFmt} → ${cycleEndFmt}\n\nYour monthly fee is still pending.\n\nPlease try to complete your payment within the first 1–2 weeks of your cycle.\n\nThank you!`;
-                }
+                paymentStatus = cycleDueEnd && new Date() > cycleDueEnd ? 'OVERDUE' : 'UNPAID';
             }
 
-            const separator = '-----------------------------------';
-            return [
-                `👋 Sat Sri Akal ${student.name}!`,
-                '',
-                `💃 Here's your 2-Month Bhangra Report!`,
-                '',
-                `📊 Classes Attended: ${classesCount}`,
-                '',
-                `🗓️ Attendance Dates:`,
-                formattedAttendanceDates,
-                '',
-                `🌟 Amazing work! Every class makes you stronger and more confident. Keep rocking!`,
-                '',
-                separator,
-                '',
-                lastPaymentSection,
-                '',
-                paymentStatusMessage,
-                '',
-                separator,
-                '',
-                `🙏 Thank you for being part of our Bhangra family! We can't wait to see you at the next session!`
-            ].join('\n');
+            const sep = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
+
+            let message = '';
+            message += `\uD83D\uDC4B Sat Sri Akal ${student.name}! \uD83D\uDC83\uD83D\uDD7A\n\n`;
+            message += `\uD83C\uDF89 Here's your 2-Month Bhangra Report! \uD83C\uDF89\n\n`;
+            message += `\uD83D\uDCC5 Classes Attended: ${classesCount}\n\n`;
+            message += `\u2705 Attendance Dates\n${attendanceDates}\n\n`;
+            message += `\uD83D\uDD25 Amazing work! Every class makes you stronger, more confident, and brings even more Bhangra energy. Keep rocking the dance floor! \uD83E\uDD41\uD83D\uDCA5\n\n`;
+            message += `${sep}\n`;
+            message += `\n\uD83D\uDCB3 Last Payment Record\n\n`;
+            message += `\uD83D\uDCB6 \u20AC${lastPaymentAmount}\n\n`;
+            message += `\uD83D\uDCC5 Paid on: ${lastPaymentDate}\n\n`;
+            message += `\uD83D\uDDD3\uFE0F Cycle: ${lastCycleStart} \u2192 ${lastCycleEnd}\n`;
+
+            if (paymentStatus === 'PAID') {
+                message += `\n\uD83D\uDFE2 Current Membership: Active\n\n`;
+                message += `\uD83D\uDCB6 Current Payment: \u20AC${currentPaymentAmount}\n`;
+                message += `\uD83D\uDCC5 Paid on: ${currentPaymentDate}\n`;
+                message += `\uD83D\uDDD3\uFE0F Valid Until: ${currentCycleStart} \u2192 ${currentCycleEnd}\n\n`;
+                message += `\uD83E\uDD73 You're all set! Enjoy your classes and keep shining on the dance floor! \uD83D\uDC83\uD83D\uDD7A\n`;
+            } else if (paymentStatus === 'UNPAID') {
+                message += `\n\uD83D\uDFE1 Current Payment Cycle\n\n`;
+                message += `\uD83D\uDDD3\uFE0F ${currentCycleStart} \u2192 ${currentCycleEnd}\n\n`;
+                message += `\uD83D\uDE0A Your monthly fee is still pending.\n\n`;
+                message += `Please try to complete your payment within the first 1\u20132 weeks of your payment cycle.\n\n`;
+                message += `Thank you! \u2764\uFE0F\uD83D\uDE4F\n`;
+            } else if (paymentStatus === 'OVERDUE') {
+                message += `\n\uD83D\uDCC5 Current Payment Cycle\n\n`;
+                message += `\uD83D\uDDD3\uFE0F ${currentCycleStart} \u2192 ${currentCycleEnd}\n\n`;
+                message += `\uD83D\uDE0A This is simply a friendly reminder regarding your current membership cycle.\n\n`;
+                message += `If you haven't already, you may complete your monthly payment whenever convenient.\n\n`;
+                message += `Thank you for your continued support! \u2764\uFE0F\n`;
+            }
+
+            message += `\n${sep}\n\n`;
+            message += `\u2764\uFE0F Thank you for being part of our Bhangra family! Your dedication and positive energy make every class special. We can't wait to see you at the next session! \uD83C\uDFB6\uD83D\uDD7A`;
+
+            return message.trim();
         }
 
         function sendStudentWhatsAppReport(studentId) {
@@ -1425,7 +1449,7 @@
                 return;
             }
             const message = generateWhatsAppReportMessage(student);
-            const url = `https://wa.me/39${rawPhone}?text=${encodeURIComponent(message)}`;
+            const url = `https://api.whatsapp.com/send?phone=39${rawPhone}&text=${encodeURIComponent(message)}`;
             window.open(url, '_blank');
         }
         // ─────────────────────────────────────────────────────────────────────────
@@ -4182,6 +4206,7 @@
 
                 const overrideTag = hasOverride ? `<span style="background:#f0e6fa;color:#8e44ad;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">EXTENDED</span>` : '';
                 const overdueTag = isOverdue ? `<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">OVERDUE</span>` : '';
+                const waBtn = student.phone ? `<button onclick="sendStudentWhatsAppReport(${student.id})" title="Send WhatsApp Report" style="background:#25D366;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;font-size:0.85em;">📱 WA</button>` : '';
 
                 const card = `
                     <div style="${cardStyle}">
@@ -4197,6 +4222,7 @@
                         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
                             ${isOverdue ? extendBtn : ''}
                             ${actionBtn}
+                            ${waBtn}
                         </div>
                     </div>`;
 
@@ -4221,6 +4247,121 @@
             document.getElementById('overdueCount').textContent = overdueCount;
             document.getElementById('totalCount').textContent = students.length;
         }
+
+        // ── Excel Export ─────────────────────────────────────────────────────────
+        function exportPaymentsExcel(type) {
+            const twoMonthsAgo = new Date();
+            twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+            twoMonthsAgo.setHours(0, 0, 0, 0);
+
+            const rows = [];
+            const today = new Date();
+
+            const filtered = students.filter(s => {
+                const isPaid = isStudentPaymentActive(s);
+                if (type === 'paid') return isPaid;
+                const cycleDates = getTodayCycleDates(s);
+                const cycleDueEnd = cycleDates.end ? new Date(cycleDates.end + 'T23:59:59') : null;
+                const isOverdue = !isPaid && cycleDueEnd && today > cycleDueEnd;
+                if (type === 'overdue') return isOverdue;
+                if (type === 'unpaid') return !isPaid && !isOverdue;
+                return true; // 'all'
+            });
+
+            if (filtered.length === 0) {
+                alert('No students found for this group.');
+                return;
+            }
+
+            filtered.forEach(student => {
+                // Attendance
+                const recentDates = Object.entries(attendance)
+                    .filter(([date, dayAtt]) => {
+                        if (!dayAtt || !dayAtt[student.id]) return false;
+                        const d = new Date(date + 'T00:00:00');
+                        return !Number.isNaN(d.getTime()) && d >= twoMonthsAgo;
+                    })
+                    .map(([date]) => date)
+                    .sort();
+
+                const classesCount = recentDates.length;
+                const attendanceDatesStr = recentDates.length > 0
+                    ? recentDates.map(d => {
+                        const dt = new Date(d + 'T00:00:00');
+                        return `${String(dt.getDate()).padStart(2,'0')} ${dt.toLocaleDateString('en-GB',{month:'short'})}`;
+                      }).join(' • ')
+                    : 'No classes recorded';
+
+                // Payment data
+                const cycleHistory = getStudentCycleHistory(student);
+                const isPaid = isStudentPaymentActive(student);
+
+                let lastPaymentAmount = '0.00', lastPaymentDate = 'N/A', lastCycleStart = 'N/A', lastCycleEnd = 'N/A';
+                if (cycleHistory.length > 0) {
+                    const lc = cycleHistory[cycleHistory.length - 1];
+                    lastPaymentAmount = Number(lc.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                    const rawDate = String(lc.record?.paiddate ?? lc.record?.paidDate ?? lc.record?.paid_date ?? '').slice(0,10);
+                    lastPaymentDate = rawDate ? formatDisplayDate(rawDate) : 'N/A';
+                    lastCycleStart = lc.startDate ? formatDisplayDate(lc.startDate) : 'N/A';
+                    lastCycleEnd = lc.endDate ? formatDisplayDate(lc.endDate) : 'N/A';
+                }
+
+                let currentCycleStart = 'N/A', currentCycleEnd = 'N/A', paymentStatus = 'UNPAID';
+                if (isPaid && cycleHistory.length > 0) {
+                    const cc = cycleHistory[cycleHistory.length - 1];
+                    currentCycleStart = cc.startDate ? formatDisplayDate(cc.startDate) : 'N/A';
+                    currentCycleEnd = cc.endDate ? formatDisplayDate(cc.endDate) : 'N/A';
+                    paymentStatus = 'PAID';
+                } else {
+                    const cd = getTodayCycleDates(student);
+                    currentCycleStart = cd.start ? formatDisplayDate(cd.start) : 'N/A';
+                    currentCycleEnd = cd.end ? formatDisplayDate(cd.end) : 'N/A';
+                    const due = cd.end ? new Date(cd.end + 'T23:59:59') : null;
+                    paymentStatus = due && today > due ? 'OVERDUE' : 'UNPAID';
+                }
+
+                const rawPhone = (student.phone || '').replace(/\D/g, '');
+                const message = generateWhatsAppReportMessage(student);
+                const waLink = rawPhone ? `https://api.whatsapp.com/send?phone=39${rawPhone}&text=${encodeURIComponent(message)}` : 'No phone';
+
+                rows.push({
+                    'Student Name': student.name || '',
+                    'Classes Attended (Last 2 Months)': classesCount,
+                    'Payment Status': paymentStatus,
+                    'Last Payment Date': lastPaymentDate,
+                    'WhatsApp Link': waLink,
+                    'Message Sent? (✓/✗)': ''
+                });
+            });
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+
+            // Make WhatsApp Link column clickable hyperlinks
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            const linkColIndex = Object.keys(rows[0]).indexOf('WhatsApp Link');
+            for (let R = 1; R <= range.e.r; R++) {
+                const cellAddr = XLSX.utils.encode_cell({ r: R, c: linkColIndex });
+                if (ws[cellAddr] && ws[cellAddr].v && ws[cellAddr].v !== 'No phone') {
+                    ws[cellAddr].l = { Target: ws[cellAddr].v, Tooltip: 'Open WhatsApp' };
+                }
+            }
+            ws['!cols'] = [
+                { wch: 25 }, // Student Name
+                { wch: 30 }, // Classes Attended
+                { wch: 18 }, // Payment Status
+                { wch: 20 }, // Last Payment Date
+                { wch: 60 }, // WhatsApp Link
+                { wch: 22 }  // Message Sent
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'WhatsApp Reports');
+
+            const label = type === 'overdue' ? 'Overdue' : type === 'unpaid' ? 'Pending' : type === 'paid' ? 'Paid' : 'All';
+            const date = new Date().toISOString().slice(0,10);
+            XLSX.writeFile(wb, `Bhangra_WhatsApp_${label}_${date}.xlsx`);
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         function displayFeesTab() {
             const month = new Date().toISOString().slice(0, 7);
