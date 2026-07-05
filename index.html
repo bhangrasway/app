@@ -978,6 +978,22 @@
         </div>
     </div>
 
+    <!-- PAYMENT DATE MODAL -->
+    <div id="paymentDateModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:2100; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this) closePaymentDateModal()">
+      <div style="background:#fff; border-radius:16px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,0.35); padding:30px;">
+        <div style="font-size:1.15em; font-weight:800; margin-bottom:6px;">📅 Record Payment</div>
+        <div style="font-size:0.9em; color:#666; margin-bottom:18px;">When was this payment received?</div>
+        <label style="font-size:0.8em; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Payment Date</label>
+        <input type="date" id="paymentDateInput" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #ddd; font-size:1em; margin-bottom:16px;">
+        <label style="font-size:0.8em; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Amount Paid (€)</label>
+        <input type="number" id="paymentAmountInput" min="0" step="0.01" placeholder="0.00" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #ddd; font-size:1em; margin-bottom:22px;">
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button onclick="closePaymentDateModal()" style="padding:9px 20px; background:#f0f0f0; border:none; border-radius:7px; cursor:pointer; font-weight:600; font-size:0.95em;">Cancel</button>
+          <button onclick="confirmMarkPaid()" style="padding:9px 22px; background:#27ae60; color:white; border:none; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.95em;">✓ Confirm Paid</button>
+        </div>
+      </div>
+    </div>
+
     <!-- TAX MODAL -->
     <div id="taxModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this) closeTaxModal()">
       <div style="background:#fff; border-radius:16px; width:100%; max-width:720px; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); display:flex; flex-direction:column;">
@@ -1307,6 +1323,112 @@
             const url = `https://wa.me/39${phone}?text=${encodeURIComponent(msg)}`;
             if (win) win.location.href = url; else window.open(url, '_blank');
         }
+
+        // ── WhatsApp Student Progress Report ─────────────────────────────────────
+        function generateWhatsAppReportMessage(student) {
+            // Attendance: last 2 months
+            const twoMonthsAgo = new Date();
+            twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+            twoMonthsAgo.setHours(0, 0, 0, 0);
+
+            const recentAttendanceDates = Object.entries(attendance)
+                .filter(([date, dayAtt]) => {
+                    if (!dayAtt || !dayAtt[student.id]) return false;
+                    const d = new Date(date + 'T00:00:00');
+                    return !Number.isNaN(d.getTime()) && d >= twoMonthsAgo;
+                })
+                .map(([date]) => date)
+                .sort();
+
+            const classesCount = recentAttendanceDates.length;
+            const formattedAttendanceDates = recentAttendanceDates.length > 0
+                ? recentAttendanceDates.map(d => {
+                    const dt = new Date(d + 'T00:00:00');
+                    const day = String(dt.getDate()).padStart(2, '0');
+                    const month = dt.toLocaleDateString('en-GB', { month: 'short' });
+                    return `${day} ${month}`;
+                  }).join(' • ')
+                : 'No classes recorded yet';
+
+            // Last payment record
+            const cycleHistory = getStudentCycleHistory(student);
+            let lastPaymentSection = '';
+            if (cycleHistory.length > 0) {
+                const lastCycle = cycleHistory[cycleHistory.length - 1];
+                const lastAmount = Number(lastCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                const lastPaidDateRaw = String(lastCycle.record?.paiddate ?? lastCycle.record?.paidDate ?? lastCycle.record?.paid_date ?? '').slice(0, 10);
+                const lastPaidDate = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : 'N/A';
+                const lastCycleStart = lastCycle.startDate ? formatDisplayDate(lastCycle.startDate) : 'N/A';
+                const lastCycleEnd = lastCycle.endDate ? formatDisplayDate(lastCycle.endDate) : 'N/A';
+                lastPaymentSection = `💶 LAST PAYMENT RECORD\n\nAmount: €${lastAmount}\nPaid on: ${lastPaidDate}\nCycle: ${lastCycleStart} → ${lastCycleEnd}`;
+            } else {
+                lastPaymentSection = `💶 PAYMENT RECORD\n\nNo payment records found yet.`;
+            }
+
+            // Current payment status
+            const isPaid = isStudentPaymentActive(student);
+            let paymentStatusMessage = '';
+
+            if (isPaid) {
+                const currentCycle = cycleHistory[cycleHistory.length - 1];
+                const currentAmount = Number(currentCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                const currentPaidDateRaw = String(currentCycle.record?.paiddate ?? currentCycle.record?.paidDate ?? currentCycle.record?.paid_date ?? '').slice(0, 10);
+                const currentPaidDate = currentPaidDateRaw ? formatDisplayDate(currentPaidDateRaw) : 'N/A';
+                const currentCycleStart = currentCycle.startDate ? formatDisplayDate(currentCycle.startDate) : 'N/A';
+                const currentCycleEnd = currentCycle.endDate ? formatDisplayDate(currentCycle.endDate) : 'N/A';
+                paymentStatusMessage = `✅ CURRENT MEMBERSHIP: ACTIVE\n\nCurrent Payment: €${currentAmount}\nPaid on: ${currentPaidDate}\nValid Until: ${currentCycleStart} → ${currentCycleEnd}\n\nYou're all set! Enjoy your classes! 🎉`;
+            } else {
+                const currentCycleDates = getTodayCycleDates(student);
+                const cycleStartFmt = currentCycleDates.start ? formatDisplayDate(currentCycleDates.start) : 'N/A';
+                const cycleEndFmt = currentCycleDates.end ? formatDisplayDate(currentCycleDates.end) : 'N/A';
+                const cycleDueEnd = currentCycleDates.end ? new Date(currentCycleDates.end + 'T23:59:59') : null;
+                const isOverdue = cycleDueEnd && new Date() > cycleDueEnd;
+
+                if (isOverdue) {
+                    paymentStatusMessage = `� Current Payment Cycle:\n${cycleStartFmt} → ${cycleEndFmt}\n\n😊 Friendly reminder 😊\n\nIf you haven't already completed your payment for this cycle, you can do so whenever it's convenient.\n\nThank you, and we look forward to seeing you in the next Bhangra class! 💃🕺❤️`;
+                } else {
+                    paymentStatusMessage = `🟡 PAYMENT PENDING\n\n${cycleStartFmt} → ${cycleEndFmt}\n\nYour monthly fee is still pending.\n\nPlease try to complete your payment within the first 1–2 weeks of your cycle.\n\nThank you!`;
+                }
+            }
+
+            const separator = '-----------------------------------';
+            return [
+                `👋 Sat Sri Akal ${student.name}!`,
+                '',
+                `💃 Here's your 2-Month Bhangra Report!`,
+                '',
+                `📊 Classes Attended: ${classesCount}`,
+                '',
+                `🗓️ Attendance Dates:`,
+                formattedAttendanceDates,
+                '',
+                `🌟 Amazing work! Every class makes you stronger and more confident. Keep rocking!`,
+                '',
+                separator,
+                '',
+                lastPaymentSection,
+                '',
+                paymentStatusMessage,
+                '',
+                separator,
+                '',
+                `🙏 Thank you for being part of our Bhangra family! We can't wait to see you at the next session!`
+            ].join('\n');
+        }
+
+        function sendStudentWhatsAppReport(studentId) {
+            const student = students.find(s => s.id === studentId);
+            if (!student) { alert('Student not found.'); return; }
+            const rawPhone = (student.phone || '').replace(/\D/g, '');
+            if (!rawPhone) {
+                alert('No phone number registered for this student.\nPlease add a phone number in the student\'s profile first.');
+                return;
+            }
+            const message = generateWhatsAppReportMessage(student);
+            const url = `https://wa.me/39${rawPhone}?text=${encodeURIComponent(message)}`;
+            window.open(url, '_blank');
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         async function updatePdfStats() {
             const el = document.getElementById('pdfStatsBar');
@@ -1670,7 +1792,8 @@
                 ispaid: record.ispaid ?? record.isPaid ?? record.is_paid ?? false,
                 paiddate: record.paiddate ?? record.paidDate ?? record.paid_date ?? new Date().toISOString(),
                 paid_start_date: record.paid_start_date ?? record.paidStartDate ?? '',
-                paid_end_date: record.paid_end_date ?? record.paidEndDate ?? ''
+                paid_end_date: record.paid_end_date ?? record.paidEndDate ?? '',
+                amount: record.amount ?? null
             };
 
             if (variant === 'compact') {
@@ -1680,7 +1803,8 @@
                     ispaid: !!base.ispaid,
                     paiddate: base.paiddate,
                     paidstartdate: base.paid_start_date,
-                    paidenddate: base.paid_end_date
+                    paidenddate: base.paid_end_date,
+                    amount: base.amount
                 };
             }
 
@@ -1691,7 +1815,8 @@
                     is_paid: !!base.ispaid,
                     paid_date: base.paiddate,
                     paid_start_date: base.paid_start_date,
-                    paid_end_date: base.paid_end_date
+                    paid_end_date: base.paid_end_date,
+                    amount: base.amount
                 };
             }
 
@@ -2041,6 +2166,9 @@
                 }
 
                 displayStudents();
+                updatePaymentsDisplay();
+                displayFeesTab();
+                displayReports();
                 await loadTaxRecords();
                 updateLastBackupInfo();
             } catch (error) {
@@ -2245,10 +2373,15 @@
                 });
 
                 const isPaid = isStudentPaymentActive(student);
+                const prevUnpaid = hasPreviousCycleUnpaid(student);
                 const batchColor = batchColors[student.batch] || '#667eea';
                 const joinDate = String(student.joinDate || '').slice(0, 10);
-                // CURRENT = the cycle containing today's date
-                const currentCycleDates = getTodayCycleDates(student);
+                // If a cycle-start override is set and no payment history, use the override as CURRENT
+                const override = getNextPaymentOverride(student.id);
+                const hasCycleHistory = getStudentCycleHistory(student).length > 0;
+                const currentCycleDates = (override && !hasCycleHistory)
+                    ? getPaymentCycleDates(override)
+                    : getTodayCycleDates(student);
                 const currentCycleLabel = currentCycleDates.start ? formatCycleLabel(currentCycleDates.start, currentCycleDates.end) : '—';
                 // NEXT = the cycle after the current one
                 const nextCycleStart = currentCycleDates.end ? addDaysToDate(currentCycleDates.end, 1) : (getEffectiveNextCycleStart(student) || joinDate);
@@ -2283,6 +2416,7 @@
                         <span style="color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; font-size:0.75em; margin-top:4px;">Next</span>
                         <span style="color:#3498db; background:#eaf4fd; border-radius:4px; padding:2px 8px;">${nextPayLabel}</span>
                         <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}" style="margin-top:4px;">${isPaid ? '✓ PAID' : '⏳ PENDING'}</span>
+                        ${prevUnpaid ? `<span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⚠️ Last cycle unpaid</span>` : ''}
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:130px;">
                         <button onclick="showStudentDetail(${student.id})" class="btn-small" style="background:#27ae60;">View</button>
@@ -2354,22 +2488,40 @@
         }
 
         function getNextPaymentOverride(studentId) {
+            // Primary: read from in-memory students array (populated from DB column if it exists)
+            const student = students.find(s => String(s.id) === String(studentId));
+            const val = String(student?.nextPaymentDate || student?.next_payment_date || student?.nextpaymentdate || '').trim();
+            if (val) return val.slice(0, 10);
+            // Fallback: localStorage (used when DB column doesn't exist yet)
             try {
                 const overrides = JSON.parse(localStorage.getItem('nextPaymentOverrides') || '{}');
                 return overrides[String(studentId)] || null;
             } catch { return null; }
         }
 
-        function setNextPaymentOverride(studentId, date) {
-            try {
-                const overrides = JSON.parse(localStorage.getItem('nextPaymentOverrides') || '{}');
-                if (date) {
-                    overrides[String(studentId)] = String(date).slice(0, 10);
-                } else {
-                    delete overrides[String(studentId)];
-                }
-                localStorage.setItem('nextPaymentOverrides', JSON.stringify(overrides));
-            } catch {}
+        async function setNextPaymentOverride(studentId, date) {
+            const student = students.find(s => String(s.id) === String(studentId));
+            if (!student) return;
+            const newDate = date ? String(date).slice(0, 10) : '';
+            // Update local cache immediately
+            student.nextPaymentDate = newDate;
+            student.next_payment_date = newDate;
+            student.nextpaymentdate = newDate;
+            // Try minimal DB patch — each column name variant
+            let savedToDb = false;
+            for (const patch of [{nextpaymentdate:newDate},{next_payment_date:newDate},{nextPaymentDate:newDate}]) {
+                const { error } = await supabaseClient.from('students').update(patch).eq('id', studentId);
+                if (!error) { savedToDb = true; break; }
+            }
+            // Fallback to localStorage if DB column doesn't exist yet
+            if (!savedToDb) {
+                try {
+                    const overrides = JSON.parse(localStorage.getItem('nextPaymentOverrides') || '{}');
+                    if (newDate) { overrides[String(studentId)] = newDate; }
+                    else { delete overrides[String(studentId)]; }
+                    localStorage.setItem('nextPaymentOverrides', JSON.stringify(overrides));
+                } catch {}
+            }
         }
 
         function extendStudentPlan(studentId) {
@@ -2399,14 +2551,16 @@
             `;
             document.body.appendChild(modal);
 
-            document.getElementById('extendPlanConfirmBtn').addEventListener('click', () => {
+            document.getElementById('extendPlanConfirmBtn').addEventListener('click', async () => {
                 const val = document.getElementById('extendPlanDateInput').value;
                 if (!val) { return; }
                 const parsed = formatDateInputValue(val);
                 if (!parsed) return;
-                setNextPaymentOverride(studentId, parsed);
+                await setNextPaymentOverride(studentId, parsed);
                 modal.remove();
                 refreshStudentDetailView(studentId);
+                updatePaymentsDisplay();
+                displayFeesTab();
                 showSuccessMessage('\u2713 Plan extended \u2014 next payment set to ' + formatDisplayDate(parsed));
             });
 
@@ -2581,6 +2735,25 @@
             return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end;
         }
 
+        function getPreviousCycleMonth(student) {
+            // The cycle containing today, shifted back one month
+            const todayCycle = getTodayCycleDates(student);
+            if (!todayCycle.start) return null;
+            const prevStart = addMonthsToDate(todayCycle.start, -1);
+            if (!prevStart) return null;
+            // Don't flag if the student hadn't joined yet in that prior cycle
+            const joinDate = String(student.joinDate || student.join_date || '').slice(0, 10);
+            if (joinDate && prevStart < joinDate) return null;
+            return prevStart.slice(0, 7); // "YYYY-MM"
+        }
+
+        function hasPreviousCycleUnpaid(student) {
+            const prevMonth = getPreviousCycleMonth(student);
+            if (!prevMonth) return false; // student just joined this cycle — no prior cycle to check
+            const key = `${student.id}_${prevMonth}`;
+            return !feesPaid[key]; // true = previous cycle NOT paid
+        }
+
         function refreshNextPaymentDateFromJoinDate() {
             const joinDateValue = document.getElementById('joinDate')?.value;
             const nextPaymentDateInput = document.getElementById('nextPaymentDate');
@@ -2629,12 +2802,18 @@
         function renderStudentDetailHTML(student) {
             const currentMonth = getSelectedPaymentMonth();
             const currentMonthPaid = isStudentPaymentActive(student);
+            const prevCycleUnpaid = hasPreviousCycleUnpaid(student);
+            const prevMonth = getPreviousCycleMonth(student);
             return `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
                     <h2 style="margin:0;">${student.name}</h2>
-                    <div style="display:flex; gap:8px;">
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                         <button class="btn-small" onclick="editStudent(${student.id}); backToStudents();" style="background:#3498db;">Edit Student</button>
                         <button class="btn-small btn-delete" onclick="deleteStudent(${student.id}); backToStudents();">Delete</button>
+                        ${student.phone
+                            ? `<button class="btn-small" onclick="sendStudentWhatsAppReport(${student.id})" style="background:#25D366; color:#fff;" title="Send 2-Month Progress Report on WhatsApp">📱 Send Report on WhatsApp</button>`
+                            : `<button class="btn-small" disabled title="No phone number registered for this student" style="background:#ccc; color:#888; cursor:not-allowed;">📱 Send Report on WhatsApp</button>`
+                        }
                     </div>
                 </div>
                 <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:10px;">
@@ -2649,6 +2828,7 @@
                     <div><strong>Join Date:</strong> ${student.joinDate ? formatDisplayDate(student.joinDate) : ''}</div>
                     <div><strong>Next Payment:</strong> ${getStudentNextPaymentDate(student) ? formatDisplayDate(getStudentNextPaymentDate(student)) : 'N/A'}</div>
                     <div><strong>Current Status:</strong> <span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span></div>
+                    ${prevCycleUnpaid && prevMonth ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⚠️ Last cycle unpaid — ${formatMonthLabel(prevMonth)}</span></div>` : ''}
                     <button class="btn-small" onclick="extendStudentPlan(${student.id})" style="background:#8e44ad;" title="Manually set next payment date to extend the plan">Extend Plan</button>
                 </div>
                 <h3 style="margin-top:16px; margin-bottom:8px;">Payment History</h3>
@@ -2669,13 +2849,19 @@
             const laterUpcomingCycles = paidRecords.length === 0 ? upcomingCycles.slice(1) : upcomingCycles;
 
             historyContainer.innerHTML = paidRecords.length === 0
-                ? `<div class="empty-message" style="padding:12px;">No payment history yet. The first due cycle is shown below.</div>${firstDueCycle ? `
+                ? `<div style="padding:10px 14px; background:#f0f4ff; border:1px solid #c5d0ee; border-radius:8px; margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span style="font-size:0.88em; color:#333; font-weight:600;">📅 New cycle starts from:</span>
+                    <input type="date" id="cycleStartInput_${studentId}" value="${getEffectiveNextCycleStart(student) || String(student.joinDate || '').slice(0,10)}" style="padding:5px 8px; border:1.5px solid #b0bfdd; border-radius:6px; font-size:0.88em;">
+                    <button class="btn-small" onclick="applyNewCycleStart(${studentId})" style="background:#8e44ad;">Set Date</button>
+                    <span style="font-size:0.8em; color:#666; font-style:italic;">Adjust if student is rejoining on a different date</span>
+                  </div>
+                  <div class="empty-message" style="padding:12px;">No payment history yet. The first due cycle is shown below.</div>${firstDueCycle ? `
                     <div style="margin-top:14px; font-weight:700;">Current Cycle</div>
                     <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                         <div style="font-weight:600;">${formatCycleLabel(firstDueCycle.start, firstDueCycle.end)}</div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <div class="fees-status fees-unpaid">PENDING</div>
-                            <button class="btn-small" onclick="toggleFeesPaid(${studentId}, '${firstDueCycle.start.slice(0, 7)}', true)" style="background:#27ae60;">
+                            <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${firstDueCycle.start.slice(0, 7)}')" style="background:#27ae60;">
                                 Mark Paid
                             </button>
                         </div>
@@ -2687,7 +2873,7 @@
                             <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div class="fees-status fees-unpaid">PENDING</div>
-                                <button class="btn-small" onclick="toggleFeesPaid(${studentId}, '${cycle.start.slice(0, 7)}', true)" style="background:#27ae60;">
+                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start.slice(0, 7)}')" style="background:#27ae60;">
                                     Mark Paid
                                 </button>
                             </div>
@@ -2699,9 +2885,14 @@
                     const displayEnd = cycle.endDate;
                     const isPaid = !!cycle.isPaid;
                     const recordId = cycle.record?.id ?? cycle.record?.record_id ?? cycle.record?.recordId ?? null;
+                    const paidDateStr = String(cycle.record?.paiddate ?? cycle.record?.paidDate ?? cycle.record?.paid_date ?? '').slice(0, 10);
+                    const paidAmount = Number(cycle.record?.amount ?? student?.monthlyFees ?? 0);
                     return `
                         <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                            <div style="font-weight:600;">${formatCycleLabel(displayStart, displayEnd)}</div>
+                            <div>
+                                <div style="font-weight:600;">${formatCycleLabel(displayStart, displayEnd)}</div>
+                                ${isPaid && paidDateStr ? `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${formatDisplayDate(paidDateStr)} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${paidAmount.toFixed(2)}</strong></div>` : ''}
+                            </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">${isPaid ? 'PAID' : 'PENDING'}</div>
                                 <button class="btn-small" onclick="${recordId !== null ? `toggleFeesPaidByRecord(${recordId}, false)` : `toggleFeesPaid(${studentId}, '${cycle.key}', false)`}" style="background:${isPaid ? '#e74c3c' : '#27ae60'};">
@@ -2717,7 +2908,7 @@
                             <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div class="fees-status fees-unpaid">PENDING</div>
-                                <button class="btn-small" onclick="toggleFeesPaid(${studentId}, '${cycle.start.slice(0, 7)}', true)" style="background:#27ae60;">
+                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start.slice(0, 7)}')" style="background:#27ae60;">
                                     Mark Paid
                                 </button>
                             </div>
@@ -3156,7 +3347,35 @@
             }
         }
 
-        async function toggleFeesPaid(studentId, month, shouldBePaid = true) {
+        // --- Payment Date Picker ---
+        let _pendingPayment = null;
+
+        function promptAndMarkPaid(studentId, month) {
+            _pendingPayment = { studentId, month };
+            const today = new Date().toISOString().slice(0, 10);
+            document.getElementById('paymentDateInput').value = today;
+            // Pre-fill amount from student's monthly fee
+            const student = students.find(s => String(s.id) === String(studentId));
+            document.getElementById('paymentAmountInput').value = student?.monthlyFees ?? 0;
+            document.getElementById('paymentDateModal').style.display = 'flex';
+        }
+
+        function closePaymentDateModal() {
+            document.getElementById('paymentDateModal').style.display = 'none';
+            _pendingPayment = null;
+        }
+
+        async function confirmMarkPaid() {
+            if (!_pendingPayment) return;
+            const { studentId, month } = _pendingPayment;
+            const selectedDate = document.getElementById('paymentDateInput').value;
+            const amount = parseFloat(document.getElementById('paymentAmountInput').value);
+            if (!selectedDate) { alert('Please select a payment date.'); return; }
+            closePaymentDateModal();
+            await toggleFeesPaid(studentId, month, true, selectedDate, isNaN(amount) ? null : amount);
+        }
+
+        async function toggleFeesPaid(studentId, month, shouldBePaid = true, paidDate = null, amount = null) {
             try {
                 const safeMonth = /^\d{4}-\d{2}$/.test(String(month || ''))
                     ? String(month)
@@ -3180,9 +3399,12 @@
                     return;
                 }
 
-                // Mark paid: delete only any existing record for THIS specific month (avoid duplicates)
+                // Mark paid: best-effort delete of any existing record for THIS specific month (avoid duplicates)
+                // Non-blocking — if delete fails (column name / RLS), the insert still proceeds
                 await supabaseClient.from('fees_paid').delete()
-                    .eq('studentid', studentId).eq('month', safeMonth);
+                    .eq('studentid', studentId).eq('month', safeMonth).then(() => {}).catch(() => {});
+                await supabaseClient.from('fees_paid').delete()
+                    .eq('student_id', studentId).eq('month', safeMonth).then(() => {}).catch(() => {});
 
                 // Derive cycle dates directly from the month being paid
                 const cycleStart = `${safeMonth}-01`;
@@ -3193,9 +3415,10 @@
                     studentid: studentId,
                     month: safeMonth,
                     ispaid: true,
-                    paiddate: new Date().toISOString(),
+                    paiddate: paidDate ? paidDate : new Date().toISOString().slice(0, 10),
                     paid_start_date: cycleDates.start,
-                    paid_end_date: cycleDates.end
+                    paid_end_date: cycleDates.end,
+                    amount: amount !== null ? amount : Number(student?.monthlyFees ?? 0)
                 }]);
 
                 if (student) {
@@ -3242,6 +3465,44 @@
 
         async function markFeesPaid(studentId, month) {
             return toggleFeesPaid(studentId, month, true);
+        }
+
+        async function deleteCycleRecord(recordId, studentId, month) {
+            const label = month ? ` for ${formatMonthLabel(month)}` : '';
+            if (!confirm(`Delete this payment cycle record${label}? This cannot be undone.`)) return;
+            try {
+                if (recordId !== null && recordId !== undefined && Number.isFinite(Number(recordId))) {
+                    const { error } = await supabaseClient.from('fees_paid').delete().eq('id', Number(recordId));
+                    if (error) throw error;
+                } else {
+                    await supabaseClient.from('fees_paid').delete().eq('studentid', studentId).eq('month', month).then(() => {}).catch(() => {});
+                    await supabaseClient.from('fees_paid').delete().eq('student_id', studentId).eq('month', month).then(() => {}).catch(() => {});
+                }
+                showSuccessMessage('✓ Cycle record deleted.');
+                await loadAllData();
+                refreshStudentDetailView(studentId);
+            } catch (error) {
+                console.error('Error deleting cycle record:', error);
+                alert('Error deleting cycle: ' + error.message);
+            }
+        }
+
+        async function applyNewCycleStart(studentId) {
+            const input = document.getElementById(`cycleStartInput_${studentId}`);
+            if (!input?.value) { alert('Please select a date.'); return; }
+            const newDate = String(input.value).slice(0, 10);
+            // Update local cache immediately for instant UI refresh
+            const student = students.find(s => String(s.id) === String(studentId));
+            if (!student) return;
+            student.nextPaymentDate = newDate;
+            student.next_payment_date = newDate;
+            // Re-render UI right away
+            renderStudentPayments(studentId);
+            updatePaymentsDisplay();
+            displayFeesTab();
+            showSuccessMessage('✓ New cycle start set to ' + formatDisplayDate(newDate));
+            // Persist to DB using minimal patch
+            await setNextPaymentOverride(studentId, newDate);
         }
 
         function csvEscape(val) {
@@ -3915,7 +4176,7 @@
 
                 const actionBtn = isPaid
                     ? `<button onclick="toggleFeesPaidByRecord(${latestRecord?.id ?? 'null'}, false)" style="background:#e74c3c;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Unpaid</button>`
-                    : `<button onclick="toggleFeesPaid(${student.id}, '${displayCycle.start ? displayCycle.start.slice(0,7) : month}', true)" style="background:#27ae60;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Paid</button>`;
+                    : `<button onclick="promptAndMarkPaid(${student.id}, '${displayCycle.start ? displayCycle.start.slice(0,7) : month}')" style="background:#27ae60;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Paid</button>`;
 
                 const extendBtn = `<button onclick="extendStudentPlan(${student.id})" title="Extend plan" style="background:#8e44ad;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Extend</button>`;
 
@@ -4075,7 +4336,7 @@
                                 </div>
                                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
                                     <div style="font-size:1.2em; font-weight:800; color:#e67e22;">€${Number(student.monthlyFees || 0).toFixed(2)}</div>
-                                    <button class="btn-small" onclick="toggleFeesPaid(${student.id}, '${cycleDates.start ? cycleDates.start.slice(0,7) : month}', true)" style="background:#27ae60;color:#fff;">Mark Paid</button>
+                                    <button class="btn-small" onclick="promptAndMarkPaid(${student.id}, '${cycleDates.start ? cycleDates.start.slice(0,7) : month}')" style="background:#27ae60;color:#fff;">Mark Paid</button>
                                 </div>
                             </div>
                         `;
