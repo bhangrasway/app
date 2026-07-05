@@ -676,7 +676,7 @@
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>💶 Fee (€) *</label>
-                                <input type="number" id="monthlyFees" required placeholder="30" step="0.01">
+                                <input type="number" id="monthlyFees" required placeholder="30" step="1">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📅 Join Date *</label>
@@ -1392,14 +1392,14 @@
 
             if (cycleHistory.length > 0) {
                 const lastCycle = cycleHistory[cycleHistory.length - 1];
-                lastPaymentAmount = Number(lastCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                lastPaymentAmount = String(Math.round(Number(lastCycle.record?.amount ?? student.monthlyFees ?? 0)));
                 const lastPaidDateRaw = String(lastCycle.record?.paiddate ?? lastCycle.record?.paidDate ?? lastCycle.record?.paid_date ?? '').slice(0, 10);
                 lastPaymentDate = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : 'N/A';
                 lastCycleStart = lastCycle.startDate ? formatDisplayDate(lastCycle.startDate) : 'N/A';
                 lastCycleEnd = lastCycle.endDate ? formatDisplayDate(lastCycle.endDate) : 'N/A';
             }
 
-            let currentPaymentAmount = '0.00';
+            let currentPaymentAmount = '0';
             let currentPaymentDate = 'N/A';
             let currentCycleStart = 'N/A';
             let currentCycleEnd = 'N/A';
@@ -1407,7 +1407,7 @@
 
             if (isPaid && cycleHistory.length > 0) {
                 const currentCycle = cycleHistory[cycleHistory.length - 1];
-                currentPaymentAmount = Number(currentCycle.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                currentPaymentAmount = String(Math.round(Number(currentCycle.record?.amount ?? student.monthlyFees ?? 0)));
                 const currentPaidDateRaw = String(currentCycle.record?.paiddate ?? currentCycle.record?.paidDate ?? currentCycle.record?.paid_date ?? '').slice(0, 10);
                 currentPaymentDate = currentPaidDateRaw ? formatDisplayDate(currentPaidDateRaw) : 'N/A';
                 currentCycleStart = currentCycle.startDate ? formatDisplayDate(currentCycle.startDate) : 'N/A';
@@ -2131,7 +2131,7 @@
                     ...student,
                     parentName: student.parentName ?? student.parent_name ?? student.parentname ?? '',
                     codiceFiscale: student.codiceFiscale ?? student.codice_fiscale ?? student.codicefiscale ?? '',
-                    monthlyFees: student.monthlyFees ?? student.monthly_fees ?? student.monthlyfees ?? 0,
+                    monthlyFees: Math.round(student.monthlyFees ?? student.monthly_fees ?? student.monthlyfees ?? 0),
                     joinDate: student.joinDate ?? student.join_date ?? student.joindate ?? '',
                     nextPaymentDate: student.nextPaymentDate ?? student.next_payment_date ?? student.nextpaymentdate ?? '',
                     paidAtRegistration: student.paidAtRegistration ?? student.paid_at_registration ?? student.paidatregistration ?? false
@@ -2248,7 +2248,7 @@
                 address: document.getElementById('studentAddress').value,
                 codiceFiscale: document.getElementById('codiceFiscale').value,
                 batch: document.getElementById('studentBatch').value,
-                monthlyFees: parseFloat(document.getElementById('monthlyFees').value),
+                monthlyFees: Math.round(parseFloat(document.getElementById('monthlyFees').value)),
                 joinDate: joinDateValue,
                 nextPaymentDate: nextPaymentDateValue,
                 paidAtRegistration: document.getElementById('paidAtRegistration').checked
@@ -2409,9 +2409,11 @@
 
             filteredStudents.forEach(student => {
                 let attendanceCount = 0;
+                let totalAttendanceCount = 0;
                 Object.entries(attendance).forEach(([attendanceDate, dayAttendance]) => {
-                    if (attendanceDate >= paymentMonthStart && dayAttendance && dayAttendance[student.id]) {
-                        attendanceCount += 1;
+                    if (dayAttendance && dayAttendance[student.id]) {
+                        totalAttendanceCount += 1;
+                        if (attendanceDate >= paymentMonthStart) attendanceCount += 1;
                     }
                 });
 
@@ -2419,12 +2421,8 @@
                 const prevUnpaid = hasPreviousCycleUnpaid(student);
                 const batchColor = batchColors[student.batch] || '#667eea';
                 const joinDate = String(student.joinDate || '').slice(0, 10);
-                // If a cycle-start override is set and no payment history, use the override as CURRENT
-                const override = getNextPaymentOverride(student.id);
-                const hasCycleHistory = getStudentCycleHistory(student).length > 0;
-                const currentCycleDates = (override && !hasCycleHistory)
-                    ? getPaymentCycleDates(override)
-                    : getTodayCycleDates(student);
+                // getTodayCycleDates already honours the manual override as anchor when no paid records exist
+                const currentCycleDates = getTodayCycleDates(student);
                 const currentCycleLabel = currentCycleDates.start ? formatCycleLabel(currentCycleDates.start, currentCycleDates.end) : '—';
                 // NEXT = the cycle after the current one
                 const nextCycleStart = currentCycleDates.end ? addDaysToDate(currentCycleDates.end, 1) : (getEffectiveNextCycleStart(student) || joinDate);
@@ -2446,11 +2444,11 @@
                         <div style="color:#1a1a1a; font-size:0.95em; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || '—'} &nbsp;·&nbsp; 📞 ${student.phone || '—'}</div>
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
                             <span style="background:${batchColor}22; color:${batchColor}; border:1px solid ${batchColor}44; border-radius:20px; padding:3px 10px; font-size:0.88em; font-weight:700;">${student.batch}</span>
-                            <span style="color:#1a1a1a; font-size:0.92em;">€${student.monthlyFees.toFixed(2)}</span>
+                            <span style="color:#1a1a1a; font-size:0.92em;">€${Math.round(student.monthlyFees)}</span>
                             ${ageLabel}
                             ${cfLabel}
                             <span style="color:#444; font-size:0.9em;">📅 ${student.joinDate}</span>
-                            <span style="color:#444; font-size:0.9em;">🏃 ${attendanceCount}</span>
+                            <span style="color:#444; font-size:0.9em;" title="This month / Total attendance">🏃 ${attendanceCount} | ${totalAttendanceCount}</span>
                         </div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start; white-space:nowrap; font-size:0.88em;">
@@ -2496,16 +2494,30 @@
             return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
         }
 
+        // Parse "YYYY-MM-DD" as LOCAL midnight — avoids UTC timezone shift (e.g. CEST UTC+2)
+        function parseLocalDate(dateStr) {
+            const s = String(dateStr || '').slice(0, 10);
+            const parts = s.split('-').map(Number);
+            if (parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return new Date(NaN);
+            return new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+
+        // Format a Date as "YYYY-MM-DD" using LOCAL time (no UTC shift)
+        function formatLocalDate(date) {
+            if (!date || Number.isNaN(date.getTime())) return '';
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
         function formatDateInputValue(dateValue) {
-            const date = new Date(dateValue);
-            if (Number.isNaN(date.getTime())) return '';
-            return date.toISOString().slice(0, 10);
+            if (dateValue instanceof Date) return formatLocalDate(dateValue);
+            const s = String(dateValue || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+            return formatLocalDate(parseLocalDate(s));
         }
 
         function formatDisplayDate(dateValue) {
-            const date = new Date(dateValue);
-            if (Number.isNaN(date.getTime())) return dateValue || '';
-
+            const date = parseLocalDate(String(dateValue || '').slice(0, 10));
+            if (Number.isNaN(date.getTime())) return String(dateValue || '');
             const day = String(date.getDate()).padStart(2, '0');
             const month = date.toLocaleDateString('en', { month: 'short' });
             const year = date.getFullYear();
@@ -2513,21 +2525,21 @@
         }
 
         function addMonthsToDate(dateValue, months) {
-            const date = new Date(dateValue);
+            const date = parseLocalDate(dateValue);
             if (Number.isNaN(date.getTime())) return '';
             const originalDay = date.getDate();
             date.setMonth(date.getMonth() + months);
             if (date.getDate() !== originalDay) {
                 date.setDate(0);
             }
-            return formatDateInputValue(date);
+            return formatLocalDate(date);
         }
 
         function addDaysToDate(dateValue, days) {
-            const date = new Date(dateValue);
+            const date = parseLocalDate(dateValue);
             if (Number.isNaN(date.getTime())) return '';
             date.setDate(date.getDate() + days);
-            return formatDateInputValue(date);
+            return formatLocalDate(date);
         }
 
         function getNextPaymentOverride(studentId) {
@@ -2629,7 +2641,7 @@
         }
 
         function getPaymentCycleDates(startDateValue) {
-            const startDate = new Date(startDateValue);
+            const startDate = parseLocalDate(startDateValue);
             if (Number.isNaN(startDate.getTime())) return { start: '', end: '' };
 
             const endDate = new Date(startDate);
@@ -2637,8 +2649,8 @@
             endDate.setDate(endDate.getDate() - 1);
 
             return {
-                start: formatDateInputValue(startDate),
-                end: formatDateInputValue(endDate)
+                start: formatLocalDate(startDate),
+                end: formatLocalDate(endDate)
             };
         }
 
@@ -2691,17 +2703,11 @@
 
             paidRecords.forEach((record, index) => {
                 const explicitStart = String(record.paid_start_date ?? record.paidStartDate ?? '').slice(0, 10);
-                const explicitEnd = String(record.paid_end_date ?? record.paidEndDate ?? '').slice(0, 10);
                 const startDate = explicitStart || (joinDate ? addMonthsToDate(joinDate, index) : '');
                 const isLastRecord = index === paidRecords.length - 1;
-                let endDate = explicitEnd || (startDate ? getPaymentCycleDates(startDate).end : '');
-                // If this is the last paid record and the plan was extended, end the cycle the day before the next payment
-                if (isLastRecord && !explicitEnd) {
-                    const override = getNextPaymentOverride(student?.id);
-                    if (override) {
-                        endDate = addDaysToDate(override, -1);
-                    }
-                }
+                // Always use the natural cycle end — stable regardless of which record is last.
+                // Override-based extension is handled separately in isStudentPaymentActive.
+                const endDate = startDate ? getPaymentCycleDates(startDate).end : '';
 
                 cycles.push({
                     record,
@@ -2729,23 +2735,79 @@
 
         function getEffectiveNextCycleStart(student) {
             const override = getNextPaymentOverride(student?.id);
-            if (override) return override;
+            if (override) {
+                // nextPaymentDate is auto-set to joinDate+1month at registration.
+                // For students with NO paid records that auto-value is NOT a user override —
+                // ignoring it makes the first cycle start from joinDate (e.g. Jul 5, not Aug 5).
+                const joinDate = String(student?.joinDate || student?.join_date || '').slice(0, 10);
+                const autoDefault = joinDate ? addMonthsToDate(joinDate, 1) : '';
+                const hasPaidRecords = getStudentPaidRecords(student?.id).length > 0;
+                if (!hasPaidRecords && override === autoDefault) {
+                    // Auto-default: fall through to joinDate-based calculation
+                    return getNextCycleStart(student);
+                }
+                return override;
+            }
             return getNextCycleStart(student);
         }
 
-        // Returns the payment cycle that contains today's date, derived from the join date schedule
+        // Returns the "current" payment cycle for a student.
+        //
+        // Two distinct behaviours depending on payment state:
+        //
+        // A) Student has NO paid records yet (never paid, or paidAtRegistration not ticked):
+        //    → Always return the FIRST cycle from the anchor date, regardless of today.
+        //      The first cycle is always pending/overdue until the student pays — it must
+        //      not auto-advance to a later month just because the calendar moved on.
+        //      Example: joined June 1, today July 5, not paid → current = June 1–30 (overdue)
+        //
+        // B) Student HAS paid records:
+        //    → Find the cycle that contains today, anchored from the first paid record's
+        //      start date. This correctly advances month by month after each payment.
+        //      Example: paid June 1–30, today July 5 → current = July 1–31 (pending)
+        //
+        // Anchor priority (A): manual override (if set) › join date
+        // Anchor priority (B): first paid record's paid_start_date › join date
         function getTodayCycleDates(student) {
             const joinDate = String(student?.joinDate || student?.join_date || '').slice(0, 10);
-            if (!joinDate) return { start: '', end: '' };
+            const paidRecords = getStudentPaidRecords(student.id); // sorted ascending by start
+
+            if (paidRecords.length === 0) {
+                // Case A — no payments yet: always show the FIRST unpaid cycle (never advances).
+                //
+                // IMPORTANT: nextPaymentDate is auto-set to joinDate+1month at registration.
+                // We must NOT treat that auto-value as a user cycle-start override, or a
+                // student who joins July 5 would show Aug 5–Sep 4 as their first cycle.
+                // Only use the override if it differs from the auto-computed default.
+                const override = getNextPaymentOverride(student?.id);
+                const autoDefault = joinDate ? addMonthsToDate(joinDate, 1) : '';
+                const isUserOverride = override && override !== autoDefault;
+                const anchorDate = isUserOverride ? override : joinDate;
+                if (!anchorDate) return { start: '', end: '' };
+                return getPaymentCycleDates(anchorDate);
+            }
+
+            // Case B — has paid records: advance to the cycle that contains today.
+            const firstRecord = paidRecords[0];
+            const explicitStart = String(firstRecord.paid_start_date ?? firstRecord.paidStartDate ?? '').slice(0, 10);
+            const anchorDate = explicitStart || joinDate; // paidAtRegistration has no paid_start_date → joinDate
+
+            if (!anchorDate) return { start: '', end: '' };
             const now = new Date();
-            const join = new Date(joinDate + 'T00:00:00');
-            if (Number.isNaN(join.getTime())) return { start: '', end: '' };
-            const monthsElapsed = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth());
-            const cycleStart = addMonthsToDate(joinDate, monthsElapsed);
+            now.setHours(0, 0, 0, 0);
+            const anchor = parseLocalDate(anchorDate);
+            if (Number.isNaN(anchor.getTime())) return { start: '', end: '' };
+            const monthsElapsed = (now.getFullYear() - anchor.getFullYear()) * 12 + (now.getMonth() - anchor.getMonth());
+            const cycleStart = addMonthsToDate(anchorDate, monthsElapsed);
             const cycleDates = getPaymentCycleDates(cycleStart);
             // If today is past this cycle's end, advance one more month
-            if (cycleDates.end && now > new Date(cycleDates.end + 'T23:59:59')) {
-                return getPaymentCycleDates(addMonthsToDate(joinDate, monthsElapsed + 1));
+            if (cycleDates.end && now > parseLocalDate(cycleDates.end)) {
+                return getPaymentCycleDates(addMonthsToDate(anchorDate, monthsElapsed + 1));
+            }
+            // If today is before this cycle's start (day-of-month hasn't arrived yet),
+            // go back one month — e.g. anchor Jun 6, today is Jul 5 → still in Jun 6 cycle
+            if (cycleDates.start && now < parseLocalDate(cycleDates.start)) {
+                return getPaymentCycleDates(addMonthsToDate(anchorDate, monthsElapsed - 1));
             }
             return cycleDates;
         }
@@ -2767,15 +2829,26 @@
             if (cycleHistory.length === 0) return false;
 
             const latestCycle = cycleHistory[cycleHistory.length - 1];
-            const startDate = latestCycle.startDate;
-            const endDate = latestCycle.endDate;
-
-            if (!startDate || !endDate) return false;
+            if (!latestCycle.startDate || !latestCycle.endDate) return false;
 
             const now = new Date();
-            const start = new Date(`${startDate}T00:00:00`);
-            const end = new Date(`${endDate}T23:59:59`);
-            return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end;
+            now.setHours(0, 0, 0, 0);
+            const start = parseLocalDate(latestCycle.startDate);
+            const naturalEnd = parseLocalDate(latestCycle.endDate);
+
+            if (Number.isNaN(start.getTime()) || Number.isNaN(naturalEnd.getTime())) return false;
+
+            // Within the natural paid cycle?
+            if (now >= start && now <= naturalEnd) return true;
+
+            // If plan was extended via override, check if today falls within the extension period
+            const override = getNextPaymentOverride(student?.id);
+            if (override) {
+                const overrideEnd = parseLocalDate(addDaysToDate(override, -1));
+                if (overrideEnd > naturalEnd && now > naturalEnd && now <= overrideEnd) return true;
+            }
+
+            return false;
         }
 
         function getPreviousCycleMonth(student) {
@@ -2867,7 +2940,7 @@
                 </div>
                 <div style="margin-bottom:10px;"><strong>Address:</strong> ${student.address || 'N/A'} | <strong>Codice Fiscale:</strong> ${student.codiceFiscale || 'N/A'}</div>
                 <div style="margin-bottom:10px; display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
-                    <div><strong>Monthly Fee:</strong> €${(student.monthlyFees || 0).toFixed(2)}</div>
+                    <div><strong>Monthly Fee:</strong> €${Math.round(student.monthlyFees || 0)}</div>
                     <div><strong>Join Date:</strong> ${student.joinDate ? formatDisplayDate(student.joinDate) : ''}</div>
                     <div><strong>Next Payment:</strong> ${getStudentNextPaymentDate(student) ? formatDisplayDate(getStudentNextPaymentDate(student)) : 'N/A'}</div>
                     <div><strong>Current Status:</strong> <span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span></div>
@@ -2904,7 +2977,7 @@
                         <div style="font-weight:600;">${formatCycleLabel(firstDueCycle.start, firstDueCycle.end)}</div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <div class="fees-status fees-unpaid">PENDING</div>
-                            <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${firstDueCycle.start.slice(0, 7)}')" style="background:#27ae60;">
+                            <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${firstDueCycle.start}')" style="background:#27ae60;">
                                 Mark Paid
                             </button>
                         </div>
@@ -2916,7 +2989,7 @@
                             <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div class="fees-status fees-unpaid">PENDING</div>
-                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start.slice(0, 7)}')" style="background:#27ae60;">
+                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">
                                     Mark Paid
                                 </button>
                             </div>
@@ -2934,7 +3007,7 @@
                         <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                             <div>
                                 <div style="font-weight:600;">${formatCycleLabel(displayStart, displayEnd)}</div>
-                                ${isPaid && paidDateStr ? `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${formatDisplayDate(paidDateStr)} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${paidAmount.toFixed(2)}</strong></div>` : ''}
+                                ${isPaid && paidDateStr ? `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${formatDisplayDate(paidDateStr)} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong></div>` : ''}
                             </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">${isPaid ? 'PAID' : 'PENDING'}</div>
@@ -2951,13 +3024,25 @@
                             <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div class="fees-status fees-unpaid">PENDING</div>
-                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start.slice(0, 7)}')" style="background:#27ae60;">
+                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">
                                     Mark Paid
                                 </button>
                             </div>
                         </div>
                     `).join('')}
                 ` : '');
+
+            // Show "Next cycle starts from" override bar for students who already have payment history
+            if (paidRecords.length > 0) {
+                const _overrideVal = getEffectiveNextCycleStart(student) || String(student.joinDate || '').slice(0, 10);
+                const _overrideBar = `<div style="background:#f0f4ff; border:1px solid #c5d0ee; border-radius:8px; padding:10px 16px; margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span style="font-size:0.88em; color:#333; font-weight:600;">📅 Next cycle starts from:</span>
+                    <input type="date" id="cycleStartInput_${studentId}" value="${_overrideVal}" style="padding:5px 8px; border:1.5px solid #b0bfdd; border-radius:6px; font-size:0.88em;">
+                    <button class="btn-small" onclick="applyNewCycleStart(${studentId})" style="background:#8e44ad;">Set Date</button>
+                    <span style="font-size:0.8em; color:#666; font-style:italic;">Adjust if student rejoins on a different date</span>
+                </div>`;
+                historyContainer.innerHTML = _overrideBar + historyContainer.innerHTML;
+            }
 
             const attendanceDates = Object.entries(attendance)
                 .filter(([, dayAttendance]) => dayAttendance && dayAttendance[studentId])
@@ -3393,9 +3478,9 @@
         // --- Payment Date Picker ---
         let _pendingPayment = null;
 
-        function promptAndMarkPaid(studentId, month) {
-            _pendingPayment = { studentId, month };
-            const today = new Date().toISOString().slice(0, 10);
+        function promptAndMarkPaid(studentId, cycleStart) {
+            _pendingPayment = { studentId, cycleStart };
+            const today = formatLocalDate(new Date());
             document.getElementById('paymentDateInput').value = today;
             // Pre-fill amount from student's monthly fee
             const student = students.find(s => String(s.id) === String(studentId));
@@ -3410,19 +3495,21 @@
 
         async function confirmMarkPaid() {
             if (!_pendingPayment) return;
-            const { studentId, month } = _pendingPayment;
+            const { studentId, cycleStart } = _pendingPayment;
             const selectedDate = document.getElementById('paymentDateInput').value;
             const amount = parseFloat(document.getElementById('paymentAmountInput').value);
             if (!selectedDate) { alert('Please select a payment date.'); return; }
             closePaymentDateModal();
-            await toggleFeesPaid(studentId, month, true, selectedDate, isNaN(amount) ? null : amount);
+            await toggleFeesPaid(studentId, cycleStart, true, selectedDate, isNaN(amount) ? null : amount);
         }
 
         async function toggleFeesPaid(studentId, month, shouldBePaid = true, paidDate = null, amount = null) {
             try {
-                const safeMonth = /^\d{4}-\d{2}$/.test(String(month || ''))
-                    ? String(month)
-                    : getSelectedPaymentMonth();
+                // Accept full date "YYYY-MM-DD" (preferred) or month "YYYY-MM" (fallback)
+                const _isFullDate = /^\d{4}-\d{2}-\d{2}$/.test(String(month || ''));
+                const safeMonth = _isFullDate
+                    ? String(month || '').slice(0, 7)
+                    : (/^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : getSelectedPaymentMonth());
 
                 const student = students.find((entry) => entry.id === studentId);
 
@@ -3436,6 +3523,8 @@
                     } else {
                         await deleteQuery.eq('studentid', studentId).eq('month', safeMonth);
                     }
+                    // Clear nextPaymentDate override so the cycle system recomputes from history
+                    await setNextPaymentOverride(studentId, null);
                     await loadAllData();
                     refreshStudentDetailView(studentId);
                     updatePaymentsDisplay();
@@ -3449,10 +3538,9 @@
                 await supabaseClient.from('fees_paid').delete()
                     .eq('student_id', studentId).eq('month', safeMonth).then(() => {}).catch(() => {});
 
-                // Derive cycle dates directly from the month being paid
-                const cycleStart = `${safeMonth}-01`;
+                // Derive cycle dates from the actual cycle start (student-aligned, not always month-01)
+                const cycleStart = _isFullDate ? String(month) : `${safeMonth}-01`;
                 const cycleDates = getPaymentCycleDates(cycleStart);
-                const nextPaymentDate = cycleDates.end ? addDaysToDate(cycleDates.end, 1) : calculateNextPaymentDate(cycleStart);
 
                 await insertFeesPaidWithSchemaFallback([{
                     studentid: studentId,
@@ -3464,12 +3552,9 @@
                     amount: amount !== null ? amount : Number(student?.monthlyFees ?? 0)
                 }]);
 
-                if (student) {
-                    await updateStudentWithSchemaFallback(studentId, {
-                        ...student,
-                        nextPaymentDate
-                    });
-                }
+                // Clear nextPaymentDate override so the cycle system computes the next date
+                // from payment history — prevents the "New cycle starts from" bar changing automatically
+                await setNextPaymentOverride(studentId, null);
                 await loadAllData();
                 refreshStudentDetailView(studentId);
                 updatePaymentsDisplay();
@@ -3487,12 +3572,18 @@
                 }
 
                 if (!shouldBePaid) {
+                    // Find studentId before deleting so we can clear the override
+                    const payRec = feePayments.find(r => Number(r.id) === parsedRecordId);
+                    const affectedStudentId = payRec ? (payRec.studentid ?? payRec.studentId ?? payRec.student_id) : null;
+
                     const { error } = await supabaseClient
                         .from('fees_paid')
                         .delete()
                         .eq('id', parsedRecordId);
 
                     if (error) throw error;
+                    // Clear nextPaymentDate override so the cycle system recomputes from history
+                    if (affectedStudentId) await setNextPaymentOverride(affectedStudentId, null);
                     await loadAllData();
                     refreshStudentDetailView();
                     updatePaymentsDisplay();
@@ -4219,7 +4310,7 @@
 
                 const actionBtn = isPaid
                     ? `<button onclick="toggleFeesPaidByRecord(${latestRecord?.id ?? 'null'}, false)" style="background:#e74c3c;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Unpaid</button>`
-                    : `<button onclick="promptAndMarkPaid(${student.id}, '${displayCycle.start ? displayCycle.start.slice(0,7) : month}')" style="background:#27ae60;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Paid</button>`;
+                    : `<button onclick="promptAndMarkPaid(${student.id}, '${displayCycle.start || ''}')` + `" style="background:#27ae60;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Paid</button>`;
 
                 const extendBtn = `<button onclick="extendStudentPlan(${student.id})" title="Extend plan" style="background:#8e44ad;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Extend</button>`;
 
@@ -4235,7 +4326,7 @@
                                 ${overdueTag}${overrideTag}
                             </div>
                             <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">👤 ${student.parentName}</div>
-                            <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">💰 <strong style="color:#27ae60;">€${Number(student.monthlyFees||0).toFixed(2)}</strong> / month</div>
+                            <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">💰 <strong style="color:#27ae60;">€${Math.round(student.monthlyFees||0)}</strong> / month</div>
                             <div style="color:#1a1a1a; font-size:0.92em;">📅 ${cycleLabel}</div>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
@@ -4318,7 +4409,7 @@
                 let lastPaymentAmount = '0.00', lastPaymentDate = 'N/A', lastCycleStart = 'N/A', lastCycleEnd = 'N/A';
                 if (cycleHistory.length > 0) {
                     const lc = cycleHistory[cycleHistory.length - 1];
-                    lastPaymentAmount = Number(lc.record?.amount ?? student.monthlyFees ?? 0).toFixed(2);
+                    lastPaymentAmount = String(Math.round(Number(lc.record?.amount ?? student.monthlyFees ?? 0)));
                     const rawDate = String(lc.record?.paiddate ?? lc.record?.paidDate ?? lc.record?.paid_date ?? '').slice(0,10);
                     lastPaymentDate = rawDate ? formatDisplayDate(rawDate) : 'N/A';
                     lastCycleStart = lc.startDate ? formatDisplayDate(lc.startDate) : 'N/A';
@@ -4450,19 +4541,19 @@
             if (statsContainer) {
                 statsContainer.innerHTML = `
                     <div class="stat-box" style="background:#27ae60;">
-                        <div class="stat-number">€${feesCollected.toFixed(2)}</div>
+                        <div class="stat-number">€${Math.round(feesCollected)}</div>
                         <div class="stat-label">Fees Collected</div>
                     </div>
                     <div class="stat-box" style="background:#e67e22;">
-                        <div class="stat-number">€${dueAmount.toFixed(2)}</div>
+                        <div class="stat-number">€${Math.round(dueAmount)}</div>
                         <div class="stat-label">Upcoming Fees This Month</div>
                     </div>
                     <div class="stat-box" style="background:#3498db;">
-                        <div class="stat-number">€${feesCollected.toFixed(2)}</div>
+                        <div class="stat-number">€${Math.round(feesCollected)}</div>
                         <div class="stat-label">Total Income</div>
                     </div>
                     <div class="stat-box" style="background:#e74c3c;">
-                        <div class="stat-number">€${totalExpenses.toFixed(2)}</div>
+                        <div class="stat-number">€${Math.round(totalExpenses)}</div>
                         <div class="stat-label">Total Expense</div>
                     </div>
                 `;
@@ -4495,8 +4586,8 @@
                                     <div style="color:#1a1a1a; font-size:0.9em; margin-top:2px;">📅 ${cycleLabel2}</div>
                                 </div>
                                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-                                    <div style="font-size:1.2em; font-weight:800; color:#e67e22;">€${Number(student.monthlyFees || 0).toFixed(2)}</div>
-                                    <button class="btn-small" onclick="promptAndMarkPaid(${student.id}, '${cycleDates.start ? cycleDates.start.slice(0,7) : month}')" style="background:#27ae60;color:#fff;">Mark Paid</button>
+                                    <div style="font-size:1.2em; font-weight:800; color:#e67e22;">€${Math.round(student.monthlyFees || 0)}</div>
+                                    <button class="btn-small" onclick="promptAndMarkPaid(${student.id}, '${cycleDates.start || ''}')" style="background:#27ae60;color:#fff;">Mark Paid</button>
                                 </div>
                             </div>
                         `;
@@ -4517,7 +4608,7 @@
                                 <div style="color:#1a1a1a; font-size:0.9em;">${expense.expenseDate}</div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-size:1.2em; font-weight:bold; color:#e74c3c;">€${Number(expense.amount || 0).toFixed(2)}</div>
+                                <div style="font-size:1.2em; font-weight:bold; color:#e74c3c;">€${Math.round(expense.amount || 0)}</div>
                                 <button class="btn-small btn-delete" onclick="deleteExpense(${Number(expense.id)})" style="margin-top:8px;">Delete</button>
                             </div>
                         `;
@@ -4580,7 +4671,7 @@
                 html += `<div style="margin-bottom:20px;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #eee;">
                         <span style="font-weight:700;font-size:1em;color:#333;">📅 ${date}</span>
-                        <span style="background:#d4edda;color:#155724;border-radius:5px;padding:2px 10px;font-size:0.82em;font-weight:700;">€${dayTotal.toFixed(2)} collected</span>
+                        <span style="background:#d4edda;color:#155724;border-radius:5px;padding:2px 10px;font-size:0.82em;font-weight:700;">€${Math.round(dayTotal)} collected</span>
                         <span style="color:#aaa;font-size:0.82em;">${dayRecs.length} payment${dayRecs.length !== 1 ? 's' : ''}</span>
                     </div>`;
 
@@ -4589,7 +4680,7 @@
                     const s = students.find(x => String(x.id) === String(sid));
                     const name = s?.name || `Student #${sid}`;
                     const parentName = s?.parentName || '';
-                    const fee  = Number(s?.monthlyFees || 0).toFixed(2);
+                    const fee  = String(Math.round(s?.monthlyFees || 0));
                     // Derive cycle dates from cycle history so extensions are reflected
                     const paidDate = String(r.paiddate ?? r.paidDate ?? r.paid_date ?? date).slice(0, 10);
                     const recordId = String(r.id ?? r.record_id ?? r.recordId ?? '');
@@ -4695,15 +4786,15 @@
 
             statsContainer.innerHTML = `
                 <div class="stat-box" style="background:#27ae60;">
-                    <div class="stat-number">€${totalIncome.toFixed(2)}</div>
+                    <div class="stat-number">€${Math.round(totalIncome)}</div>
                     <div class="stat-label">Income</div>
                 </div>
                 <div class="stat-box" style="background:#e74c3c;">
-                    <div class="stat-number">€${totalExpenses.toFixed(2)}</div>
+                    <div class="stat-number">€${Math.round(totalExpenses)}</div>
                     <div class="stat-label">Expenses</div>
                 </div>
                 <div class="stat-box" style="background:${profit >= 0 ? '#2980b9' : '#c0392b'};">
-                    <div class="stat-number">€${profit.toFixed(2)}</div>
+                    <div class="stat-number">€${Math.round(profit)}</div>
                     <div class="stat-label">Profit</div>
                 </div>
                 <div class="stat-box" style="background:#8e44ad;">
@@ -4737,7 +4828,7 @@
                         const s = students.find(x => String(x.id) === String(sid));
                         breakdownHtml += `<div style="display:flex;justify-content:space-between;padding:8px 14px;background:#f8f9fa;border-left:4px solid #27ae60;border-radius:6px;margin-bottom:5px;">
                             <span style="color:#333;">${s?.name || 'Unknown'} <span style="color:#aaa;font-size:0.85em;">(${date})</span></span>
-                            <strong style="color:#27ae60;">€${Number(s?.monthlyFees||0).toFixed(2)}</strong>
+                            <strong style="color:#27ae60;">€${Math.round(s?.monthlyFees||0)}</strong>
                         </div>`;
                     });
                 });
@@ -4748,7 +4839,7 @@
                 reportExpenses.forEach(e => {
                     breakdownHtml += `<div style="display:flex;justify-content:space-between;padding:8px 14px;background:#f8f9fa;border-left:4px solid #e74c3c;border-radius:6px;margin-bottom:5px;">
                         <span style="color:#333;">${e.description} <span style="color:#aaa;font-size:0.85em;">(${e.expenseDate})</span></span>
-                        <strong style="color:#e74c3c;">€${Number(e.amount||0).toFixed(2)}</strong>
+                        <strong style="color:#e74c3c;">€${Math.round(e.amount||0)}</strong>
                     </div>`;
                 });
             }
