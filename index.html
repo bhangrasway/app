@@ -1412,42 +1412,42 @@
                 paymentStatus = cycleDueEnd && new Date() > cycleDueEnd ? 'OVERDUE' : 'UNPAID';
             }
 
-            const sep = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
+            const sep = '━━━━━━━━━━━━━━';
 
             let message = '';
-            message += `\uD83D\uDC4B Sat Sri Akal ${student.name}! \uD83D\uDC83\uD83D\uDD7A\n\n`;
-            message += `\uD83C\uDF89 Here's your 2-Month Bhangra Report! \uD83C\uDF89\n\n`;
-            message += `\uD83D\uDCC5 Classes Attended: ${classesCount}\n\n`;
-            message += `\u2705 Attendance Dates\n${attendanceDates}\n\n`;
-            message += `\uD83D\uDD25 Amazing work! Every class makes you stronger, more confident, and brings even more Bhangra energy. Keep rocking the dance floor! \uD83E\uDD41\uD83D\uDCA5\n\n`;
+            message += `👋 Sat Sri Akal ${student.name}! 💃🕺\n\n`;
+            message += `🎉 Here's your 2-Month Bhangra Report! 🎉\n\n`;
+            message += `📅 Classes Attended: ${classesCount}\n\n`;
+            message += `✅ Attendance Dates\n${attendanceDates}\n\n`;
+            message += `🔥 Amazing work! Every class makes you stronger, more confident, and brings even more Bhangra energy. Keep rocking the dance floor! 🥁💥\n\n`;
             message += `${sep}\n`;
-            message += `\n\uD83D\uDCB3 Last Payment Record\n\n`;
-            message += `\uD83D\uDCB6 \u20AC${lastPaymentAmount}\n\n`;
-            message += `\uD83D\uDCC5 Paid on: ${lastPaymentDate}\n\n`;
-            message += `\uD83D\uDDD3\uFE0F Cycle: ${lastCycleStart} \u2192 ${lastCycleEnd}\n`;
+            message += `\n💳 Last Payment Record\n\n`;
+            message += `💶 €${lastPaymentAmount}\n\n`;
+            message += `📅 Paid on: ${lastPaymentDate}\n\n`;
+            message += `🗓️ Cycle: ${lastCycleStart} → ${lastCycleEnd}\n`;
 
             if (paymentStatus === 'PAID') {
-                message += `\n\uD83D\uDFE2 Current Membership: Active\n\n`;
-                message += `\uD83D\uDCB6 Current Payment: \u20AC${currentPaymentAmount}\n`;
-                message += `\uD83D\uDCC5 Paid on: ${currentPaymentDate}\n`;
-                message += `\uD83D\uDDD3\uFE0F Valid Until: ${currentCycleStart} \u2192 ${currentCycleEnd}\n\n`;
-                message += `\uD83E\uDD73 You're all set! Enjoy your classes and keep shining on the dance floor! \uD83D\uDC83\uD83D\uDD7A\n`;
+                message += `\n🟢 Current Membership: Active\n\n`;
+                message += `💶 Current Payment: €${currentPaymentAmount}\n`;
+                message += `📅 Paid on: ${currentPaymentDate}\n`;
+                message += `🗓️ Valid Until: ${currentCycleStart} → ${currentCycleEnd}\n\n`;
+                message += `🥳 You're all set! Enjoy your classes and keep shining on the dance floor! 💃🕺\n`;
             } else if (paymentStatus === 'UNPAID') {
-                message += `\n\uD83D\uDFE1 Current Payment Cycle\n\n`;
-                message += `\uD83D\uDDD3\uFE0F ${currentCycleStart} \u2192 ${currentCycleEnd}\n\n`;
-                message += `\uD83D\uDE0A Your monthly fee is still pending.\n\n`;
-                message += `Please try to complete your payment within the first 1\u20132 weeks of your payment cycle.\n\n`;
-                message += `Thank you! \u2764\uFE0F\uD83D\uDE4F\n`;
+                message += `\n🟡 Current Payment Cycle\n\n`;
+                message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
+                message += `😊 Your monthly fee is still pending.\n\n`;
+                message += `Please try to complete your payment within the first 1–2 weeks of your payment cycle.\n\n`;
+                message += `Thank you! ❤️🙏\n`;
             } else if (paymentStatus === 'OVERDUE') {
-                message += `\n\uD83D\uDCC5 Current Payment Cycle\n\n`;
-                message += `\uD83D\uDDD3\uFE0F ${currentCycleStart} \u2192 ${currentCycleEnd}\n\n`;
-                message += `\uD83D\uDE0A This is simply a friendly reminder regarding your current membership cycle.\n\n`;
+                message += `\n📅 Current Payment Cycle\n\n`;
+                message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
+                message += `😊 This is simply a friendly reminder regarding your current membership cycle.\n\n`;
                 message += `If you haven't already, you may complete your monthly payment whenever convenient.\n\n`;
-                message += `Thank you for your continued support! \u2764\uFE0F\n`;
+                message += `Thank you for your continued support! ❤️\n`;
             }
 
             message += `\n${sep}\n\n`;
-            message += `\u2764\uFE0F Thank you for being part of our Bhangra family! Your dedication and positive energy make every class special. We can't wait to see you at the next session! \uD83C\uDFB6\uD83D\uDD7A`;
+            message += `❤️ Thank you for being part of our Bhangra family! Your dedication and positive energy make every class special. We can't wait to see you at the next session! 🎶🕺`;
 
             return message.trim();
         }
