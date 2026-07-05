@@ -333,16 +333,27 @@
         }
 
         .success-message {
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #27ae60;
+            color: #fff;
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
         }
 
         .success-message.show {
-            display: block;
+            opacity: 1;
+            pointer-events: auto;
         }
 
         /* BACKUP & RESTORE STYLES */
@@ -568,9 +579,10 @@
                 <button class="tab-btn" onclick="switchTab('reports')">Reports</button>
             </div>
 
+            <div class="success-message" id="successMsg"></div>
+
             <!-- STUDENTS TAB -->
             <div id="students" class="tab-content active">
-                <div class="success-message" id="successMsg"></div>
                 
                 <h2>Register New Student</h2>
                 <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
