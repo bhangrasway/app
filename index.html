@@ -1699,6 +1699,9 @@
         let currentEditingStudentId = null;
         let currentViewingStudentId = null;
         let currentEditingFromDetailView = false;
+        // Tracks unsaved checkbox changes keyed by date -> studentId -> boolean
+        // Survives filter/search re-renders so prior markings are not lost
+        let pendingAttendanceChanges = {};
 
         function buildStudentPayloadForSchema(student, variant) {
             const base = {
@@ -1976,6 +1979,32 @@
                     .from('attendance')
                     .delete()
                     .eq(dateColumn, attendanceDate);
+
+                if (!error) return;
+                lastError = error;
+
+                if (!isMissingColumnError(error)) {
+                    throw error;
+                }
+            }
+
+            if (lastError) throw lastError;
+        }
+
+        async function deleteAttendanceByDateAndStudentsWithSchemaFallback(attendanceDate, studentIds) {
+            if (!studentIds || studentIds.length === 0) return;
+            const dateColumns = ['attendancedate', 'attendance_date', 'attendanceDate', 'date'];
+            const idColumns = ['studentid', 'student_id', 'studentId'];
+            let lastError = null;
+
+            for (let i = 0; i < dateColumns.length; i++) {
+                const dateColumn = dateColumns[i];
+                const idColumn = idColumns[i] ?? idColumns[idColumns.length - 1];
+                const { error } = await supabaseClient
+                    .from('attendance')
+                    .delete()
+                    .eq(dateColumn, attendanceDate)
+                    .in(idColumn, studentIds);
 
                 if (!error) return;
                 lastError = error;
@@ -3405,17 +3434,39 @@
             }
             
             try {
-                const attendanceRecords = Array.from(checkboxes).map((checkbox) => ({
-                    studentId: parseInt(checkbox.dataset.studentId, 10),
+                // Sync visible DOM checkboxes into pending so Mark All / manual checks
+                // are captured even when a filter is active at save time.
+                document.querySelectorAll('.attendance-checkbox').forEach(cb => {
+                    const id = parseInt(cb.dataset.studentId, 10);
+                    if (Number.isFinite(id)) {
+                        if (!pendingAttendanceChanges[attendanceDate]) pendingAttendanceChanges[attendanceDate] = {};
+                        pendingAttendanceChanges[attendanceDate][id] = cb.checked;
+                    }
+                });
+
+                // Build the full attendance record for the date by merging:
+                // 1. Pending unsaved changes (visible DOM + any prior searches)
+                // 2. Existing DB state for students not touched at all this session
+                const dateAttendanceDb = attendance[attendanceDate] || {};
+                const pendingForDate = pendingAttendanceChanges[attendanceDate] || {};
+
+                const allStudentIds = students.map(s => s.id).filter(id => Number.isFinite(id));
+                const attendanceRecords = allStudentIds.map(id => ({
+                    studentId: id,
                     attendanceDate,
-                    isPresent: checkbox.checked
-                })).filter((record) => Number.isFinite(record.studentId));
+                    isPresent: id in pendingForDate
+                        ? pendingForDate[id]
+                        : (dateAttendanceDb[id] || false)
+                }));
 
                 await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
 
                 if (attendanceRecords.length > 0) {
                     await insertAttendanceWithSchemaFallback(attendanceRecords);
                 }
+
+                // Clear pending state for this date after successful save
+                delete pendingAttendanceChanges[attendanceDate];
 
                 showSuccessMessage('✓ Attendance saved successfully!');
                 await loadAllData();
@@ -4198,9 +4249,13 @@
             document.getElementById('noStudentsMsg').style.display = 'none';
 
             const dateAttendance = attendance[attendanceDate] || {};
+            const pendingForDate = pendingAttendanceChanges[attendanceDate] || {};
 
             filteredStudents.forEach(student => {
-                const isPresent = dateAttendance[student.id] || false;
+                // Use pending (unsaved) value if set, otherwise fall back to DB value
+                const isPresent = student.id in pendingForDate
+                    ? pendingForDate[student.id]
+                    : (dateAttendance[student.id] || false);
                 const card = document.createElement('div');
                 card.className = 'attendance-card';
                 card.innerHTML = `
@@ -4214,7 +4269,14 @@
                         Present
                     </label>
                 `;
-                card.querySelector('.attendance-checkbox').addEventListener('change', updateAttendanceCounts);
+                card.querySelector('.attendance-checkbox').addEventListener('change', (e) => {
+                    // Persist checkbox state so it survives filter/search re-renders
+                    if (!pendingAttendanceChanges[attendanceDate]) {
+                        pendingAttendanceChanges[attendanceDate] = {};
+                    }
+                    pendingAttendanceChanges[attendanceDate][student.id] = e.target.checked;
+                    updateAttendanceCounts();
+                });
                 grid.appendChild(card);
             });
 
@@ -4222,15 +4284,27 @@
         }
 
         function markAllPresent() {
+            const attendanceDate = document.getElementById('attendanceDate').value;
             document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                 checkbox.checked = true;
+                const id = parseInt(checkbox.dataset.studentId, 10);
+                if (attendanceDate && Number.isFinite(id)) {
+                    if (!pendingAttendanceChanges[attendanceDate]) pendingAttendanceChanges[attendanceDate] = {};
+                    pendingAttendanceChanges[attendanceDate][id] = true;
+                }
             });
             updateAttendanceCounts();
         }
 
         function markAllAbsent() {
+            const attendanceDate = document.getElementById('attendanceDate').value;
             document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
                 checkbox.checked = false;
+                const id = parseInt(checkbox.dataset.studentId, 10);
+                if (attendanceDate && Number.isFinite(id)) {
+                    if (!pendingAttendanceChanges[attendanceDate]) pendingAttendanceChanges[attendanceDate] = {};
+                    pendingAttendanceChanges[attendanceDate][id] = false;
+                }
             });
             updateAttendanceCounts();
         }
@@ -4866,7 +4940,11 @@
 
         // Attendance batch filter
         document.getElementById('attendanceBatchFilter').addEventListener('change', displayAttendanceTab);
-        document.getElementById('attendanceDate').addEventListener('change', displayAttendanceTab);
+        document.getElementById('attendanceDate').addEventListener('change', () => {
+            // Clear pending changes when switching to a different date
+            pendingAttendanceChanges = {};
+            displayAttendanceTab();
+        });
 
         document.getElementById('joinDate').addEventListener('change', refreshNextPaymentDateFromJoinDate);
 
