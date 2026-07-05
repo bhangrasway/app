@@ -1342,9 +1342,18 @@
             }
             const phone = (s.phone || '').replace(/\D/g, '');
             const msg = `Gentile ${s.parentName || s.name},\n\nAllego il documento fiscale (${p.taxFileNo || 'N/A'}) del ${p.date || ''}.\n${pdfUrl ? 'PDF: ' + pdfUrl : ''}\n\nBhangra Sway Cremona`;
-            const url = `https://wa.me/39${phone}?text=${encodeURIComponent(msg)}`;
-            if (win) win.location.href = url; else window.open(url, '_blank');
+            if (win) win.close();
+            openWhatsApp(phone, msg);
         }
+
+        // ── WhatsApp Helper ──────────────────────────────────────────────────────
+        function openWhatsApp(phone, message) {
+            if (!phone) { alert('Phone number missing'); return; }
+            const cleanPhone = String(phone).replace(/\D/g, '');
+            const url = `https://api.whatsapp.com/send?phone=39${cleanPhone}&text=${encodeURIComponent(message)}`;
+            window.open(url, '_blank');
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         // ── WhatsApp Student Progress Report ─────────────────────────────────────
         function generateWhatsAppReportMessage(student) {
@@ -1455,14 +1464,12 @@
         function sendStudentWhatsAppReport(studentId) {
             const student = students.find(s => s.id === studentId);
             if (!student) { alert('Student not found.'); return; }
-            const rawPhone = (student.phone || '').replace(/\D/g, '');
-            if (!rawPhone) {
+            if (!student.phone) {
                 alert('No phone number registered for this student.\nPlease add a phone number in the student\'s profile first.');
                 return;
             }
             const message = generateWhatsAppReportMessage(student);
-            const url = `https://api.whatsapp.com/send?phone=39${rawPhone}&text=${encodeURIComponent(message)}`;
-            window.open(url, '_blank');
+            openWhatsApp(student.phone, message);
         }
         // ─────────────────────────────────────────────────────────────────────────
 
@@ -4334,7 +4341,7 @@
 
                 const rawPhone = (student.phone || '').replace(/\D/g, '');
                 const message = generateWhatsAppReportMessage(student);
-                const waLink = rawPhone ? `https://api.whatsapp.com/send?phone=39${rawPhone}&text=${encodeURIComponent(message)}` : 'No phone';
+                const waLink = rawPhone ? buildWhatsAppUrl(rawPhone, message) : 'No phone';
 
                 rows.push({
                     'Student Name': student.name || '',
