@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -574,7 +575,7 @@
             <div class="tabs">
                 <button class="tab-btn active" onclick="switchTab('students')">Students</button>
                 <button class="tab-btn" onclick="switchTab('payments')">Payments</button>
-                <button class="tab-btn" onclick="switchTab('attendance')">Attendance</button>
+                <button class="tab-btn" onclick="switchTab('attendance')">Attendance<span id="checkinReqBadge" style="display:none; pointer-events:none; margin-left:6px; background:#e74c3c; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.75em; font-weight:700; vertical-align:middle;"></span></button>
                 <button class="tab-btn" onclick="switchTab('fees')">Income & Expense</button>
                 <button class="tab-btn" onclick="switchTab('reports')">Reports</button>
             </div>
@@ -681,10 +682,6 @@
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📅 Join Date *</label>
                                 <input type="date" id="joinDate" required>
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label>💳 Next Payment</label>
-                                <input type="date" id="nextPaymentDate">
                             </div>
                         </div>
                     </div>
@@ -862,6 +859,50 @@
                     </div>
                     <div style="background:#3498db; color:#fff; border-radius:8px; padding:10px 20px; font-weight:700; font-size:1em;">
                         Total: <span id="totalAttendanceCount">0</span>
+                    </div>
+                </div>
+
+                <div style="margin-top:24px; padding:18px; border:1px solid #e2e2e2; border-radius:10px; background:#fafafa;">
+                    <h3 style="margin:0 0 12px;">Student Portal (QR / Link)</h3>
+                    <p style="margin:0 0 12px; color:#555; font-size:0.92em;">Students scan the QR code (print it for the door, or share the link in WhatsApp) to mark attendance or view their report. Attendance only works during the window below; reports are available anytime.</p>
+
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="0"> Sun</label>
+                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="1"> Mon</label>
+                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="2"> Tue</label>
+                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="3"> Wed</label>
+                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="4"> Thu</label>
+                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="5"> Fri</label>
+                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="6"> Sat</label>
+                    </div>
+
+                    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;">
+                        <div>
+                            <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Start time</label>
+                            <input type="time" id="checkinStartTime" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">End time</label>
+                            <input type="time" id="checkinEndTime" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd;">
+                        </div>
+                        <button onclick="saveCheckinSettings()" style="background:#27ae60;">Save Window</button>
+                    </div>
+
+                    <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+                        <canvas id="checkinQrCanvas"></canvas>
+                        <div>
+                            <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Student portal link</label>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input type="text" id="checkinUrlText" readonly style="padding:8px 10px; border-radius:6px; border:1px solid #ddd; min-width:220px;">
+                                <button onclick="copyCheckinUrl()">Copy link</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:18px; border-top:1px solid #e2e2e2; padding-top:14px;">
+                        <h4 style="margin:0 0 8px;">Pending Manual Check-Ins</h4>
+                        <div id="checkinRequestsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+                        <div id="noCheckinRequestsMsg" style="color:#888; font-size:0.9em; display:none;">No pending requests.</div>
                     </div>
                 </div>
 
@@ -1066,6 +1107,9 @@
 
     <button id="goTopBtn" onclick="scrollToTop()">↑</button>
 
+    <!-- Shared trust-based membership engine (same file report.html loads,
+         so admin math and student-facing math can never drift apart) -->
+    <script src="membership.js"></script>
     <script>
         // ===== TAX RECORDS =====
         const TAX_BUCKET = 'tax-pdfs';
@@ -1371,55 +1415,62 @@
                 .map(([date]) => date)
                 .sort();
 
-            const classesCount = recentAttendanceDates.length;
+            const demoDatesInReport = recentAttendanceDates.filter(d => isDemoClass(student.id, d));
+            const classesCount = recentAttendanceDates.length - demoDatesInReport.length;
             const attendanceDates = recentAttendanceDates.length > 0
                 ? recentAttendanceDates.map(d => {
                     const dt = new Date(d + 'T00:00:00');
                     const day = String(dt.getDate()).padStart(2, '0');
                     const month = dt.toLocaleDateString('en-GB', { month: 'short' });
-                    return `${day} ${month}`;
+                    return `${day} ${month}${isDemoClass(student.id, d) ? ' (free demo 🎁)' : ''}`;
                   }).join(' • ')
                 : 'No attendance records';
 
-            // Payment data
-            const cycleHistory = getStudentCycleHistory(student);
+            // Payment/membership: single source of truth, same trust-based
+            // timeline the admin dashboard and report.html use — this used to be
+            // built from an older, separate cycle calculation and then had a
+            // "friendly note" bolted on afterward from the newer system, which is
+            // why unpaid students used to get the payment reminder twice.
+            const timeline = getMembershipTimeline(student);
+            const autoExt = getAutoExtension(student);
             const isPaid = isStudentPaymentActive(student);
+            const paidRecords = getStudentPaidRecords(student.id);
+            const displayCycle = timeline.current || timeline.cycles[timeline.cycles.length - 1] || null;
 
-            let lastPaymentAmount = '0.00';
+            const lastRecord = paidRecords[paidRecords.length - 1] || null;
+            let lastPaymentAmount = '0';
             let lastPaymentDate = 'N/A';
-            let lastCycleStart = 'N/A';
-            let lastCycleEnd = 'N/A';
-
-            if (cycleHistory.length > 0) {
-                const lastCycle = cycleHistory[cycleHistory.length - 1];
-                lastPaymentAmount = String(Math.round(Number(lastCycle.record?.amount ?? student.monthlyFees ?? 0)));
-                const lastPaidDateRaw = String(lastCycle.record?.paiddate ?? lastCycle.record?.paidDate ?? lastCycle.record?.paid_date ?? '').slice(0, 10);
+            if (lastRecord) {
+                lastPaymentAmount = String(Math.round(Number(lastRecord.amount ?? student.monthlyFees ?? 0)));
+                const lastPaidDateRaw = String(lastRecord.paiddate ?? lastRecord.paidDate ?? lastRecord.paid_date ?? '').slice(0, 10);
                 lastPaymentDate = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : 'N/A';
-                lastCycleStart = lastCycle.startDate ? formatDisplayDate(lastCycle.startDate) : 'N/A';
-                lastCycleEnd = lastCycle.endDate ? formatDisplayDate(lastCycle.endDate) : 'N/A';
             }
 
-            let currentPaymentAmount = '0';
-            let currentPaymentDate = 'N/A';
-            let currentCycleStart = 'N/A';
-            let currentCycleEnd = 'N/A';
             let paymentStatus = 'UNPAID';
+            if (isPaid) paymentStatus = 'PAID';
+            else if (timeline.owedCycles.length > 0) paymentStatus = 'OVERDUE';
 
-            if (isPaid && cycleHistory.length > 0) {
-                const currentCycle = cycleHistory[cycleHistory.length - 1];
-                currentPaymentAmount = String(Math.round(Number(currentCycle.record?.amount ?? student.monthlyFees ?? 0)));
-                const currentPaidDateRaw = String(currentCycle.record?.paiddate ?? currentCycle.record?.paidDate ?? currentCycle.record?.paid_date ?? '').slice(0, 10);
-                currentPaymentDate = currentPaidDateRaw ? formatDisplayDate(currentPaidDateRaw) : 'N/A';
-                currentCycleStart = currentCycle.startDate ? formatDisplayDate(currentCycle.startDate) : 'N/A';
-                currentCycleEnd = currentCycle.endDate ? formatDisplayDate(currentCycle.endDate) : 'N/A';
-                paymentStatus = 'PAID';
-            } else {
-                const currentCycleDates = getTodayCycleDates(student);
-                currentCycleStart = currentCycleDates.start ? formatDisplayDate(currentCycleDates.start) : 'N/A';
-                currentCycleEnd = currentCycleDates.end ? formatDisplayDate(currentCycleDates.end) : 'N/A';
-                const cycleDueEnd = currentCycleDates.end ? new Date(currentCycleDates.end + 'T23:59:59') : null;
-                paymentStatus = cycleDueEnd && new Date() > cycleDueEnd ? 'OVERDUE' : 'UNPAID';
-            }
+            // Fees are collected in advance, so the current cycle counts as due
+            // too even before it's "complete" by the attendance rule — plus every
+            // already-owed (complete-and-unpaid) past cycle. This is the combined
+            // total across previous month(s) AND this month, not just one or the
+            // other.
+            const currentCycleAlsoPending = displayCycle && !displayCycle.paid && !timeline.owedCycles.includes(displayCycle);
+            const totalOwedCount = timeline.owedCycles.length + (currentCycleAlsoPending ? 1 : 0);
+            const totalPendingAmount = totalOwedCount * (student.monthlyFees || 0);
+
+            const currentCycleStart = displayCycle ? formatDisplayDate(displayCycle.start) : 'N/A';
+            const currentCycleEnd = displayCycle
+                ? formatDisplayDate(autoExt.isExtended ? autoExt.effectiveEndDate : displayCycle.naturalEnd)
+                : 'N/A';
+            const extraClasses = displayCycle ? Math.max(0, displayCycle.attended - AUTO_EXTENSION_CLASS_TARGET) : 0;
+
+            // The cycle immediately before this one in the actual chain (mirrors
+            // report.html's "Previous Cycle" card) — shown regardless of whether
+            // it was ever paid, so a never-paid student's overdue month is visible
+            // here, not just folded into a number.
+            const displayIndex = displayCycle ? timeline.cycles.indexOf(displayCycle) : -1;
+            const previousCycle = displayIndex > 0 ? timeline.cycles[displayIndex - 1] : null;
 
             const sep = '━━━━━━━━━━━━━━';
 
@@ -1430,29 +1481,39 @@
             message += `✅ Attendance Dates\n${attendanceDates}\n\n`;
             message += `🔥 Amazing work! Every class makes you stronger, more confident, and brings even more Bhangra energy. Keep rocking the dance floor! 🥁💥\n\n`;
             message += `${sep}\n`;
-            message += `\n💳 Last Payment Record\n\n`;
-            message += `💶 €${lastPaymentAmount}\n\n`;
-            message += `📅 Paid on: ${lastPaymentDate}\n\n`;
-            message += `🗓️ Cycle: ${lastCycleStart} → ${lastCycleEnd}\n`;
+
+            if (previousCycle) {
+                message += `\n📆 Previous Cycle\n\n`;
+                message += `🗓️ ${formatDisplayDate(previousCycle.start)} → ${formatDisplayDate(previousCycle.effectiveEnd)}\n`;
+                message += `${previousCycle.paid ? '✅ Paid' : '❌ Unpaid'} · 🏃 ${previousCycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes\n\n`;
+            }
+
+            if (lastRecord) {
+                message += `\n💳 Last Payment Record\n\n`;
+                message += `💶 €${lastPaymentAmount}\n\n`;
+                message += `📅 Paid on: ${lastPaymentDate}\n\n`;
+            }
+
+            message += `\n${paymentStatus === 'PAID' ? '🟢 Current Membership: Active' : '🟡 Current Payment Cycle'}\n\n`;
+            message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
+
+            if (extraClasses > 0) {
+                message += `🎁 Bonus: you attended ${extraClasses} extra class${extraClasses > 1 ? 'es' : ''} this cycle beyond the ${AUTO_EXTENSION_CLASS_TARGET}-class minimum — enjoy!\n\n`;
+            } else if (autoExt.isExtended) {
+                const classesLeft = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - autoExt.attendedCount);
+                message += paymentStatus === 'PAID'
+                    ? `⏳ No rush — you're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`
+                    : `⏳ You're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`;
+            }
 
             if (paymentStatus === 'PAID') {
-                message += `\n🟢 Current Membership: Active\n\n`;
-                message += `💶 Current Payment: €${currentPaymentAmount}\n`;
-                message += `📅 Paid on: ${currentPaymentDate}\n`;
-                message += `🗓️ Valid Until: ${currentCycleStart} → ${currentCycleEnd}\n\n`;
                 message += `🥳 You're all set! Enjoy your classes and keep shining on the dance floor! 💃🕺\n`;
-            } else if (paymentStatus === 'UNPAID') {
-                message += `\n🟡 Current Payment Cycle\n\n`;
-                message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
-                message += `😊 Your monthly fee is still pending.\n\n`;
-                message += `Please try to complete your payment within the first 1–2 weeks of your payment cycle.\n\n`;
+            } else {
+                message += paymentStatus === 'OVERDUE'
+                    ? `😊 This is a friendly reminder — ${timeline.owedCycles.length} previous month${timeline.owedCycles.length > 1 ? 's are' : ' is'} still unpaid${currentCycleAlsoPending ? ', along with this cycle' : ''}.\n\n`
+                    : `😊 Your fee for this cycle is still pending — you can pay anytime at class.\n\n`;
+                message += `💶 Total Payment To Be Paid = €${Math.round(totalPendingAmount)}\n`;
                 message += `Thank you! ❤️🙏\n`;
-            } else if (paymentStatus === 'OVERDUE') {
-                message += `\n📅 Current Payment Cycle\n\n`;
-                message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
-                message += `😊 This is simply a friendly reminder regarding your current membership cycle.\n\n`;
-                message += `If you haven't already, you may complete your monthly payment whenever convenient.\n\n`;
-                message += `Thank you for your continued support! ❤️\n`;
             }
 
             message += `\n${sep}\n\n`;
@@ -1693,6 +1754,9 @@
 
         let students = [];
         let attendance = {};
+        // Demo (free trial) classes: demoAttendance[dateKey][studentId] = true.
+        // Demo classes never count toward the cycle class target.
+        let demoAttendance = {};
         let expenses = [];
         let feesPaid = {};
         let feePayments = [];
@@ -1714,7 +1778,6 @@
                 batch: student.batch,
                 monthlyFees: student.monthlyFees,
                 joinDate: student.joinDate || student.join_date || '',
-                nextPaymentDate: student.nextPaymentDate || student.next_payment_date || '',
                 paidAtRegistration: !!(student.paidAtRegistration || student.paid_at_registration)
             };
 
@@ -1729,7 +1792,6 @@
                     batch: base.batch,
                     monthlyfees: base.monthlyFees,
                     joindate: base.joinDate,
-                    nextpaymentdate: base.nextPaymentDate,
                     paidatregistration: base.paidAtRegistration
                 };
             }
@@ -1745,7 +1807,6 @@
                     batch: base.batch,
                     monthly_fees: base.monthlyFees,
                     join_date: base.joinDate,
-                    next_payment_date: base.nextPaymentDate,
                     paid_at_registration: base.paidAtRegistration
                 };
             }
@@ -1944,14 +2005,16 @@
             const base = {
                 studentId: record.studentId ?? record.student_id ?? record.studentid,
                 attendanceDate: record.attendanceDate ?? record.attendance_date ?? record.attendancedate,
-                isPresent: record.isPresent ?? record.is_present ?? record.ispresent
+                isPresent: record.isPresent ?? record.is_present ?? record.ispresent,
+                isDemo: record.isDemo ?? record.is_demo ?? record.isdemo ?? false
             };
 
             if (variant === 'snake') {
                 return {
                     student_id: base.studentId,
                     attendance_date: base.attendanceDate,
-                    is_present: !!base.isPresent
+                    is_present: !!base.isPresent,
+                    is_demo: !!base.isDemo
                 };
             }
 
@@ -1959,14 +2022,16 @@
                 return {
                     studentid: base.studentId,
                     attendancedate: base.attendanceDate,
-                    ispresent: !!base.isPresent
+                    ispresent: !!base.isPresent,
+                    isdemo: !!base.isDemo
                 };
             }
 
             return {
                 studentId: base.studentId,
                 attendanceDate: base.attendanceDate,
-                isPresent: !!base.isPresent
+                isPresent: !!base.isPresent,
+                isDemo: !!base.isDemo
             };
         }
 
@@ -2125,6 +2190,7 @@
         }
 
         function showLoginPage() {
+            stopCheckinRequestsPolling();
             document.getElementById('loginPage').style.display = 'flex';
             document.getElementById('appPage').style.display = 'none';
             document.getElementById('email').value = '';
@@ -2132,10 +2198,28 @@
             document.getElementById('loginError').classList.remove('show');
         }
 
+        // Poll pending manual check-in requests while logged in, so a student's
+        // "please mark me present" shows up (as the red tab badge) within ~30s
+        // without the instructor having to re-open the Attendance tab.
+        let checkinRequestsPollTimer = null;
+
+        function startCheckinRequestsPolling() {
+            if (checkinRequestsPollTimer) return;
+            loadCheckinRequests();
+            checkinRequestsPollTimer = setInterval(loadCheckinRequests, 30000);
+        }
+
+        function stopCheckinRequestsPolling() {
+            if (!checkinRequestsPollTimer) return;
+            clearInterval(checkinRequestsPollTimer);
+            checkinRequestsPollTimer = null;
+        }
+
         function showApp() {
             document.getElementById('loginPage').style.display = 'none';
             document.getElementById('appPage').style.display = 'block';
             loadAllData();
+            startCheckinRequestsPolling();
         }
 
         async function checkAuthentication() {
@@ -2173,15 +2257,21 @@
                 
                 if (attendanceError) throw attendanceError;
                 attendance = {};
+                demoAttendance = {};
                 if (attendanceData) {
                     attendanceData.forEach(record => {
                         const rawDate = String(record.attendanceDate ?? record.attendance_date ?? record.attendancedate ?? record.date ?? '').trim();
                         const dateKey = /^\d{4}-\d{2}-\d{2}/.test(rawDate) ? rawDate.slice(0, 10) : rawDate;
                         const studentId = record.studentId ?? record.student_id ?? record.studentid;
                         const isPresent = record.isPresent ?? record.is_present ?? record.ispresent ?? false;
+                        const isDemo = record.isdemo ?? record.is_demo ?? record.isDemo ?? false;
                         if (!dateKey || !studentId) return;
                         if (!attendance[dateKey]) attendance[dateKey] = {};
                         attendance[dateKey][studentId] = !!isPresent;
+                        if (isDemo && isPresent) {
+                            if (!demoAttendance[dateKey]) demoAttendance[dateKey] = {};
+                            demoAttendance[dateKey][studentId] = true;
+                        }
                     });
                 }
 
@@ -2253,8 +2343,6 @@
             event.preventDefault();
 
             const joinDateValue = document.getElementById('joinDate').value;
-            const nextPaymentDateInput = document.getElementById('nextPaymentDate');
-            const nextPaymentDateValue = String(nextPaymentDateInput?.value || '').trim() || addMonthsToDate(joinDateValue, 1);
             const editedStudentId = currentEditingStudentId;
             const reopenDetailAfterSave = currentEditingFromDetailView;
             
@@ -2279,7 +2367,6 @@
                 batch: document.getElementById('studentBatch').value,
                 monthlyFees: Math.round(parseFloat(document.getElementById('monthlyFees').value)),
                 joinDate: joinDateValue,
-                nextPaymentDate: nextPaymentDateValue,
                 paidAtRegistration: document.getElementById('paidAtRegistration').checked
             };
 
@@ -2288,13 +2375,8 @@
                     // Update existing student
                     const editingId = currentEditingStudentId;
                     await updateStudentWithSchemaFallback(editingId, studentData);
-                    // Persist next payment date in localStorage since Supabase column doesn't exist
-                    const computedDefault = addMonthsToDate(studentData.joinDate, 1);
-                    if (studentData.nextPaymentDate && studentData.nextPaymentDate !== computedDefault) {
-                        setNextPaymentOverride(editingId, studentData.nextPaymentDate);
-                    } else {
-                        setNextPaymentOverride(editingId, null);
-                    }
+                    // Cycle anchor / extension overrides are managed via Extend Plan
+                    // and "Next cycle starts from" — edits never touch them.
                     // If Paid at registration is checked, ensure a fee record exists for the first cycle
                     if (studentData.paidAtRegistration) {
                         const paidMonth = String(studentData.joinDate || '').slice(0, 7);
@@ -2353,7 +2435,26 @@
                                 }]);
                         }
                     }
-                    showSuccessMessage('✓ Student added successfully!');
+
+                    // Auto-record the first class on the join date. If they didn't
+                    // pay at registration it's a FREE DEMO — the plan starts on
+                    // their next attended class.
+                    const recordAsDemo = !studentData.paidAtRegistration;
+                    if (newStudentId && studentData.joinDate) {
+                        try {
+                            await insertAttendanceWithSchemaFallback([{
+                                studentId: newStudentId,
+                                attendanceDate: studentData.joinDate,
+                                isPresent: true,
+                                isDemo: recordAsDemo
+                            }]);
+                        } catch (attendanceError) {
+                            console.error('Could not auto-record first class:', attendanceError);
+                        }
+                    }
+                    showSuccessMessage(recordAsDemo
+                        ? '✓ Student added — today\'s class recorded as FREE DEMO. Plan starts at their next class!'
+                        : '✓ Student added — first class attendance recorded!');
                 }
 
                 document.getElementById('studentNome').value = '';
@@ -2372,8 +2473,6 @@
                 document.getElementById('studentBatch').value = '';
                 document.getElementById('monthlyFees').value = '';
                 document.getElementById('joinDate').valueAsDate = new Date();
-                document.getElementById('nextPaymentDate').value = '';
-                document.getElementById('nextPaymentDate').dataset.autofill = 'true';
                 document.getElementById('paidAtRegistration').checked = false;
                 document.getElementById('submitBtn').textContent = 'Register Student';
                 document.getElementById('cancelBtn').style.display = 'none';
@@ -2447,14 +2546,15 @@
                 });
 
                 const isPaid = isStudentPaymentActive(student);
-                const prevUnpaid = hasPreviousCycleUnpaid(student);
+                const autoExt = getAutoExtension(student);
                 const batchColor = batchColors[student.batch] || '#667eea';
                 const joinDate = String(student.joinDate || '').slice(0, 10);
-                // getTodayCycleDates already honours the manual override as anchor when no paid records exist
                 const currentCycleDates = getTodayCycleDates(student);
-                const currentCycleLabel = currentCycleDates.start ? formatCycleLabel(currentCycleDates.start, currentCycleDates.end) : '—';
-                // NEXT = the cycle after the current one
-                const nextCycleStart = currentCycleDates.end ? addDaysToDate(currentCycleDates.end, 1) : (getEffectiveNextCycleStart(student) || joinDate);
+                // Once the extension has actually started, show the extended end
+                const cycleDisplayEnd = autoExt.isExtended ? currentCycleDates.effectiveEnd : currentCycleDates.end;
+                const currentCycleLabel = currentCycleDates.start ? formatCycleLabel(currentCycleDates.start, cycleDisplayEnd) : '—';
+                // NEXT = the cycle after the current one (chains after the extended end)
+                const nextCycleStart = cycleDisplayEnd ? addDaysToDate(cycleDisplayEnd, 1) : (getEffectiveNextCycleStart(student) || joinDate);
                 const nextCycleDates = getPaymentCycleDates(nextCycleStart);
                 const nextPayLabel = nextCycleDates.start ? formatCycleLabel(nextCycleDates.start, nextCycleDates.end) : '—';
 
@@ -2486,7 +2586,10 @@
                         <span style="color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; font-size:0.75em; margin-top:4px;">Next</span>
                         <span style="color:#3498db; background:#eaf4fd; border-radius:4px; padding:2px 8px;">${nextPayLabel}</span>
                         <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}" style="margin-top:4px;">${isPaid ? '✓ PAID' : '⏳ PENDING'}</span>
-                        ${prevUnpaid ? `<span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⚠️ Last cycle unpaid</span>` : ''}
+                        ${autoExt.isExtended ? `<span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⏳ Auto-ext ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span>` : ''}
+                        ${autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⏸ Paused — ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over</span>` : ''}
+                        ${autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">🎁 Demo taken — plan starts at next class</span>` : ''}
+                        ${autoExt.owedCount > 0 ? `<span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">💶 To pay: ${autoExt.owedCount} month${autoExt.owedCount > 1 ? 's' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span>` : ''}
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:130px;">
                         <button onclick="showStudentDetail(${student.id})" class="btn-small" style="background:#27ae60;">View</button>
@@ -2523,53 +2626,9 @@
             return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
         }
 
-        // Parse "YYYY-MM-DD" as LOCAL midnight — avoids UTC timezone shift (e.g. CEST UTC+2)
-        function parseLocalDate(dateStr) {
-            const s = String(dateStr || '').slice(0, 10);
-            const parts = s.split('-').map(Number);
-            if (parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return new Date(NaN);
-            return new Date(parts[0], parts[1] - 1, parts[2]);
-        }
-
-        // Format a Date as "YYYY-MM-DD" using LOCAL time (no UTC shift)
-        function formatLocalDate(date) {
-            if (!date || Number.isNaN(date.getTime())) return '';
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-        }
-
-        function formatDateInputValue(dateValue) {
-            if (dateValue instanceof Date) return formatLocalDate(dateValue);
-            const s = String(dateValue || '').trim();
-            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-            return formatLocalDate(parseLocalDate(s));
-        }
-
-        function formatDisplayDate(dateValue) {
-            const date = parseLocalDate(String(dateValue || '').slice(0, 10));
-            if (Number.isNaN(date.getTime())) return String(dateValue || '');
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = date.toLocaleDateString('en', { month: 'short' });
-            const year = date.getFullYear();
-            return `${day}-${month}-${year}`;
-        }
-
-        function addMonthsToDate(dateValue, months) {
-            const date = parseLocalDate(dateValue);
-            if (Number.isNaN(date.getTime())) return '';
-            const originalDay = date.getDate();
-            date.setMonth(date.getMonth() + months);
-            if (date.getDate() !== originalDay) {
-                date.setDate(0);
-            }
-            return formatLocalDate(date);
-        }
-
-        function addDaysToDate(dateValue, days) {
-            const date = parseLocalDate(dateValue);
-            if (Number.isNaN(date.getTime())) return '';
-            date.setDate(date.getDate() + days);
-            return formatLocalDate(date);
-        }
+        // Date helpers (parseLocalDate, formatLocalDate, formatDateInputValue,
+        // formatDisplayDate, addMonthsToDate, addDaysToDate) and the membership
+        // policy constants now live in membership.js, shared with report.html.
 
         function getNextPaymentOverride(studentId) {
             // Primary: read from in-memory students array (populated from DB column if it exists)
@@ -2669,19 +2728,7 @@
             return addMonthsToDate(currentDateValue, 1);
         }
 
-        function getPaymentCycleDates(startDateValue) {
-            const startDate = parseLocalDate(startDateValue);
-            if (Number.isNaN(startDate.getTime())) return { start: '', end: '' };
-
-            const endDate = new Date(startDate);
-            endDate.setMonth(endDate.getMonth() + 1);
-            endDate.setDate(endDate.getDate() - 1);
-
-            return {
-                start: formatLocalDate(startDate),
-                end: formatLocalDate(endDate)
-            };
-        }
+        // getPaymentCycleDates lives in membership.js.
 
         function formatCycleLabel(startDate, endDate) {
             if (!startDate || !endDate) return 'N/A';
@@ -2714,16 +2761,53 @@
         }
 
         function getStudentPaidRecords(studentId) {
-            return (feePayments || [])
-                .filter((record) => String(record.studentid ?? record.studentId ?? record.student_id) === String(studentId))
-                .filter((record) => !!(record.ispaid ?? record.isPaid ?? record.is_paid))
-                .slice()
-                .sort((left, right) => {
-                    const leftDate = new Date(left.paid_start_date ?? left.paidStartDate ?? left.paiddate ?? left.paidDate ?? 0).getTime();
-                    const rightDate = new Date(right.paid_start_date ?? right.paidStartDate ?? right.paiddate ?? right.paidDate ?? 0).getTime();
-                    return leftDate - rightDate;
-                });
+            return getStudentPaidRecordsFromRows(studentId, feePayments);
         }
+
+        function isDemoClass(studentId, dateKey) {
+            return !!(demoAttendance[dateKey] && demoAttendance[dateKey][studentId]);
+        }
+
+        function studentHasDemoClass(studentId) {
+            return Object.keys(demoAttendance).some((dateKey) => demoAttendance[dateKey][studentId]);
+        }
+
+        // Demo (free) classes are excluded — they never count toward the target.
+        function countAttendanceInRange(studentId, startDate, endDate) {
+            if (!startDate || !endDate) return 0;
+            let count = 0;
+            Object.entries(attendance).forEach(([dateKey, dayAttendance]) => {
+                if (dateKey >= startDate && dateKey <= endDate && dayAttendance && dayAttendance[studentId]
+                    && !isDemoClass(studentId, dateKey)) count += 1;
+            });
+            return count;
+        }
+
+        // First non-demo attended class after dateStr ('' = first ever).
+        function firstAttendanceAfter(studentId, dateStr) {
+            let earliest = '';
+            Object.entries(attendance).forEach(([dateKey, dayAttendance]) => {
+                if (dateKey > dateStr && dayAttendance && dayAttendance[studentId]
+                    && !isDemoClass(studentId, dateKey)) {
+                    if (!earliest || dateKey < earliest) earliest = dateKey;
+                }
+            });
+            return earliest;
+        }
+
+        // All non-demo attended dates for a student strictly after startDate, up
+        // through endDate — sorted ascending. Used to find the EXACT day an
+        // extension target is met, instead of rounding up to a week boundary.
+        function attendedDatesInRange(studentId, startDate, endDate) {
+            const dates = [];
+            Object.entries(attendance).forEach(([dateKey, dayAttendance]) => {
+                if (dateKey > startDate && dateKey <= endDate && dayAttendance && dayAttendance[studentId]
+                    && !isDemoClass(studentId, dateKey)) dates.push(dateKey);
+            });
+            return dates.sort();
+        }
+
+        // nextSundayOnOrAfter lives in membership.js.
 
         function getStudentCycleHistory(student) {
             const paidRecords = getStudentPaidRecords(student.id);
@@ -2750,6 +2834,26 @@
             return cycles;
         }
 
+        // ── Trust-based membership timeline ─────────────────────────────────────
+        // The engine itself lives in membership.js (shared with report.html so
+        // admin math and the student-facing report can never drift apart).
+        // This adapter answers the engine's attendance/payment questions from
+        // the dashboard's in-memory maps.
+        function membershipOpts(student) {
+            return {
+                paidRecords: getStudentPaidRecords(student?.id),
+                nextPaymentOverride: getNextPaymentOverride(student?.id),
+                hasDemoClass: () => studentHasDemoClass(student?.id),
+                countAttendanceInRange: (startDate, endDate) => countAttendanceInRange(student?.id, startDate, endDate),
+                firstAttendanceAfter: (dateStr) => firstAttendanceAfter(student?.id, dateStr),
+                attendedDatesInRange: (startDate, endDate) => attendedDatesInRange(student?.id, startDate, endDate)
+            };
+        }
+
+        function getMembershipTimeline(student) {
+            return buildMembershipTimeline(student, membershipOpts(student));
+        }
+
         function getNextCycleStart(student) {
             const cycleHistory = getStudentCycleHistory(student);
             if (cycleHistory.length > 0) {
@@ -2762,83 +2866,40 @@
             return String(student?.joinDate || student?.join_date || '').slice(0, 10);
         }
 
+        // The cycle start a new payment should be registered for: the earliest
+        // owed (complete, unpaid) cycle, else the running unpaid cycle, else the
+        // cycle that will follow the current paid one.
         function getEffectiveNextCycleStart(student) {
-            const override = getNextPaymentOverride(student?.id);
-            if (override) {
-                // nextPaymentDate is auto-set to joinDate+1month at registration.
-                // For students with NO paid records that auto-value is NOT a user override —
-                // ignoring it makes the first cycle start from joinDate (e.g. Jul 5, not Aug 5).
-                const joinDate = String(student?.joinDate || student?.join_date || '').slice(0, 10);
-                const autoDefault = joinDate ? addMonthsToDate(joinDate, 1) : '';
-                const hasPaidRecords = getStudentPaidRecords(student?.id).length > 0;
-                if (!hasPaidRecords && override === autoDefault) {
-                    // Auto-default: fall through to joinDate-based calculation
-                    return getNextCycleStart(student);
-                }
-                return override;
+            const timeline = getMembershipTimeline(student);
+            // Demo taken, no real class yet: the plan (and first payment) has no start date yet.
+            if (timeline.awaitingFirstClass) return '';
+            if (timeline.owedCycles.length > 0) return timeline.owedCycles[0].start;
+            if (timeline.current) {
+                return timeline.current.paid
+                    ? addDaysToDate(timeline.current.effectiveEnd, 1)
+                    : timeline.current.start;
+            }
+            if (timeline.cycles.length > 0) {
+                // Paused plan: paying settles the last (incomplete) cycle.
+                return timeline.cycles[timeline.cycles.length - 1].start;
             }
             return getNextCycleStart(student);
         }
 
-        // Returns the "current" payment cycle for a student.
-        //
-        // Two distinct behaviours depending on payment state:
-        //
-        // A) Student has NO paid records yet (never paid, or paidAtRegistration not ticked):
-        //    → Always return the FIRST cycle from the anchor date, regardless of today.
-        //      The first cycle is always pending/overdue until the student pays — it must
-        //      not auto-advance to a later month just because the calendar moved on.
-        //      Example: joined June 1, today July 5, not paid → current = June 1–30 (overdue)
-        //
-        // B) Student HAS paid records:
-        //    → Find the cycle that contains today, anchored from the first paid record's
-        //      start date. This correctly advances month by month after each payment.
-        //      Example: paid June 1–30, today July 5 → current = July 1–31 (pending)
-        //
-        // Anchor priority (A): manual override (if set) › join date
-        // Anchor priority (B): first paid record's paid_start_date › join date
+        // The membership cycle containing today, from the trust-based timeline
+        // (chained cycles with class-based extension — see getMembershipTimeline).
+        // For a paused plan, returns the last (incomplete) cycle with paused=true.
         function getTodayCycleDates(student) {
-            const joinDate = String(student?.joinDate || student?.join_date || '').slice(0, 10);
-            const paidRecords = getStudentPaidRecords(student.id); // sorted ascending by start
-
-            if (paidRecords.length === 0) {
-                // Case A — no payments yet: always show the FIRST unpaid cycle (never advances).
-                //
-                // IMPORTANT: nextPaymentDate is auto-set to joinDate+1month at registration.
-                // We must NOT treat that auto-value as a user cycle-start override, or a
-                // student who joins July 5 would show Aug 5–Sep 4 as their first cycle.
-                // Only use the override if it differs from the auto-computed default.
-                const override = getNextPaymentOverride(student?.id);
-                const autoDefault = joinDate ? addMonthsToDate(joinDate, 1) : '';
-                const isUserOverride = override && override !== autoDefault;
-                const anchorDate = isUserOverride ? override : joinDate;
-                if (!anchorDate) return { start: '', end: '' };
-                return getPaymentCycleDates(anchorDate);
-            }
-
-            // Case B — has paid records: advance to the cycle that contains today.
-            const firstRecord = paidRecords[0];
-            const explicitStart = String(firstRecord.paid_start_date ?? firstRecord.paidStartDate ?? '').slice(0, 10);
-            const anchorDate = explicitStart || joinDate; // paidAtRegistration has no paid_start_date → joinDate
-
-            if (!anchorDate) return { start: '', end: '' };
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-            const anchor = parseLocalDate(anchorDate);
-            if (Number.isNaN(anchor.getTime())) return { start: '', end: '' };
-            const monthsElapsed = (now.getFullYear() - anchor.getFullYear()) * 12 + (now.getMonth() - anchor.getMonth());
-            const cycleStart = addMonthsToDate(anchorDate, monthsElapsed);
-            const cycleDates = getPaymentCycleDates(cycleStart);
-            // If today is past this cycle's end, advance one more month
-            if (cycleDates.end && now > parseLocalDate(cycleDates.end)) {
-                return getPaymentCycleDates(addMonthsToDate(anchorDate, monthsElapsed + 1));
-            }
-            // If today is before this cycle's start (day-of-month hasn't arrived yet),
-            // go back one month — e.g. anchor Jun 6, today is Jul 5 → still in Jun 6 cycle
-            if (cycleDates.start && now < parseLocalDate(cycleDates.start)) {
-                return getPaymentCycleDates(addMonthsToDate(anchorDate, monthsElapsed - 1));
-            }
-            return cycleDates;
+            const timeline = getMembershipTimeline(student);
+            const cycle = timeline.current || timeline.cycles[timeline.cycles.length - 1] || null;
+            if (!cycle) return { start: '', end: '' };
+            return {
+                start: cycle.start,
+                end: cycle.naturalEnd,
+                effectiveEnd: cycle.effectiveEnd,
+                extended: cycle.effectiveEnd !== cycle.naturalEnd,
+                paused: timeline.paused
+            };
         }
 
         function getUpcomingCycles(student, count = 2) {
@@ -2853,62 +2914,27 @@
             return cycles;
         }
 
+        // Extension state of the membership's current (or last, if paused) cycle.
+        // Applies to paid AND unpaid cycles alike — students pay on trust.
+        function getAutoExtension(student) {
+            return buildAutoExtension(student, membershipOpts(student));
+        }
+
+        // "Active/paid" = the membership cycle containing today has been paid for.
         function isStudentPaymentActive(student) {
-            const cycleHistory = getStudentCycleHistory(student);
-            if (cycleHistory.length === 0) return false;
-
-            const latestCycle = cycleHistory[cycleHistory.length - 1];
-            if (!latestCycle.startDate || !latestCycle.endDate) return false;
-
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-            const start = parseLocalDate(latestCycle.startDate);
-            const naturalEnd = parseLocalDate(latestCycle.endDate);
-
-            if (Number.isNaN(start.getTime()) || Number.isNaN(naturalEnd.getTime())) return false;
-
-            // Within the natural paid cycle?
-            if (now >= start && now <= naturalEnd) return true;
-
-            // If plan was extended via override, check if today falls within the extension period
-            const override = getNextPaymentOverride(student?.id);
-            if (override) {
-                const overrideEnd = parseLocalDate(addDaysToDate(override, -1));
-                if (overrideEnd > naturalEnd && now > naturalEnd && now <= overrideEnd) return true;
-            }
-
-            return false;
+            return computePaymentActive(student, membershipOpts(student));
         }
 
         function getPreviousCycleMonth(student) {
-            // The cycle containing today, shifted back one month
-            const todayCycle = getTodayCycleDates(student);
-            if (!todayCycle.start) return null;
-            const prevStart = addMonthsToDate(todayCycle.start, -1);
-            if (!prevStart) return null;
-            // Don't flag if the student hadn't joined yet in that prior cycle
-            const joinDate = String(student.joinDate || student.join_date || '').slice(0, 10);
-            if (joinDate && prevStart < joinDate) return null;
-            return prevStart.slice(0, 7); // "YYYY-MM"
+            // Most recent owed (complete, unpaid) cycle before the current one — "YYYY-MM"
+            const timeline = getMembershipTimeline(student);
+            const owed = timeline.owedCycles.filter((cycle) => cycle !== timeline.current);
+            if (owed.length === 0) return null;
+            return owed[owed.length - 1].start.slice(0, 7);
         }
 
         function hasPreviousCycleUnpaid(student) {
-            const prevMonth = getPreviousCycleMonth(student);
-            if (!prevMonth) return false; // student just joined this cycle — no prior cycle to check
-            const key = `${student.id}_${prevMonth}`;
-            return !feesPaid[key]; // true = previous cycle NOT paid
-        }
-
-        function refreshNextPaymentDateFromJoinDate() {
-            const joinDateValue = document.getElementById('joinDate')?.value;
-            const nextPaymentDateInput = document.getElementById('nextPaymentDate');
-            if (!joinDateValue || !nextPaymentDateInput) return;
-
-            const generatedValue = addMonthsToDate(joinDateValue, 1);
-            if (!nextPaymentDateInput.value || nextPaymentDateInput.dataset.autofill === 'true') {
-                nextPaymentDateInput.value = generatedValue;
-                nextPaymentDateInput.dataset.autofill = 'true';
-            }
+            return getPreviousCycleMonth(student) !== null;
         }
 
         async function cleanupOldFeeRecords() {
@@ -2947,6 +2973,7 @@
         function renderStudentDetailHTML(student) {
             const currentMonth = getSelectedPaymentMonth();
             const currentMonthPaid = isStudentPaymentActive(student);
+            const autoExt = getAutoExtension(student);
             const prevCycleUnpaid = hasPreviousCycleUnpaid(student);
             const prevMonth = getPreviousCycleMonth(student);
             return `
@@ -2971,8 +2998,11 @@
                 <div style="margin-bottom:10px; display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
                     <div><strong>Monthly Fee:</strong> €${Math.round(student.monthlyFees || 0)}</div>
                     <div><strong>Join Date:</strong> ${student.joinDate ? formatDisplayDate(student.joinDate) : ''}</div>
-                    <div><strong>Next Payment:</strong> ${getStudentNextPaymentDate(student) ? formatDisplayDate(getStudentNextPaymentDate(student)) : 'N/A'}</div>
                     <div><strong>Current Status:</strong> <span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span></div>
+                    ${autoExt.isExtended ? `<div><span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏳ Auto-extended — ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} classes · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span></div>` : ''}
+                    ${autoExt.paused ? `<div><span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏸ Plan paused — ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over when he returns</span></div>` : ''}
+                    ${autoExt.awaitingFirstClass ? `<div><span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">🎁 Demo taken — plan starts on their next attended class</span></div>` : ''}
+                    ${autoExt.owedCount > 0 ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">💶 To pay: ${autoExt.owedCount} month${autoExt.owedCount > 1 ? 's' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span></div>` : ''}
                     ${prevCycleUnpaid && prevMonth ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⚠️ Last cycle unpaid — ${formatMonthLabel(prevMonth)}</span></div>` : ''}
                     <button class="btn-small" onclick="extendStudentPlan(${student.id})" style="background:#8e44ad;" title="Manually set next payment date to extend the plan">Extend Plan</button>
                 </div>
@@ -2988,67 +3018,121 @@
             const attendanceContainer = document.getElementById('studentAttendanceList');
             const student = students.find((entry) => entry.id === studentId);
             if (!historyContainer || !attendanceContainer || !student) return;
-            const paidRecords = getStudentCycleHistory(student);
-            const upcomingCycles = getUpcomingCycles(student, paidRecords.length === 0 ? 3 : 2);
-            const firstDueCycle = paidRecords.length === 0 ? upcomingCycles[0] : null;
-            const laterUpcomingCycles = paidRecords.length === 0 ? upcomingCycles.slice(1) : upcomingCycles;
+            const timeline = getMembershipTimeline(student);
+            const autoExt = getAutoExtension(student);
 
-            historyContainer.innerHTML = paidRecords.length === 0
-                ? `<div style="padding:10px 14px; background:#f0f4ff; border:1px solid #c5d0ee; border-radius:8px; margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <span style="font-size:0.88em; color:#333; font-weight:600;">📅 New cycle starts from:</span>
-                    <input type="date" id="cycleStartInput_${studentId}" value="${getEffectiveNextCycleStart(student) || String(student.joinDate || '').slice(0,10)}" style="padding:5px 8px; border:1.5px solid #b0bfdd; border-radius:6px; font-size:0.88em;">
-                    <button class="btn-small" onclick="applyNewCycleStart(${studentId})" style="background:#8e44ad;">Set Date</button>
-                    <span style="font-size:0.8em; color:#666; font-style:italic;">Adjust if student is rejoining on a different date</span>
-                  </div>
-                  <div class="empty-message" style="padding:12px;">No payment history yet. The first due cycle is shown below.</div>${firstDueCycle ? `
-                    <div style="margin-top:14px; font-weight:700;">Current Cycle</div>
-                    <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <div style="font-weight:600;">${formatCycleLabel(firstDueCycle.start, firstDueCycle.end)}</div>
-                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <div class="fees-status fees-unpaid">PENDING</div>
-                            <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${firstDueCycle.start}')" style="background:#27ae60;">
-                                Mark Paid
-                            </button>
-                        </div>
-                    </div>
-                ` : ''}${laterUpcomingCycles.length > 0 ? `
-                    <div style="margin-top:14px; font-weight:700;">Upcoming Cycles</div>
-                    ${laterUpcomingCycles.map((cycle) => `
-                        <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                            <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
-                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                <div class="fees-status fees-unpaid">PENDING</div>
-                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">
-                                    Mark Paid
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
-                ` : ''}`
-                : paidRecords.map((cycle, index) => {
-                    const displayStart = cycle.startDate;
-                    const displayEnd = cycle.endDate;
-                    const isPaid = !!cycle.isPaid;
-                    const recordId = cycle.record?.id ?? cycle.record?.record_id ?? cycle.record?.recordId ?? null;
+            const renderCycleRow = (cycle) => {
+                const isCurrent = cycle === timeline.current;
+                const wasExtended = cycle.effectiveEnd !== cycle.naturalEnd;
+                // For the current cycle, only show the extension once it has actually started
+                const showExtended = wasExtended && (!isCurrent || autoExt.isExtended);
+                const label = formatCycleLabel(cycle.start, showExtended ? cycle.effectiveEnd : cycle.naturalEnd)
+                    + (showExtended ? ` <span style="color:#00796b; font-size:0.82em; font-weight:700;">⏳ extended</span>` : '');
+                const carryNote = cycle.carriedIn > 0 ? ` (incl. ${cycle.carriedIn} carried over)` : '';
+                // 5-weekend months mean attended can exceed the 4-class minimum —
+                // there's a floor, not a cap, so keep the fraction but call out
+                // the bonus too.
+                const extra = cycle.attended - AUTO_EXTENSION_CLASS_TARGET;
+                const classesLabel = extra > 0
+                    ? `${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes — ${extra} extra class${extra === 1 ? '' : 'es'} gifted! 🎁`
+                    : `${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes`;
+                const classesLine = `<div style="font-size:0.82em; color:#555; margin-top:2px;">🏃 ${classesLabel}${carryNote}</div>`;
+
+                let statusChip = '';
+                let actionBtn = '';
+                let paidLine = '';
+                if (cycle.paid) {
+                    const recordId = cycle.record?.id ?? null;
                     const paidDateStr = String(cycle.record?.paiddate ?? cycle.record?.paidDate ?? cycle.record?.paid_date ?? '').slice(0, 10);
                     const paidAmount = Number(cycle.record?.amount ?? student?.monthlyFees ?? 0);
+                    statusChip = `<div class="fees-status fees-paid">PAID</div>`;
+                    if (paidDateStr) paidLine = `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${formatDisplayDate(paidDateStr)} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong></div>`;
+                    if (recordId !== null) actionBtn = `<button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>`;
+                } else if (cycle.complete) {
+                    statusChip = `<div class="fees-status fees-unpaid">TO PAY</div>`;
+                    actionBtn = `<button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">Mark Paid</button>`;
+                } else if (isCurrent) {
+                    statusChip = `<div class="fees-status fees-unpaid">PENDING</div>`;
+                    actionBtn = `<button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">Mark Paid</button>`;
+                } else {
+                    // Incomplete unpaid past cycle — its classes carried into the next cycle
+                    statusChip = `<div style="background:#eceff1; color:#546e7a; border-radius:5px; padding:3px 9px; font-size:0.82em; font-weight:700;">CLASSES CARRIED OVER</div>`;
+                }
+
+                return `
+                    <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <div>
+                            <div style="font-weight:600;">${label}</div>
+                            ${classesLine}${paidLine}
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            ${statusChip}
+                            ${actionBtn}
+                        </div>
+                    </div>`;
+            };
+
+            const overrideBar = `<div style="background:#f0f4ff; border:1px solid #c5d0ee; border-radius:8px; padding:10px 16px; margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <span style="font-size:0.88em; color:#333; font-weight:600;">📅 Next cycle starts from:</span>
+                <input type="date" id="cycleStartInput_${studentId}" value="${getEffectiveNextCycleStart(student) || String(student.joinDate || '').slice(0, 10)}" style="padding:5px 8px; border:1.5px solid #b0bfdd; border-radius:6px; font-size:0.88em;">
+                <button class="btn-small" onclick="applyNewCycleStart(${studentId})" style="background:#8e44ad;">Set Date</button>
+                <span style="font-size:0.8em; color:#666; font-style:italic;">Adjust if student is rejoining on a different date</span>
+            </div>`;
+
+            let historyHtml = overrideBar;
+            if (timeline.awaitingFirstClass) {
+                historyHtml += `<div style="padding:10px 14px; background:#fff3e0; border:1px solid #ffe0b2; border-radius:8px; color:#e65100; font-size:0.9em; font-weight:600;">🎁 Demo class taken (free) — the first cycle starts automatically on their next attended class.</div>`;
+            } else if (timeline.cycles.length === 0) {
+                historyHtml += '<div class="empty-message" style="padding:12px;">No membership cycles yet.</div>';
+            }
+
+            const pastCycles = timeline.cycles.filter((cycle) => cycle !== timeline.current);
+            if (pastCycles.length > 0) {
+                historyHtml += pastCycles.map(renderCycleRow).join('');
+            }
+
+            if (timeline.current) {
+                historyHtml += `<div style="margin-top:14px; font-weight:700;">Current Cycle</div>`;
+                historyHtml += renderCycleRow(timeline.current);
+            }
+
+            if (timeline.paused) {
+                const lastCycle = timeline.cycles[timeline.cycles.length - 1];
+                const carryCount = lastCycle?.attended || 0;
+                historyHtml += `<div style="margin-top:12px; padding:10px 14px; background:#eceff1; border:1px solid #cfd8dc; border-radius:8px; color:#546e7a; font-size:0.9em; font-weight:600;">⏸ Plan paused — the next cycle starts on the day they attend again${carryCount > 0 ? `, carrying over ${carryCount} attended class${carryCount > 1 ? 'es' : ''}` : ''}.</div>`;
+            }
+
+            if (timeline.unmatchedRecords.length > 0) {
+                historyHtml += `<div style="margin-top:14px; font-weight:700;">Paid in Advance</div>`;
+                historyHtml += timeline.unmatchedRecords.map((record) => {
+                    const recStart = String(record.paid_start_date ?? record.paidStartDate ?? '').slice(0, 10);
+                    const recEnd = String(record.paid_end_date ?? record.paidEndDate ?? '').slice(0, 10) || (recStart ? getPaymentCycleDates(recStart).end : '');
+                    const recordId = record.id ?? null;
                     return `
                         <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                            <div>
-                                <div style="font-weight:600;">${formatCycleLabel(displayStart, displayEnd)}</div>
-                                ${isPaid && paidDateStr ? `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${formatDisplayDate(paidDateStr)} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong></div>` : ''}
-                            </div>
+                            <div style="font-weight:600;">${recStart ? formatCycleLabel(recStart, recEnd) : (record.month || 'N/A')}</div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                <div class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}">${isPaid ? 'PAID' : 'PENDING'}</div>
-                                <button class="btn-small" onclick="${recordId !== null ? `toggleFeesPaidByRecord(${recordId}, false)` : `toggleFeesPaid(${studentId}, '${cycle.key}', false)`}" style="background:${isPaid ? '#e74c3c' : '#27ae60'};">
-                                    ${isPaid ? 'Mark Unpaid' : 'Mark Paid'}
-                                </button>
+                                <div class="fees-status fees-paid">PAID</div>
+                                ${recordId !== null ? `<button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>` : ''}
                             </div>
-                        </div>
-                    `;
-                }).join('') + (laterUpcomingCycles.length > 0 ? `
-                    <div style="margin-top:14px; font-weight:700;">Upcoming Cycles</div>
-                    ${laterUpcomingCycles.map((cycle) => `
+                        </div>`;
+                }).join('');
+            }
+
+            // Upcoming cycles: projection assuming the current cycle finishes normally
+            if (!timeline.paused && timeline.current) {
+                const currentDisplayEnd = autoExt.isExtended ? timeline.current.effectiveEnd : timeline.current.naturalEnd;
+                let cursor = currentDisplayEnd ? addDaysToDate(currentDisplayEnd, 1) : '';
+                const upcoming = [];
+                for (let index = 0; index < 2 && cursor; index += 1) {
+                    const cycleDates = getPaymentCycleDates(cursor);
+                    if (!cycleDates.start || !cycleDates.end) break;
+                    upcoming.push(cycleDates);
+                    cursor = addDaysToDate(cycleDates.end, 1);
+                }
+                if (upcoming.length > 0) {
+                    historyHtml += `<div style="margin-top:14px; font-weight:700;">Upcoming Cycles</div>`;
+                    historyHtml += upcoming.map((cycle) => `
                         <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                             <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -3058,20 +3142,11 @@
                                 </button>
                             </div>
                         </div>
-                    `).join('')}
-                ` : '');
-
-            // Show "Next cycle starts from" override bar for students who already have payment history
-            if (paidRecords.length > 0) {
-                const _overrideVal = getEffectiveNextCycleStart(student) || String(student.joinDate || '').slice(0, 10);
-                const _overrideBar = `<div style="background:#f0f4ff; border:1px solid #c5d0ee; border-radius:8px; padding:10px 16px; margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <span style="font-size:0.88em; color:#333; font-weight:600;">📅 Next cycle starts from:</span>
-                    <input type="date" id="cycleStartInput_${studentId}" value="${_overrideVal}" style="padding:5px 8px; border:1.5px solid #b0bfdd; border-radius:6px; font-size:0.88em;">
-                    <button class="btn-small" onclick="applyNewCycleStart(${studentId})" style="background:#8e44ad;">Set Date</button>
-                    <span style="font-size:0.8em; color:#666; font-style:italic;">Adjust if student rejoins on a different date</span>
-                </div>`;
-                historyContainer.innerHTML = _overrideBar + historyContainer.innerHTML;
+                    `).join('');
+                }
             }
+
+            historyContainer.innerHTML = historyHtml;
 
             const attendanceDates = Object.entries(attendance)
                 .filter(([, dayAttendance]) => dayAttendance && dayAttendance[studentId])
@@ -3080,7 +3155,7 @@
 
             attendanceContainer.innerHTML = attendanceDates.length === 0
                 ? '<div class="empty-message" style="padding:12px;">No attendance records yet.</div>'
-                : attendanceDates.map((date) => `<div style="padding:6px 0; border-bottom:1px solid #f5f5f5;">${date}</div>`).join('');
+                : attendanceDates.map((date) => `<div style="padding:6px 0; border-bottom:1px solid #f5f5f5;">${date}${isDemoClass(studentId, date) ? ' <span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:5px;padding:1px 7px;font-size:0.78em;font-weight:700;">🎁 DEMO (free)</span>' : ''}</div>`).join('');
         }
 
         function editStudent(studentId) {
@@ -3110,8 +3185,6 @@
             document.getElementById('studentBatch').value = student.batch;
             document.getElementById('monthlyFees').value = student.monthlyFees;
             document.getElementById('joinDate').value = student.joinDate;
-            document.getElementById('nextPaymentDate').value = getStudentNextPaymentDate(student);
-            document.getElementById('nextPaymentDate').dataset.autofill = 'false';
             document.getElementById('paidAtRegistration').checked = !!student.paidAtRegistration;
             document.getElementById('submitBtn').textContent = 'Update Student';
             document.getElementById('cancelBtn').style.display = 'inline-block';
@@ -3137,8 +3210,6 @@
             document.getElementById('studentBatch').value = '';
             document.getElementById('monthlyFees').value = '';
             document.getElementById('joinDate').valueAsDate = new Date();
-            document.getElementById('nextPaymentDate').value = addMonthsToDate(new Date(), 1);
-            document.getElementById('nextPaymentDate').dataset.autofill = 'true';
             document.getElementById('paidAtRegistration').checked = false;
             document.getElementById('submitBtn').textContent = 'Register Student';
             document.getElementById('cancelBtn').style.display = 'none';
@@ -3434,21 +3505,50 @@
             }
             
             try {
-                // Sync visible DOM checkboxes into pending so Mark All / manual checks
-                // are captured even when a filter is active at save time.
-                document.querySelectorAll('.attendance-checkbox').forEach(cb => {
-                    const id = parseInt(cb.dataset.studentId, 10);
-                    if (Number.isFinite(id)) {
-                        if (!pendingAttendanceChanges[attendanceDate]) pendingAttendanceChanges[attendanceDate] = {};
-                        pendingAttendanceChanges[attendanceDate][id] = cb.checked;
-                    }
-                });
-
-                // Build the full attendance record for the date by merging:
-                // 1. Pending unsaved changes (visible DOM + any prior searches)
-                // 2. Existing DB state for students not touched at all this session
-                const dateAttendanceDb = attendance[attendanceDate] || {};
+                // Every deliberate change (checkbox tap, Mark All Present/Absent)
+                // is already recorded in pendingAttendanceChanges by its own
+                // handler. Only those explicit changes may override the database —
+                // an untouched checkbox must NOT write back this screen's possibly
+                // stale snapshot, or it would erase check-ins that happened after
+                // this page loaded (e.g. a student self-checking-in by phone).
                 const pendingForDate = pendingAttendanceChanges[attendanceDate] || {};
+
+                // Re-fetch this date's rows right now, so students marked present
+                // from elsewhere (self check-in, another device) since page load
+                // are preserved. Falls back to the in-memory snapshot if offline.
+                let freshPresent = null;
+                let freshDemo = {};
+                const { data: freshRows, error: freshError } = await supabaseClient
+                    .from('attendance')
+                    .select('*')
+                    .eq('attendancedate', attendanceDate);
+                if (!freshError && Array.isArray(freshRows)) {
+                    freshPresent = {};
+                    freshRows.forEach((r) => {
+                        const sid = r.studentid ?? r.studentId ?? r.student_id;
+                        const present = !!(r.ispresent ?? r.isPresent ?? r.is_present);
+                        const demo = !!(r.isdemo ?? r.is_demo ?? r.isDemo);
+                        if (sid == null) return;
+                        if (present) freshPresent[sid] = true;
+                        if (present && demo) freshDemo[sid] = true;
+                    });
+                }
+                const dbPresent = freshPresent ?? (attendance[attendanceDate] || {});
+
+                // Guard against accidental unticks (double-taps): flipping anyone
+                // who is already Present in the database to Absent needs an
+                // explicit confirmation, listed by name.
+                const flippedToAbsent = students.filter((s) =>
+                    (s.id in pendingForDate) && pendingForDate[s.id] === false && !!dbPresent[s.id]
+                );
+                if (flippedToAbsent.length > 0) {
+                    const ok = confirm(
+                        `⚠ ${flippedToAbsent.length} student${flippedToAbsent.length > 1 ? 's' : ''} will change from PRESENT to ABSENT:\n\n` +
+                        flippedToAbsent.map((s) => '• ' + s.name).join('\n') +
+                        '\n\nSave anyway?'
+                    );
+                    if (!ok) return;
+                }
 
                 const allStudentIds = students.map(s => s.id).filter(id => Number.isFinite(id));
                 const attendanceRecords = allStudentIds.map(id => ({
@@ -3456,7 +3556,9 @@
                     attendanceDate,
                     isPresent: id in pendingForDate
                         ? pendingForDate[id]
-                        : (dateAttendanceDb[id] || false)
+                        : !!dbPresent[id],
+                    // Preserve demo markers through the delete+reinsert save
+                    isDemo: freshPresent ? !!freshDemo[id] : isDemoClass(id, attendanceDate)
                 }));
 
                 await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
@@ -4180,6 +4282,152 @@
             }, 3000);
         }
 
+        let checkinSettingsLoaded = false;
+
+        async function loadCheckinSettings() {
+            const { data, error } = await supabaseClient
+                .from('checkin_settings')
+                .select('*')
+                .eq('id', 1)
+                .single();
+
+            document.querySelectorAll('.checkinDay').forEach(cb => {
+                cb.checked = !error && data ? (data.active_days || []).includes(Number(cb.value)) : false;
+            });
+            document.getElementById('checkinStartTime').value = (!error && data) ? String(data.start_time).slice(0, 5) : '13:15';
+            document.getElementById('checkinEndTime').value = (!error && data) ? String(data.end_time).slice(0, 5) : '19:00';
+
+            checkinSettingsLoaded = true;
+            renderCheckinQr();
+        }
+
+        async function saveCheckinSettings() {
+            const activeDays = Array.from(document.querySelectorAll('.checkinDay:checked')).map(cb => Number(cb.value));
+            const startTime = document.getElementById('checkinStartTime').value || '13:15';
+            const endTime = document.getElementById('checkinEndTime').value || '19:00';
+
+            const { error } = await supabaseClient
+                .from('checkin_settings')
+                .upsert({ id: 1, active_days: activeDays, start_time: startTime, end_time: endTime });
+
+            if (error) {
+                alert('Could not save the check-in window: ' + error.message);
+                return;
+            }
+            showSuccessMessage('✓ Check-in window updated');
+        }
+
+        function getCheckinUrl() {
+            return `${location.origin}/home.html`;
+        }
+
+        function renderCheckinQr() {
+            const url = getCheckinUrl();
+            document.getElementById('checkinUrlText').value = url;
+            const canvas = document.getElementById('checkinQrCanvas');
+            if (window.QRCode && canvas) {
+                QRCode.toCanvas(canvas, url, { width: 140, margin: 1 }, () => {});
+            }
+        }
+
+        function copyCheckinUrl() {
+            navigator.clipboard.writeText(getCheckinUrl());
+            showSuccessMessage('✓ Link copied');
+        }
+
+        function timeAgo(isoString) {
+            const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            return `${Math.floor(hours / 24)}d ago`;
+        }
+
+        let lastCheckinRequestsSignature = null;
+
+        async function loadCheckinRequests() {
+            const { data, error } = await supabaseClient
+                .from('checkin_requests')
+                .select('*')
+                .eq('status', 'pending')
+                .order('requested_at', { ascending: false });
+
+            // Badge on the Attendance tab button — visible from every tab, so a
+            // student's "please mark me present" request is noticed even while
+            // the instructor is looking at Payments or Reports.
+            const badge = document.getElementById('checkinReqBadge');
+            const pendingCount = (!error && data) ? data.length : 0;
+            badge.textContent = pendingCount;
+            badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+
+            // Only rebuild the list when its contents actually changed —
+            // otherwise the 30s poll would replace the buttons right as the
+            // instructor is about to tap one. (The poll never touches anything
+            // outside this box: forms and the attendance grid are untouched.)
+            const signature = (!error && data) ? data.map((r) => r.id).join(',') : 'err';
+            if (signature === lastCheckinRequestsSignature) return;
+            lastCheckinRequestsSignature = signature;
+
+            const list = document.getElementById('checkinRequestsList');
+            const emptyMsg = document.getElementById('noCheckinRequestsMsg');
+            list.innerHTML = '';
+
+            if (error || !data || data.length === 0) {
+                emptyMsg.style.display = 'block';
+                return;
+            }
+            emptyMsg.style.display = 'none';
+
+            data.forEach(req => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid #ddd; border-radius:8px; padding:10px 12px; flex-wrap:wrap; gap:8px;';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:600;">${req.student_name}</div>
+                        <div style="font-size:0.8em;color:#888;">${req.reason || 'Check-in issue'} · ${timeAgo(req.requested_at)}</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button style="background:#27ae60;">Mark Present</button>
+                        <button style="background:#999;">Dismiss</button>
+                    </div>
+                `;
+                const [markBtn, dismissBtn] = row.querySelectorAll('button');
+                markBtn.addEventListener('click', () => approveCheckinRequest(req.id, req.student_id, req.student_name));
+                dismissBtn.addEventListener('click', () => dismissCheckinRequest(req.id));
+                list.appendChild(row);
+            });
+        }
+
+        async function approveCheckinRequest(requestId, studentId, studentName) {
+            try {
+                // Local date, not toISOString(): after 22:00 in Italy the UTC
+                // date is already tomorrow's yesterday — see parseLocalDate.
+                const todayStr = formatLocalDate(new Date());
+                await deleteAttendanceByDateAndStudentsWithSchemaFallback(todayStr, [studentId]);
+                await insertAttendanceWithSchemaFallback([
+                    { studentId: studentId, attendanceDate: todayStr, isPresent: true }
+                ]);
+                await supabaseClient.from('checkin_requests')
+                    .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+                    .eq('id', requestId);
+
+                showSuccessMessage(`✓ ${studentName} marked present`);
+                loadCheckinRequests();
+                if (document.getElementById('attendanceDate').value === todayStr) displayAttendanceTab();
+            } catch (e) {
+                alert('Could not mark this student present: ' + (e?.message || e));
+            }
+        }
+
+        async function dismissCheckinRequest(requestId) {
+            await supabaseClient.from('checkin_requests')
+                .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+                .eq('id', requestId);
+            loadCheckinRequests();
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -4192,6 +4440,8 @@
 
             if (tabName === 'attendance') {
                 displayAttendanceTab();
+                loadCheckinSettings();
+                loadCheckinRequests();
             } else if (tabName === 'payments') {
                 updatePaymentsDisplay();
             } else if (tabName === 'fees') {
@@ -4259,7 +4509,7 @@
                 const card = document.createElement('div');
                 card.className = 'attendance-card';
                 card.innerHTML = `
-                    <div class="attendance-student-name">${student.name}</div>
+                    <div class="attendance-student-name">${student.name}${isDemoClass(student.id, attendanceDate) ? ' <span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:5px;padding:1px 6px;font-size:0.72em;font-weight:700;">🎁 DEMO</span>' : ''}</div>
                     <div style="font-size:0.85em; color:#1a1a1a; margin-top:2px;">Parent: ${student.parentName || 'N/A'}</div>
                     <div style="font-size:0.82em; color:#333; margin-top:1px;">${student.address || ''}</div>
                     <label class="checkbox-label">
@@ -4342,6 +4592,7 @@
 
             students.forEach(student => {
                 const isPaid = isStudentPaymentActive(student);
+                const autoExt = getAutoExtension(student);
                 const nextCycleStart = getEffectiveNextCycleStart(student);
                 const joinDate = String(student.joinDate || student.join_date || '').slice(0, 10);
 
@@ -4367,9 +4618,12 @@
                       })()
                     : getPaymentCycleDates(getEffectiveNextCycleStart(student) || joinDate);
 
-                const cycleLabel = displayCycle.start && displayCycle.end
+                let cycleLabel = displayCycle.start && displayCycle.end
                     ? formatCycleLabel(displayCycle.start, displayCycle.end)
                     : 'N/A';
+                if (autoExt.isExtended) {
+                    cycleLabel += ` → extended to ${formatDisplayDate(autoExt.effectiveEndDate)}`;
+                }
 
                 // Determine overdue: unpaid and the current due cycle has already ended
                 const cycleDueEnd = displayCycle.end ? new Date(displayCycle.end + 'T23:59:59') : null;
@@ -4377,7 +4631,7 @@
                 const hasOverride = !!getNextPaymentOverride(student.id);
 
                 const cardStyle = isPaid
-                    ? cardStyleBase + 'border-left:5px solid #27ae60;'
+                    ? cardStyleBase + (autoExt.isExtended ? 'border-left:5px solid #00796b;' : 'border-left:5px solid #27ae60;')
                     : isOverdue
                         ? cardStyleBase + 'border-left:5px solid #e67e22;'
                         : cardStyleBase + 'border-left:5px solid #e74c3c;';
@@ -4389,6 +4643,10 @@
                 const extendBtn = `<button onclick="extendStudentPlan(${student.id})" title="Extend plan" style="background:#8e44ad;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Extend</button>`;
 
                 const overrideTag = hasOverride ? `<span style="background:#f0e6fa;color:#8e44ad;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">EXTENDED</span>` : '';
+                const autoExtTag = autoExt.isExtended ? `<span style="background:#e0f2f1;color:#00796b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏳ AUTO-EXTENDED — ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} CLASSES</span>` : '';
+                const pausedTag = autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏸ PAUSED — ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} CARRY OVER</span>` : '';
+                const owedTag = autoExt.owedCount > 0 ? `<span style="background:#fdecea;color:#c0392b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">💶 TO PAY — ${autoExt.owedCount} MONTH${autoExt.owedCount > 1 ? 'S' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span>` : '';
+                const demoTag = autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">🎁 DEMO TAKEN — PLAN STARTS AT NEXT CLASS</span>` : '';
                 const overdueTag = isOverdue ? `<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">OVERDUE</span>` : '';
                 const waBtn = student.phone ? `<button onclick="sendStudentWhatsAppReport(${student.id})" title="Send WhatsApp Report" style="background:#25D366;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;font-size:0.85em;">📱 WA</button>` : '';
 
@@ -4397,7 +4655,7 @@
                         <div style="flex:1; min-width:0;">
                             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
                                 <span onclick="switchTab('students'); setTimeout(() => showStudentDetail(${student.id}), 100);" style="font-weight:700; font-size:1.12em; color:#3498db; cursor:pointer; text-decoration:underline;">${student.name}</span>
-                                ${overdueTag}${overrideTag}
+                                ${overdueTag}${overrideTag}${autoExtTag}${pausedTag}${owedTag}${demoTag}
                             </div>
                             <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">👤 ${student.parentName}</div>
                             <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">💰 <strong style="color:#27ae60;">€${Math.round(student.monthlyFees||0)}</strong> / month</div>
@@ -4927,8 +5185,6 @@
         // Initialize date inputs
         document.getElementById('attendanceDate').valueAsDate = new Date();
         document.getElementById('joinDate').valueAsDate = new Date();
-            document.getElementById('nextPaymentDate').value = addMonthsToDate(new Date(), 1);
-        document.getElementById('nextPaymentDate').dataset.autofill = 'true';
         document.getElementById('expenseDate').valueAsDate = new Date();
         document.getElementById('reportFrom').valueAsDate = new Date();
         document.getElementById('reportTo').valueAsDate = new Date();
@@ -4946,7 +5202,6 @@
             displayAttendanceTab();
         });
 
-        document.getElementById('joinDate').addEventListener('change', refreshNextPaymentDateFromJoinDate);
 
         // Payment month change (element may not exist in redesigned tab)
         document.getElementById('paymentMonth')?.addEventListener('change', updatePaymentsDisplay);

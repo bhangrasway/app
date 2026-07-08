@@ -57,12 +57,18 @@ class StudioRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT_DIR), **kwargs)
 
+    def end_headers(self):
+        # This app has no build/versioning step — edits to index.html/checkin.html
+        # take effect the instant the file changes, so the browser must never
+        # serve a stale cached copy from an earlier edit.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def _send_json(self, status_code, payload, cookie_header=None):
         encoded = json.dumps(payload).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
-        self.send_header("Cache-Control", "no-store")
         if cookie_header:
             self.send_header("Set-Cookie", cookie_header)
         self.end_headers()

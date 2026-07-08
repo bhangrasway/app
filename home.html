@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bhangra Sway Cremona</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 24px 14px;
+        }
+        .card {
+            width: 100%;
+            max-width: 440px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+            padding: 28px 22px;
+        }
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .logo-row img {
+            height: 56px;
+            width: auto;
+            border-radius: 10px;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+        }
+        .logo-row h1 {
+            font-size: 1.15em;
+            margin: 0;
+            color: #2c3e50;
+        }
+        p.sub { color: #555; margin: 0 0 20px; line-height: 1.5; }
+        .action-link {
+            display: block;
+            width: 100%;
+            padding: 18px;
+            margin-bottom: 14px;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #fff;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+        }
+        .action-link.attendance { background: #27ae60; }
+        .action-link.report { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo-row">
+            <img src="logo.png" alt="Bhangra Sway Logo">
+            <h1>Bhangra Sway Cremona</h1>
+        </div>
+        <p class="sub">What would you like to do?</p>
+        <a class="action-link attendance" href="checkin.html">✅ Mark Attendance</a>
+        <a class="action-link report" href="report.html">📋 See Your Report</a>
+    </div>
+</body>
+</html>
