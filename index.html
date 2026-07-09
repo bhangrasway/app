@@ -260,6 +260,15 @@
             gap: 16px;
             align-items: flex-start;
         }
+        /* Photo behind the card (set inline as a dark-tinted background-image) */
+        .event-card.has-photo {
+            background-size: cover;
+            background-position: center;
+            min-height: 170px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+        }
+        .event-card.has-photo .event-title { color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,0.55); }
+        .event-card.has-photo .event-venue { color: rgba(255,255,255,0.92); text-shadow: 0 1px 6px rgba(0,0,0,0.55); }
         .event-date {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #fff;
@@ -674,6 +683,9 @@
             .nav-links a:hover, .nav-links a:active { background: rgba(255,255,255,0.1); }
             .nav-links .members-link { justify-content: center; }
             .nav-links #langPicker { align-self: center; margin-top: 4px; }
+            /* Inside the collapsible nav the floating menu gets clipped by its
+               overflow-y scroll box, so let it flow inline instead. */
+            .nav-links .lang-dd-menu { position: static; margin-top: 6px; }
             .hero { position: relative; }
             section { padding: 44px 16px; }
             .hero-body h1 { margin-top: 4px; }
@@ -1137,8 +1149,8 @@
         // page; venue stays literal (place names and times don't translate).
         // tba: true = only the month is known, the date box shows "MON / TBA".
         const UPCOMING_EVENTS = [
-            { date: '2026-07-25', titleKey: 'event_castelvetro_title', venue: 'Castelvetro · 7:00 PM' },
-            { date: '2026-10-01', tba: true, titleKey: 'event_competition_title', venue: 'Bhangra Sway Studio, Cremona' }
+            { date: '2026-07-25', titleKey: 'event_castelvetro_title', venue: 'Castelvetro · 7:00 PM', img: 'gallery/photo-14.jpg' },
+            { date: '2026-10-01', tba: true, titleKey: 'event_competition_title', venue: 'Bhangra Sway Studio, Cremona', img: 'gallery/photo-01.jpg' }
         ];
 
         function renderEvents() {
@@ -1153,7 +1165,11 @@
                         ? `<span class="day">${month}</span><span class="month">TBA</span>`
                         : `<span class="day">${d.getDate()}</span><span class="month">${month}</span>`;
                     const card = document.createElement('div');
-                    card.className = 'event-card';
+                    card.className = 'event-card' + (ev.img ? ' has-photo' : '');
+                    if (ev.img) {
+                        card.style.backgroundImage =
+                            `linear-gradient(rgba(18,14,34,0.55), rgba(18,14,34,0.72)), url('${ev.img}')`;
+                    }
                     card.innerHTML = `
                         <div class="event-date">${dateHtml}</div>
                         <div>
