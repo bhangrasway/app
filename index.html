@@ -340,13 +340,14 @@
         .youtube-cta .icon { width: 18px; height: 18px; }
         .videos-socials {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
             gap: 14px;
             margin-top: 30px;
-            flex-wrap: wrap;
+            text-align: center;
         }
         .videos-socials .follow-label { color: #555; font-weight: 600; font-size: 0.95em; }
+        .videos-socials .social-row { display: flex; justify-content: center; gap: 14px; }
         .social-btn {
             display: inline-flex;
             width: 46px;
@@ -783,9 +784,11 @@
             <div id="videosContainer"></div>
             <div class="videos-socials">
                 <span class="follow-label" data-i18n="videos_follow">Follow us:</span>
-                <a class="social-btn yt" href="https://www.youtube.com/@BhangraSway" target="_blank" rel="noopener" aria-label="YouTube"><svg class="icon"><use href="#icon-youtube"/></svg></a>
-                <a class="social-btn ig" href="https://www.instagram.com/bhangrasway/" target="_blank" rel="noopener" aria-label="Instagram"><svg class="icon"><use href="#icon-instagram"/></svg></a>
-                <a class="social-btn tt" href="https://www.tiktok.com/@bhangrasway.italy" target="_blank" rel="noopener" aria-label="TikTok"><svg class="icon"><use href="#icon-tiktok"/></svg></a>
+                <div class="social-row">
+                    <a class="social-btn yt" href="https://www.youtube.com/@BhangraSway" target="_blank" rel="noopener" aria-label="YouTube"><svg class="icon"><use href="#icon-youtube"/></svg></a>
+                    <a class="social-btn ig" href="https://www.instagram.com/bhangrasway/" target="_blank" rel="noopener" aria-label="Instagram"><svg class="icon"><use href="#icon-instagram"/></svg></a>
+                    <a class="social-btn tt" href="https://www.tiktok.com/@bhangrasway.italy" target="_blank" rel="noopener" aria-label="TikTok"><svg class="icon"><use href="#icon-tiktok"/></svg></a>
+                </div>
             </div>
         </div>
     </section>
