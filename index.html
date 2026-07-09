@@ -1018,7 +1018,13 @@
         // Upcoming events, add {date: 'YYYY-MM-DD', title, venue} objects
         // here to list them. Leave empty to show a "follow us" card.
         // ------------------------------------------------------------------
-        const UPCOMING_EVENTS = [];
+        // titleKey points into i18n.js so event titles switch language with the
+        // page; venue stays literal (place names and times don't translate).
+        // tba: true = only the month is known, the date box shows "MON / TBA".
+        const UPCOMING_EVENTS = [
+            { date: '2026-07-25', titleKey: 'event_castelvetro_title', venue: 'Castelvetro · 7:00 PM' },
+            { date: '2026-10-01', tba: true, titleKey: 'event_competition_title', venue: 'Bhangra Sway Studio, Cremona' }
+        ];
 
         function renderEvents() {
             const container = document.getElementById('eventsContainer');
@@ -1027,14 +1033,16 @@
                 grid.className = 'events-grid';
                 UPCOMING_EVENTS.forEach(ev => {
                     const d = new Date(ev.date + 'T00:00:00');
-                    const day = d.getDate();
                     const month = d.toLocaleDateString('en-US', { month: 'short' });
+                    const dateHtml = ev.tba
+                        ? `<span class="day">${month}</span><span class="month">TBA</span>`
+                        : `<span class="day">${d.getDate()}</span><span class="month">${month}</span>`;
                     const card = document.createElement('div');
                     card.className = 'event-card';
                     card.innerHTML = `
-                        <div class="event-date"><span class="day">${day}</span><span class="month">${month}</span></div>
+                        <div class="event-date">${dateHtml}</div>
                         <div>
-                            <h3 class="event-title">${ev.title}</h3>
+                            <h3 class="event-title">${ev.titleKey ? t(ev.titleKey) : ev.title}</h3>
                             <p class="event-venue"><svg class="icon"><use href="#icon-pin"/></svg>${ev.venue}</p>
                         </div>
                     `;
