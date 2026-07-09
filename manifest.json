@@ -1,0 +1,16 @@
+{
+    "name": "Bhangra Sway Cremona",
+    "short_name": "Bhangra Sway",
+    "description": "Student portal — mark attendance and see your report",
+    "start_url": "home.html",
+    "display": "standalone",
+    "background_color": "#667eea",
+    "theme_color": "#667eea",
+    "icons": [
+        {
+            "src": "logo.png",
+            "sizes": "276x275",
+            "type": "image/png"
+        }
+    ]
+}
