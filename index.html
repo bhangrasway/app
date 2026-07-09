@@ -424,9 +424,8 @@
         .reviews { background: #2c3e50; }
         .reviews .section-heading { color: #fff; }
         .reviews-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 20px;
+            columns: 3 280px;
+            column-gap: 20px;
             margin-bottom: 32px;
         }
         .review-card {
@@ -434,10 +433,13 @@
             border-radius: 14px;
             padding: 24px 22px;
             background: rgba(255,255,255,0.04);
+            break-inside: avoid;
+            margin-bottom: 20px;
         }
         .review-stars { color: #f5a623; letter-spacing: 4px; font-size: 1.05em; margin-bottom: 12px; }
         .review-text { color: #e8edf5; font-style: italic; line-height: 1.6; margin: 0 0 14px; }
         .review-author { color: #fff; font-weight: 700; font-size: 0.92em; }
+        .review-author span { color: #9fb0c7; font-weight: 500; }
         .reviews-ctas { text-align: center; }
         .reviews-read-btn {
             display: inline-flex;
@@ -985,10 +987,24 @@
 
         // ------------------------------------------------------------------
         // Google reviews, copied manually from the studio's Google listing
-        // (Google has no free API for them). Add {name: '...', text: '...'}
-        // per review; the grid hides itself while this list is empty.
+        // (Google has no free API for them). Name + approximate date + text
+        // only, no other reviewer details. All are 5-star reviews.
         // ------------------------------------------------------------------
-        const GOOGLE_REVIEWS = [];
+        const GOOGLE_REVIEWS = [
+            { name: "Ria Kaur Maan", date: "June 2026", text: "If you want to learn real Bhangra, this is the place. The coach is highly experienced and passionate. Definitely the best place in Italy for Bhangra!" },
+            { name: "Sukhveer Singh", date: "June 2026", text: "Uno stile di danza energico e tradizionale. Con un maestro e degli studenti che ti accolgono a braccia aperte non ti sentirai mai fuori luogo, che tu sia indiano, italiano o di qualsiasi altra nazionalità." },
+            { name: "Google Review", date: "November 2025", text: "Al cuore del loro percorso c'è il coach Jaskaran Bhaji, guida carismatica e fonte costante di motivazione. Con il suo stile preciso e il suo approccio coinvolgente, Jaskaran riesce a tirare fuori il meglio da ogni ballerino, creando un ambiente fatto di disciplina, entusiasmo e crescita continua. La sua capacità di unire tecnica, tradizione e spirito di squadra è uno degli elementi che rendono Bhangra Sway così speciale. Jaskaran Bhaji rappresenta un perfetto equilibrio tra professionalità, tradizione e divertimento. Un gruppo che sa emozionare, ispirare e trasmettere la vera essenza del bhangra." },
+            { name: "Google Review", date: "November 2025", text: "Bhangra Sway is an exceptional Punjabi bhangra academy that brings pure energy, discipline, and passion to every class. The instructors are highly skilled, supportive, and truly dedicated to preserving authentic bhangra while making it fun and accessible for all ages. Their teaching style builds confidence, stamina, and technique, and the positive atmosphere makes every session feel like a celebration. If you want to experience real bhangra with unmatched vibes and professionalism, Bhangra Sway is the place to be!" },
+            { name: "Google Review", date: "November 2025", text: "A very important school for our community and for the young children who learn our traditional Bhangra dance and learn to collaborate in the group. Then it feels like a family there, it improves self-esteem" },
+            { name: "Google Review", date: "September 2025", text: "Bhangra Sway è la scuola ideale per chi ama il bhangra: Jaskaran è un coach eccezionale, talentuoso e capace di trasmettere energia e passione in ogni lezione!! Stra consigliato!!" },
+            { name: "Pravjot Kaur", date: "September 2025", text: "Ho frequentato solo un paio di lezioni ma mi sono trovata benissimo, l'ambiente è accogliente, l'insegnante è gentile e preparato, e l'atmosfera davvero positiva. Boht vadiya lagga, jrur jaana." },
+            { name: "Japmeet Kaur", date: "May 2025", text: "Bellissima esperienza, insegnante bravissimo che sa trasmettere la sua energia e insegna con dedizione e passione. Tutti sono in grado di imparare bhangra da zero grazie alle sue lezioni. Consiglio a tutti di provarci perché merita davvero. Io personalmente mi sono trovata benissimo sia con l'insegnante sempre educato, gentile e disponibile sia con i miei compagni di corso, inoltre l'ambiente è confortevole e accogliente." },
+            { name: "Jaspreet Saini", date: "May 2025", text: "Insegnante di Bhangra è straordinario! Le sue lezioni sono piene di energia, passione e divertimento. Consigliatissimo a chi vuole imparare e divertirsi allo stesso tempo." },
+            { name: "Jasman Singh", date: "May 2025", text: "Bellissima esperienza. Insegnante amichevole, si vede che ha esperienza e durante le lezioni cerca sempre di coinvolgere tutti. Fa in modo di aiutare chi fa fatica e far divertire le persone che magari sanno già ballare. Ammiro il fatto che l'insegnante non solo ci insegna passo per passo la coreografia, ma anche i nomi tradizionali dei vari passaggi e la storia dietro questi. Consiglio a tutti di farci un salto perché è un'esperienza unica e un modo per conoscere una nuova tradizione o unirci alla nostra stessa cultura che, vivendo fuori dal Punjab, si tende a perdere un po'." },
+            { name: "Manjot Saini", date: "May 2025", text: "L'insegnante ha molta esperienza e si vede che ha una grande passione per il ballo. È paziente, sempre sorridente e cerca di spiegare i passi nel modo più chiaro possibile." },
+            { name: "Gurleen Saini", date: "May 2025", text: "Ogni lezione è ben strutturata e pensata nei minimi dettagli, si vede che Paji ci mette tanta passione e cuore in quello che fa." },
+            { name: "Sofia Rani", date: "May 2025", text: "Bhaji bravissimo, bht changhe te sareya nu bht vadia sikhonde." }
+        ];
 
         function renderReviews() {
             const grid = document.getElementById('reviewsGrid');
@@ -1009,6 +1025,11 @@
                 const author = document.createElement('div');
                 author.className = 'review-author';
                 author.textContent = r.name;
+                if (r.date) {
+                    const when = document.createElement('span');
+                    when.textContent = ' · ' + r.date;
+                    author.appendChild(when);
+                }
                 card.append(stars, text, author);
                 return card;
             }));
