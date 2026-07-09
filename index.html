@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Bhangra Sway Cremona</title>
-    <meta name="description" content="Bhangra Sway Cremona — Punjabi Bhangra classes in Cremona, Italy. Free trial class available.">
+    <meta name="description" content="Bhangra Sway Cremona, Punjabi Bhangra classes in Cremona, Italy. Free trial class available.">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
@@ -20,11 +20,15 @@
             font-family: 'Inter', 'Segoe UI', sans-serif;
             color: #2c3e50;
             background: #fff;
+            overflow-x: hidden;
         }
         a { text-decoration: none; }
+        .icon { width: 1em; height: 1em; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.15em; flex-shrink: 0; }
+        .filled { fill: currentColor; stroke: none; }
+
         .hero {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 18px 20px 64px;
+            padding: 16px 20px 56px;
         }
         .nav-row {
             max-width: 1100px;
@@ -33,24 +37,48 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            flex-wrap: wrap;
         }
-        .brand-row { display: flex; align-items: center; gap: 10px; }
-        .brand-row img { height: 40px; width: auto; border-radius: 8px; }
-        .brand-row span { color: #fff; font-weight: 800; font-size: 1.1em; }
+        .brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .brand-row img { height: 38px; width: auto; border-radius: 8px; flex-shrink: 0; }
+        .brand-row span { color: #fff; font-weight: 800; font-size: 1.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .nav-toggle {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.16);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: #fff;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .nav-toggle .icon { width: 22px; height: 22px; }
+        .nav-toggle .icon-close { display: none; }
+        .nav-toggle[aria-expanded="true"] .icon-menu { display: none; }
+        .nav-toggle[aria-expanded="true"] .icon-close { display: block; }
+
         .nav-links { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
         .nav-links a {
             color: rgba(255,255,255,0.9);
             font-weight: 600;
             font-size: 0.92em;
+            padding: 6px 2px;
         }
         .nav-links a:hover { color: #fff; }
         .nav-links .members-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             background: rgba(255,255,255,0.18);
             border: 1px solid rgba(255,255,255,0.45);
-            padding: 6px 14px;
+            padding: 8px 16px;
             border-radius: 999px;
         }
+        .nav-links .members-link .icon { width: 15px; height: 15px; }
+
         .hero-body {
             max-width: 1100px;
             margin: 0 auto;
@@ -58,47 +86,53 @@
             padding: 0 12px;
         }
         .hero-body img.hero-logo {
-            height: 110px;
+            height: 96px;
             width: auto;
             border-radius: 18px;
             box-shadow: 0 14px 34px rgba(0,0,0,0.3);
-            margin-bottom: 22px;
+            margin-bottom: 20px;
         }
         .hero-body h1 {
             color: #fff;
-            font-size: clamp(1.6em, 4vw, 2.6em);
+            font-size: clamp(1.5em, 6vw, 2.6em);
             margin: 0 0 14px;
             font-weight: 800;
+            line-height: 1.15;
         }
         .hero-body p.tagline {
             color: rgba(255,255,255,0.92);
-            font-size: 1.15em;
+            font-size: clamp(1em, 3vw, 1.15em);
             max-width: 560px;
-            margin: 0 auto 28px;
+            margin: 0 auto 26px;
             line-height: 1.5;
         }
         .hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
         .btn {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             padding: 15px 26px;
             border-radius: 999px;
             font-weight: 700;
             font-size: 1em;
             cursor: pointer;
             border: none;
+            min-height: 48px;
         }
+        .btn .icon { width: 18px; height: 18px; }
         .btn-primary { background: #27ae60; color: #fff; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
         .btn-secondary { background: rgba(255,255,255,0.16); color: #fff; border: 1px solid rgba(255,255,255,0.55); }
 
-        section { padding: 64px 20px; }
+        section { padding: 56px 20px; }
         .section-inner { max-width: 1100px; margin: 0 auto; }
         h2.section-heading {
-            font-size: clamp(1.4em, 3vw, 2em);
+            font-size: clamp(1.35em, 4.5vw, 2em);
             text-align: center;
-            margin: 0 0 36px;
+            margin: 0 0 32px;
             color: #2c3e50;
         }
-        .about p { font-size: 1.08em; line-height: 1.7; color: #555; max-width: 720px; margin: 0 auto; text-align: center; }
+        .about p { font-size: clamp(1em, 2.6vw, 1.08em); line-height: 1.7; color: #555; max-width: 720px; margin: 0 auto; text-align: center; }
 
         .classes { background: #f7f7fb; }
         .classes-grid {
@@ -127,6 +161,10 @@
         .class-card h3 { margin: 0 0 8px; font-size: 1.2em; }
         .class-card .time { color: #27ae60; font-weight: 700; }
         .classes-note {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             text-align: center;
             color: #7f6a2d;
             background: #fff6dd;
@@ -137,6 +175,7 @@
             margin: 0 auto 32px;
             font-size: 0.92em;
         }
+        .classes-note .icon { color: #b3922f; width: 16px; height: 16px; }
         .map-wrap {
             max-width: 700px;
             margin: 0 auto;
@@ -144,13 +183,15 @@
         }
         .map-wrap iframe {
             width: 100%;
-            height: 320px;
+            height: 300px;
             border: 0;
             border-radius: 16px;
             box-shadow: 0 10px 28px rgba(0,0,0,0.12);
         }
         .directions-btn {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             margin-top: 18px;
             padding: 12px 22px;
             border-radius: 999px;
@@ -158,19 +199,68 @@
             color: #fff;
             font-weight: 700;
             font-size: 0.95em;
+            min-height: 44px;
         }
+        .directions-btn .icon { width: 16px; height: 16px; }
 
         .trial {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             text-align: center;
         }
         .trial h2 { color: #fff; }
-        .trial p { color: rgba(255,255,255,0.92); max-width: 560px; margin: 0 auto 26px; font-size: 1.08em; line-height: 1.6; }
+        .trial p { color: rgba(255,255,255,0.92); max-width: 560px; margin: 0 auto 26px; font-size: clamp(1em, 2.6vw, 1.08em); line-height: 1.6; }
 
+        .videos-note {
+            text-align: center;
+            color: #555;
+            font-size: clamp(1em, 2.6vw, 1.08em);
+            max-width: 560px;
+            margin: -14px auto 32px;
+        }
+        .videos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+        .video-embed {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+            background: #000;
+        }
+        .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        .videos-empty {
+            text-align: center;
+            background: #f7f7fb;
+            border-radius: 18px;
+            padding: 44px 24px;
+            max-width: 560px;
+            margin: 0 auto;
+        }
+        .videos-empty .icon { width: 46px; height: 46px; color: #ff0000; margin-bottom: 14px; }
+        .videos-empty p { color: #666; margin: 0 0 20px; }
+        .youtube-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 13px 24px;
+            border-radius: 999px;
+            background: #ff0000;
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.95em;
+            min-height: 46px;
+        }
+        .youtube-cta .icon { width: 18px; height: 18px; }
+
+        .gallery { background: #f7f7fb; }
         .gallery-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 14px;
         }
         .gallery-tile {
             aspect-ratio: 1;
@@ -179,15 +269,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2.4em;
             opacity: 0.85;
         }
+        .gallery-tile .icon { width: 30%; height: 30%; color: #fff; stroke-width: 1.5; }
         .gallery-note { text-align: center; color: #888; margin-top: 22px; }
 
         footer {
             background: #2c3e50;
             color: #eaeef5;
-            padding: 48px 20px 28px;
+            padding: 44px 20px 26px;
         }
         .footer-inner {
             max-width: 1100px;
@@ -195,24 +285,29 @@
             display: flex;
             flex-wrap: wrap;
             justify-content: space-between;
-            gap: 28px;
+            gap: 24px;
         }
         .footer-brand { display: flex; align-items: center; gap: 10px; }
         .footer-brand img { height: 34px; width: auto; border-radius: 7px; }
         .footer-brand span { font-weight: 800; }
-        .footer-contacts { display: flex; flex-wrap: wrap; gap: 14px; }
+        .footer-contacts { display: flex; flex-wrap: wrap; gap: 12px; }
         .footer-contacts a {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
             color: #eaeef5;
             font-weight: 600;
-            font-size: 0.92em;
+            font-size: 0.9em;
             background: rgba(255,255,255,0.08);
-            padding: 9px 15px;
+            padding: 10px 15px;
             border-radius: 999px;
+            min-height: 40px;
         }
+        .footer-contacts a .icon { width: 16px; height: 16px; }
         .footer-contacts a:hover { background: rgba(255,255,255,0.16); }
         .footer-bottom {
             max-width: 1100px;
-            margin: 24px auto 0;
+            margin: 22px auto 0;
             padding-top: 20px;
             border-top: 1px solid rgba(255,255,255,0.12);
             display: flex;
@@ -223,30 +318,88 @@
             color: #b7c0cf;
         }
         .footer-bottom a { color: #b7c0cf; text-decoration: underline; }
+
+        @media (max-width: 760px) {
+            .nav-toggle { display: inline-flex; }
+            .nav-links {
+                display: none;
+                position: absolute;
+                left: 16px;
+                right: 16px;
+                top: 68px;
+                z-index: 20;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 4px;
+                background: #3f3283;
+                border: 1px solid rgba(255,255,255,0.18);
+                border-radius: 14px;
+                padding: 10px;
+                box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+            }
+            .nav-links.open { display: flex; }
+            .nav-links a { padding: 12px 10px; border-radius: 8px; font-size: 1em; }
+            .nav-links a:hover, .nav-links a:active { background: rgba(255,255,255,0.1); }
+            .nav-links .members-link { justify-content: center; }
+            .nav-links #langPicker { align-self: center; margin-top: 4px; }
+            .hero { position: relative; }
+            section { padding: 44px 16px; }
+            .hero-body h1 { margin-top: 4px; }
+            .btn { width: 100%; max-width: 340px; }
+            .hero-ctas { flex-direction: column; align-items: center; }
+            .map-wrap iframe { height: 240px; }
+            .footer-inner { flex-direction: column; align-items: flex-start; }
+        }
+
+        @media (max-width: 420px) {
+            .gallery-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        }
     </style>
 </head>
 <body>
+    <!-- Icon sprite (professional outline icons, no emoji in the UI chrome) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <defs>
+            <symbol id="icon-home" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h5v-6h4v6h5V10"/></symbol>
+            <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+            <symbol id="icon-close" viewBox="0 0 24 24"><path d="M6 6 18 18M18 6 6 18"/></symbol>
+            <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 22 20H2Z"/><path d="M12 9.5v4.2"/><path d="M12 16.8h.01" stroke-width="2.6"/></symbol>
+            <symbol id="icon-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.7 7-12.2A7 7 0 1 0 5 8.8C5 14.3 12 21 12 21Z"/><circle cx="12" cy="9" r="2.4"/></symbol>
+            <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.4"/><path d="m4.5 17.5 5-5 3.5 3.5 2.5-2.5 4 4"/></symbol>
+            <symbol id="icon-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 6.5 8 6 8-6"/></symbol>
+            <symbol id="icon-play" viewBox="0 0 24 24"><path class="filled" d="M9 6.5v11l9-5.5-9-5.5Z"/></symbol>
+            <symbol id="icon-whatsapp" viewBox="0 0 24 24"><path class="filled" d="M12 2.5a9.3 9.3 0 0 0-8 14L3 21.5l5.2-1a9.3 9.3 0 1 0 3.8-18Zm0 1.7a7.6 7.6 0 0 1 6.5 11.5 7.6 7.6 0 0 1-11.7 2l-.3-.2-3 .8.8-2.9-.2-.3a7.6 7.6 0 0 1 7.9-11Zm-3.4 4c-.2 0-.5 0-.7.3-.2.2-.9.9-.9 2.1s.9 2.4 1 2.6c.1.2 1.8 2.8 4.4 3.8 2.2.9 2.6.7 3.1.6.5 0 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.6-.4-.3-.1-1.5-.8-1.8-.8-.2-.1-.4-.1-.6.1-.2.3-.6.8-.8 1-.1.2-.3.2-.5.1-.3-.1-1.1-.4-2.1-1.3-.8-.7-1.3-1.6-1.5-1.8-.1-.3 0-.4.1-.6l.4-.5c.1-.2.2-.3.3-.5s0-.4 0-.5c0-.2-.6-1.6-.9-2.1-.2-.5-.4-.5-.6-.5Z"/></symbol>
+            <symbol id="icon-instagram" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.3" cy="6.7" r="1.1" class="filled"/></symbol>
+            <symbol id="icon-youtube" viewBox="0 0 24 24"><path d="M21.6 8.3s-.2-1.5-.9-2.2c-.8-.9-1.7-.9-2.2-1C15.7 5 12 5 12 5h0s-3.7 0-6.5.2c-.5 0-1.4.1-2.2 1-.7.7-.9 2.1-.9 2.1S2.2 10 2.2 11.8v1.7c0 1.8.2 3.6.2 3.6s.2 1.5.9 2.2c.8.9 1.8.8 2.3.9 1.6.2 6.9.2 6.9.2s3.7 0 6.5-.2c.5-.1 1.4-.1 2.2-1 .7-.7.9-2.1.9-2.1s.2-1.8.2-3.6v-1.7c0-1.8-.2-3.5-.2-3.5Z"/><path d="M9.9 9.6v4.7l4.3-2.4-4.3-2.3Z" class="filled"/></symbol>
+        </defs>
+    </svg>
+
     <div class="hero">
         <div class="nav-row">
             <div class="brand-row">
                 <img src="logo.png" alt="Bhangra Sway Cremona logo">
                 <span>Bhangra Sway Cremona</span>
             </div>
-            <div class="nav-links">
+            <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Toggle menu">
+                <svg class="icon icon-menu"><use href="#icon-menu"/></svg>
+                <svg class="icon icon-close"><use href="#icon-close"/></svg>
+            </button>
+            <div class="nav-links" id="navLinks">
                 <a href="#classes" data-i18n="nav_classes">Classes</a>
                 <a href="#trial" data-i18n="nav_trial">Free Trial</a>
+                <a href="#videos" data-i18n="nav_videos">Videos</a>
                 <a href="#gallery" data-i18n="nav_gallery">Gallery</a>
                 <a href="#contact" data-i18n="nav_contact">Contact</a>
-                <a class="members-link" href="home.html">🏠 <span data-i18n="nav_members">Members</span></a>
+                <a class="members-link" href="home.html"><svg class="icon"><use href="#icon-home"/></svg><span data-i18n="nav_members">Members</span></a>
                 <div id="langPicker"></div>
             </div>
         </div>
         <div class="hero-body">
             <img class="hero-logo" src="logo.png" alt="Bhangra Sway Cremona">
             <h1>Bhangra Sway Cremona</h1>
-            <p class="tagline" data-i18n="hero_tagline">Feel the Rhythm of Punjab — Right Here in Cremona</p>
+            <p class="tagline" data-i18n="hero_tagline">Feel the Rhythm of Punjab, Right Here in Cremona</p>
             <div class="hero-ctas">
-                <a class="btn btn-primary" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class%20%F0%9F%99%8C" target="_blank" rel="noopener" data-i18n="trial_btn">💬 Book Your Free Trial</a>
+                <a class="btn btn-primary" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class%20%F0%9F%99%8C" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="trial_btn">Book Your Free Trial</span></a>
                 <a class="btn btn-secondary" href="#classes" data-i18n="nav_classes">Classes</a>
             </div>
         </div>
@@ -255,7 +408,7 @@
     <section class="about" id="about">
         <div class="section-inner">
             <h2 class="section-heading" data-i18n="about_heading">About Us</h2>
-            <p data-i18n="about_body">Bhangra Sway Cremona brings the energy of Punjabi Bhangra to Cremona, Italy. We welcome kids and adults, complete beginners and seasoned dancers — from the local Punjabi community and anyone curious about Bhangra. No experience needed to get started.</p>
+            <p data-i18n="about_body">Bhangra Sway Cremona brings the energy of Punjabi Bhangra to Cremona, Italy. We welcome kids and adults, complete beginners and seasoned dancers, from the local Punjabi community and anyone curious about Bhangra. No experience needed to get started.</p>
         </div>
     </section>
 
@@ -279,11 +432,11 @@
                     <p class="time" data-i18n="class_beginner_time">Sunday, 2:00 PM – 4:00 PM</p>
                 </div>
             </div>
-            <p class="classes-note" data-i18n="classes_note">⚠️ Timings may vary occasionally — please message or call ahead before coming.</p>
+            <p class="classes-note"><svg class="icon"><use href="#icon-alert"/></svg><span data-i18n="classes_note">Timings may vary occasionally, please message or call ahead before coming.</span></p>
             <div class="map-wrap">
                 <iframe src="https://www.google.com/maps?q=45.1395108,10.0288616&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Bhangra Sway Cremona location"></iframe>
                 <br>
-                <a class="directions-btn" href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener" data-i18n="directions_btn">📍 Get Directions</a>
+                <a class="directions-btn" href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="directions_btn">Get Directions</span></a>
             </div>
         </div>
     </section>
@@ -291,8 +444,16 @@
     <section class="trial" id="trial">
         <div class="section-inner">
             <h2 class="section-heading" data-i18n="trial_heading">New Here? Try a Class for Free</h2>
-            <p data-i18n="trial_body">Every new dancer gets a free demo class — no strings attached. Message us on WhatsApp and we'll set it up.</p>
-            <a class="btn btn-primary" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class%20%F0%9F%99%8C" target="_blank" rel="noopener" data-i18n="trial_btn">💬 Book Your Free Trial</a>
+            <p data-i18n="trial_body">Every new dancer gets a free demo class, no strings attached. Message us on WhatsApp and we'll set it up.</p>
+            <a class="btn btn-primary" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class%20%F0%9F%99%8C" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="trial_btn">Book Your Free Trial</span></a>
+        </div>
+    </section>
+
+    <section class="videos" id="videos">
+        <div class="section-inner">
+            <h2 class="section-heading" data-i18n="videos_heading">Watch Us Dance</h2>
+            <p class="videos-note" data-i18n="videos_note">Highlights from our classes and performances.</p>
+            <div id="videosContainer"></div>
         </div>
     </section>
 
@@ -300,14 +461,14 @@
         <div class="section-inner">
             <h2 class="section-heading" data-i18n="gallery_heading">Gallery</h2>
             <div class="gallery-grid">
-                <div class="gallery-tile">💃</div>
-                <div class="gallery-tile">🕺</div>
-                <div class="gallery-tile">🥁</div>
-                <div class="gallery-tile">🎉</div>
-                <div class="gallery-tile">✨</div>
-                <div class="gallery-tile">📸</div>
+                <div class="gallery-tile"><svg class="icon"><use href="#icon-image"/></svg></div>
+                <div class="gallery-tile"><svg class="icon"><use href="#icon-image"/></svg></div>
+                <div class="gallery-tile"><svg class="icon"><use href="#icon-image"/></svg></div>
+                <div class="gallery-tile"><svg class="icon"><use href="#icon-image"/></svg></div>
+                <div class="gallery-tile"><svg class="icon"><use href="#icon-image"/></svg></div>
+                <div class="gallery-tile"><svg class="icon"><use href="#icon-image"/></svg></div>
             </div>
-            <p class="gallery-note" data-i18n="gallery_note">Photos and videos from our classes and performances — coming soon!</p>
+            <p class="gallery-note" data-i18n="gallery_note">Photos from our classes and performances, coming soon!</p>
         </div>
     </section>
 
@@ -318,11 +479,11 @@
                 <span>Bhangra Sway Cremona</span>
             </div>
             <div class="footer-contacts">
-                <a href="https://wa.me/393445667033" target="_blank" rel="noopener">💬 WhatsApp</a>
-                <a href="https://www.instagram.com/bhangrasway/" target="_blank" rel="noopener">📷 Instagram</a>
-                <a href="https://www.youtube.com/@BhangraSway" target="_blank" rel="noopener">▶️ YouTube</a>
-                <a href="mailto:bhangrasway@gmail.com">✉️ Email</a>
-                <a href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener">📍 Maps</a>
+                <a href="https://wa.me/393445667033" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg>WhatsApp</a>
+                <a href="https://www.instagram.com/bhangrasway/" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-instagram"/></svg>Instagram</a>
+                <a href="https://www.youtube.com/@BhangraSway" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-youtube"/></svg>YouTube</a>
+                <a href="mailto:bhangrasway@gmail.com"><svg class="icon"><use href="#icon-mail"/></svg>Email</a>
+                <a href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg>Maps</a>
             </div>
         </div>
         <div class="footer-bottom">
@@ -333,6 +494,62 @@
 
     <script>
         document.getElementById('footerYear').textContent = new Date().getFullYear();
+
+        // Mobile nav toggle
+        const navToggle = document.getElementById('navToggle');
+        const navLinks = document.getElementById('navLinks');
+        navToggle.addEventListener('click', () => {
+            const open = navLinks.classList.toggle('open');
+            navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+            navLinks.classList.remove('open');
+            navToggle.setAttribute('aria-expanded', 'false');
+        }));
+
+        // ------------------------------------------------------------------
+        // YouTube videos, add real video IDs here (the part after "v=" in
+        // a youtube.com/watch?v=... URL, or after youtu.be/) to show them as
+        // playable embeds. Leave empty to show a "visit our channel" card.
+        // ------------------------------------------------------------------
+        const YOUTUBE_VIDEO_IDS = [];
+        const YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/@BhangraSway';
+
+        function renderVideos() {
+            const container = document.getElementById('videosContainer');
+            if (YOUTUBE_VIDEO_IDS.length) {
+                const grid = document.createElement('div');
+                grid.className = 'videos-grid';
+                YOUTUBE_VIDEO_IDS.forEach(id => {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'video-embed';
+                    const iframe = document.createElement('iframe');
+                    iframe.src = `https://www.youtube-nocookie.com/embed/${id}`;
+                    iframe.title = 'Bhangra Sway Cremona video';
+                    iframe.loading = 'lazy';
+                    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                    iframe.allowFullscreen = true;
+                    wrap.appendChild(iframe);
+                    grid.appendChild(wrap);
+                });
+                container.replaceChildren(grid);
+            } else {
+                const empty = document.createElement('div');
+                empty.className = 'videos-empty';
+                empty.innerHTML = `
+                    <svg class="icon"><use href="#icon-youtube"/></svg>
+                    <p data-i18n="videos_empty_note">New videos are on their way, subscribe so you don't miss them.</p>
+                    <a class="youtube-cta" href="${YOUTUBE_CHANNEL_URL}" target="_blank" rel="noopener">
+                        <svg class="icon"><use href="#icon-play"/></svg>
+                        <span data-i18n="videos_cta">Visit Our YouTube Channel</span>
+                    </a>
+                `;
+                container.replaceChildren(empty);
+                if (window.applyI18n) window.applyI18n();
+            }
+        }
+        renderVideos();
+        window.onLangChange = renderVideos;
     </script>
 </body>
 </html>

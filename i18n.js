@@ -1,6 +1,6 @@
 // ============================================================================
 // Shared translations for the public student pages (home / checkin / report).
-// Languages: English, Italiano, Punjabi (Latin script — not Gurmukhi, per the
+// Languages: English, Italiano, Punjabi (Latin script, not Gurmukhi, per the
 // studio's preference: the community reads romanized Punjabi on phones).
 //
 // Usage:
@@ -31,7 +31,7 @@ const I18N = {
         phone_not_found: "We couldn't find that number. Double-check it, or ask your instructor.",
         something_wrong: 'Something went wrong. Please try again or ask your instructor.',
         who_are_you: 'Who are you?',
-        pick_self: 'More than one member is registered under this number — pick yourself.',
+        pick_self: 'More than one member is registered under this number, pick yourself.',
         use_diff_number: '← Use a different number',
         // checkin.html
         checking_in_pending: '📍 Checking in…',
@@ -42,11 +42,11 @@ const I18N = {
         not_setup: "Check-in isn't set up yet. Please ask your instructor.",
         notify_from_closed: "Can't check in? Notify your instructor",
         too_far_heading: 'You seem far from the studio',
-        too_far_body: "Your phone's location says you're more than 500m from Bhangra Sway Cremona, so self check-in is blocked. Maybe your browser hasn't shared your location correctly — you can notify your instructor instead.",
+        too_far_body: "Your phone's location says you're more than 500m from Bhangra Sway Cremona, so self check-in is blocked. Maybe your browser hasn't shared your location correctly, you can notify your instructor instead.",
         request_attendance: 'Request Attendance',
         mark_yourself: 'Mark yourself present',
         notify_heading: 'Notify your instructor',
-        enter_phone_notify: 'Enter the mobile number we have on file for you — your instructor will mark you present manually.',
+        enter_phone_notify: 'Enter the mobile number we have on file for you, your instructor will mark you present manually.',
         greeting: 'Hi, {name} 👋',
         ready_to_mark: 'Ready to mark yourself present for today?',
         send_request_q: 'Send a request so your instructor marks you present manually?',
@@ -77,30 +77,30 @@ const I18N = {
         no_attendance: 'No attendance records',
         launch_note: 'ℹ️ Classes before June 2026 are not recorded here.',
         membership_heading: '💳 Membership Status',
-        guarantee_note: "ℹ️ Don't worry — every cycle guarantees you 4 classes. If you miss some, your plan automatically extends (up to 2 months) until you get all 4.",
+        guarantee_note: "ℹ️ Don't worry, every cycle guarantees you 4 classes. If you miss some, your plan automatically extends (up to 2 months) until you get all 4.",
         current_cycle: 'Current Cycle',
         previous_cycle: 'Previous Cycle',
         badge_paid: '🟢 Active / Paid',
         badge_overdue: '🔴 Overdue',
         badge_unpaid: '🟡 Payment Pending',
         month_one: 'month', month_many: 'months',
-        overdue_note: '🔴 You have {months} overdue (€{amount}) — please pay your fees as soon as possible.',
+        overdue_note: '🔴 You have {months} overdue (€{amount}), please pay your fees as soon as possible.',
         extended_tag: '⏳ extended',
         pill_paid: '✅ Paid',
         pill_unpaid: '❌ Unpaid',
         classes_progress: '{a}/{b} classes attended',
-        extra_gifted_one: ' — {n} extra class gifted! 🎁',
-        extra_gifted_many: ' — {n} extra classes gifted! 🎁',
+        extra_gifted_one: ', {n} extra class gifted! 🎁',
+        extra_gifted_many: ', {n} extra classes gifted! 🎁',
         carried_note: ' (incl. {n} carried over)',
         starts_first_class: 'Starts on your first class',
         demo_taken_pill: '🎁 Demo taken',
         na: 'N/A',
-        demo_note: '🎁 Demo class taken — your plan officially starts on your next attended class.',
-        paused_note: '⏸ Your plan is paused — {a}/{b} classes will carry over when you return.',
+        demo_note: '🎁 Demo class taken, your plan officially starts on your next attended class.',
+        paused_note: '⏸ Your plan is paused, {a}/{b} classes will carry over when you return.',
         more_classes_one: '{n} more class',
         more_classes_many: '{n} more classes',
-        ext_note_paid: "⏳ No rush — you're at {a}/{b} classes this cycle. It'll wrap up after {left} or {date} (dates auto-extend if you don't come).",
-        ext_note_unpaid: "⏳ Your plan cycle will change after {left} or {date} (dates auto-extend if you don't come) — since you're unpaid, please pay as soon as possible.",
+        ext_note_paid: "⏳ No rush, you're at {a}/{b} classes this cycle. It'll wrap up after {left} or {date} (dates auto-extend if you don't come).",
+        ext_note_unpaid: "⏳ Your plan cycle will change after {left} or {date} (dates auto-extend if you don't come), since you're unpaid, please pay as soon as possible.",
         payments_heading: '💶 Payments',
         last_payment: 'Last Payment',
         total_pending: 'Total Pending',
@@ -108,9 +108,9 @@ const I18N = {
         cycles_unpaid_one: '{n} cycle unpaid',
         cycles_unpaid_many: '{n} cycles unpaid',
         caught_up: 'All caught up! 🎉',
-        next_payment_note: '🎉 Congratulations! Your next payment is due after {date}, or after {left} attended ({a}/{b} so far this cycle) — whichever comes first.',
+        next_payment_note: '🎉 Congratulations! Your next payment is due after {date}, or after {left} attended ({a}/{b} so far this cycle), whichever comes first.',
         someone_else_report: "Check someone else's report",
-        verify_failed: "We couldn't verify you — please ask your instructor.",
+        verify_failed: "We couldn't verify you, please ask your instructor.",
         report_load_failed: 'Could not load your report ({err}). Please try again.',
 
         // Public marketing homepage (index.html)
@@ -120,11 +120,11 @@ const I18N = {
         nav_gallery: 'Gallery',
         nav_contact: 'Contact',
         nav_members: 'Members',
-        hero_tagline: 'Feel the Rhythm of Punjab — Right Here in Cremona',
+        hero_tagline: 'Feel the Rhythm of Punjab, Right Here in Cremona',
         about_heading: 'About Us',
-        about_body: 'Bhangra Sway Cremona brings the energy of Punjabi Bhangra to Cremona, Italy. We welcome kids and adults, complete beginners and seasoned dancers — from the local Punjabi community and anyone curious about Bhangra. No experience needed to get started.',
+        about_body: 'Bhangra Sway Cremona brings the energy of Punjabi Bhangra to Cremona, Italy. We welcome kids and adults, complete beginners and seasoned dancers, from the local Punjabi community and anyone curious about Bhangra. No experience needed to get started.',
         classes_heading: 'Our Classes',
-        classes_note: 'Timings may vary occasionally — please message or call ahead before coming.',
+        classes_note: 'Timings may vary occasionally, please message or call ahead before coming.',
         class_advance_name: 'Advance',
         class_advance_time: 'Saturday, 1:30 PM – 3:30 PM',
         class_intermediate_name: 'Intermediate',
@@ -133,14 +133,14 @@ const I18N = {
         class_beginner_time: 'Sunday, 2:00 PM – 4:00 PM',
         directions_btn: 'Get Directions',
         trial_heading: 'New Here? Try a Class for Free',
-        trial_body: "Every new dancer gets a free demo class — no strings attached. Message us on WhatsApp and we'll set it up.",
+        trial_body: "Every new dancer gets a free demo class, no strings attached. Message us on WhatsApp and we'll set it up.",
         trial_btn: 'Book Your Free Trial',
         videos_heading: 'Watch Us Dance',
         videos_note: 'Highlights from our classes and performances.',
-        videos_empty_note: "New videos are on their way — subscribe so you don't miss them.",
+        videos_empty_note: "New videos are on their way, subscribe so you don't miss them.",
         videos_cta: 'Visit Our YouTube Channel',
         gallery_heading: 'Gallery',
-        gallery_note: 'Photos from our classes and performances — coming soon!',
+        gallery_note: 'Photos from our classes and performances, coming soon!',
         contact_heading: 'Get In Touch',
         footer_members: 'Members Login'
     },
@@ -159,7 +159,7 @@ const I18N = {
         phone_not_found: 'Numero non trovato. Ricontrollalo, o chiedi al tuo istruttore.',
         something_wrong: 'Qualcosa è andato storto. Riprova o chiedi al tuo istruttore.',
         who_are_you: 'Chi sei?',
-        pick_self: 'Più di un membro è registrato con questo numero — scegli il tuo nome.',
+        pick_self: 'Più di un membro è registrato con questo numero, scegli il tuo nome.',
         use_diff_number: '← Usa un altro numero',
         checking_in_pending: '📍 Check-in in corso…',
         branch_confirmed: '📍✓ Sei nella nostra sede di Cremona',
@@ -169,11 +169,11 @@ const I18N = {
         not_setup: 'Il check-in non è ancora configurato. Chiedi al tuo istruttore.',
         notify_from_closed: 'Non riesci a fare il check-in? Avvisa il tuo istruttore',
         too_far_heading: 'Sembri lontano dallo studio',
-        too_far_body: 'La posizione del tuo telefono indica che sei a più di 500 m da Bhangra Sway Cremona, quindi il check-in autonomo è bloccato. Forse il browser non ha condiviso bene la posizione — puoi avvisare il tuo istruttore.',
+        too_far_body: 'La posizione del tuo telefono indica che sei a più di 500 m da Bhangra Sway Cremona, quindi il check-in autonomo è bloccato. Forse il browser non ha condiviso bene la posizione, puoi avvisare il tuo istruttore.',
         request_attendance: 'Richiedi la presenza',
         mark_yourself: 'Segna la tua presenza',
         notify_heading: 'Avvisa il tuo istruttore',
-        enter_phone_notify: 'Inserisci il numero di cellulare registrato — il tuo istruttore segnerà la presenza manualmente.',
+        enter_phone_notify: 'Inserisci il numero di cellulare registrato, il tuo istruttore segnerà la presenza manualmente.',
         greeting: 'Ciao, {name} 👋',
         ready_to_mark: 'Pronto a segnare la tua presenza di oggi?',
         send_request_q: 'Inviare una richiesta così il tuo istruttore segna la presenza manualmente?',
@@ -203,30 +203,30 @@ const I18N = {
         no_attendance: 'Nessuna presenza registrata',
         launch_note: 'ℹ️ Le lezioni prima di giugno 2026 non sono registrate qui.',
         membership_heading: '💳 Stato abbonamento',
-        guarantee_note: 'ℹ️ Tranquillo — ogni ciclo ti garantisce 4 lezioni. Se ne salti qualcuna, il piano si estende automaticamente (fino a 2 mesi) finché non le fai tutte e 4.',
+        guarantee_note: 'ℹ️ Tranquillo, ogni ciclo ti garantisce 4 lezioni. Se ne salti qualcuna, il piano si estende automaticamente (fino a 2 mesi) finché non le fai tutte e 4.',
         current_cycle: 'Ciclo attuale',
         previous_cycle: 'Ciclo precedente',
         badge_paid: '🟢 Attivo / Pagato',
         badge_overdue: '🔴 In ritardo',
         badge_unpaid: '🟡 Pagamento in sospeso',
         month_one: 'mese', month_many: 'mesi',
-        overdue_note: '🔴 Hai {months} in ritardo (€{amount}) — per favore paga la quota il prima possibile.',
+        overdue_note: '🔴 Hai {months} in ritardo (€{amount}), per favore paga la quota il prima possibile.',
         extended_tag: '⏳ estesa',
         pill_paid: '✅ Pagato',
         pill_unpaid: '❌ Da pagare',
         classes_progress: '{a}/{b} lezioni frequentate',
-        extra_gifted_one: ' — {n} lezione extra in regalo! 🎁',
-        extra_gifted_many: ' — {n} lezioni extra in regalo! 🎁',
+        extra_gifted_one: ', {n} lezione extra in regalo! 🎁',
+        extra_gifted_many: ', {n} lezioni extra in regalo! 🎁',
         carried_note: ' (incl. {n} riportate)',
         starts_first_class: 'Inizia alla tua prima lezione',
         demo_taken_pill: '🎁 Prova fatta',
         na: 'N/D',
-        demo_note: '🎁 Lezione di prova fatta — il tuo piano parte ufficialmente dalla prossima lezione frequentata.',
-        paused_note: '⏸ Il tuo piano è in pausa — {a}/{b} lezioni saranno riportate quando torni.',
+        demo_note: '🎁 Lezione di prova fatta, il tuo piano parte ufficialmente dalla prossima lezione frequentata.',
+        paused_note: '⏸ Il tuo piano è in pausa, {a}/{b} lezioni saranno riportate quando torni.',
         more_classes_one: 'ancora {n} lezione',
         more_classes_many: 'ancora {n} lezioni',
-        ext_note_paid: '⏳ Nessuna fretta — sei a {a}/{b} lezioni in questo ciclo. Si chiuderà dopo {left} o il {date} (le date si estendono da sole se non vieni).',
-        ext_note_unpaid: '⏳ Il tuo ciclo cambierà dopo {left} o il {date} (le date si estendono da sole se non vieni) — il pagamento è in sospeso, per favore paga il prima possibile.',
+        ext_note_paid: '⏳ Nessuna fretta, sei a {a}/{b} lezioni in questo ciclo. Si chiuderà dopo {left} o il {date} (le date si estendono da sole se non vieni).',
+        ext_note_unpaid: '⏳ Il tuo ciclo cambierà dopo {left} o il {date} (le date si estendono da sole se non vieni), il pagamento è in sospeso, per favore paga il prima possibile.',
         payments_heading: '💶 Pagamenti',
         last_payment: 'Ultimo pagamento',
         total_pending: 'Totale da pagare',
@@ -234,9 +234,9 @@ const I18N = {
         cycles_unpaid_one: '{n} ciclo da pagare',
         cycles_unpaid_many: '{n} cicli da pagare',
         caught_up: 'Tutto in regola! 🎉',
-        next_payment_note: '🎉 Congratulazioni! Il prossimo pagamento è dovuto dopo il {date}, o dopo {left} frequentate ({a}/{b} finora in questo ciclo) — quello che arriva prima.',
+        next_payment_note: '🎉 Congratulazioni! Il prossimo pagamento è dovuto dopo il {date}, o dopo {left} frequentate ({a}/{b} finora in questo ciclo), quello che arriva prima.',
         someone_else_report: 'Vedi il report di qualcun altro',
-        verify_failed: 'Non siamo riusciti a verificarti — chiedi al tuo istruttore.',
+        verify_failed: 'Non siamo riusciti a verificarti, chiedi al tuo istruttore.',
         report_load_failed: 'Impossibile caricare il report ({err}). Riprova.',
 
         // Public marketing homepage (index.html)
@@ -246,11 +246,11 @@ const I18N = {
         nav_gallery: 'Galleria',
         nav_contact: 'Contatti',
         nav_members: 'Area Soci',
-        hero_tagline: 'Vivi il Ritmo del Punjab — Qui a Cremona',
+        hero_tagline: 'Vivi il Ritmo del Punjab, Qui a Cremona',
         about_heading: 'Chi Siamo',
-        about_body: "Bhangra Sway Cremona porta l'energia del Bhangra punjabi a Cremona. Accogliamo bambini e adulti, principianti assoluti e ballerini esperti — dalla comunità punjabi locale e chiunque sia curioso di scoprire il Bhangra. Non serve esperienza per iniziare.",
+        about_body: "Bhangra Sway Cremona porta l'energia del Bhangra punjabi a Cremona. Accogliamo bambini e adulti, principianti assoluti e ballerini esperti, dalla comunità punjabi locale e chiunque sia curioso di scoprire il Bhangra. Non serve esperienza per iniziare.",
         classes_heading: 'I Nostri Corsi',
-        classes_note: "Gli orari possono variare occasionalmente — scrivici o chiamaci prima di venire.",
+        classes_note: "Gli orari possono variare occasionalmente, scrivici o chiamaci prima di venire.",
         class_advance_name: 'Avanzato',
         class_advance_time: 'Sabato, 13:30 – 15:30',
         class_intermediate_name: 'Intermedio',
@@ -263,15 +263,15 @@ const I18N = {
         trial_btn: 'Prenota la Prova Gratuita',
         videos_heading: 'Guardaci Ballare',
         videos_note: 'I momenti salienti delle nostre lezioni ed esibizioni.',
-        videos_empty_note: 'Nuovi video in arrivo — iscriviti per non perderteli.',
+        videos_empty_note: 'Nuovi video in arrivo, iscriviti per non perderteli.',
         videos_cta: 'Visita il Nostro Canale YouTube',
         gallery_heading: 'Galleria',
-        gallery_note: 'Foto delle nostre lezioni ed esibizioni — in arrivo presto!',
+        gallery_note: 'Foto delle nostre lezioni ed esibizioni, in arrivo presto!',
         contact_heading: 'Contattaci',
         footer_members: 'Area Soci'
     },
 
-    // Romanized Punjabi (Latin script, as typed on phones — NOT Gurmukhi)
+    // Romanized Punjabi (Latin script, as typed on phones, NOT Gurmukhi)
     pa: {
         lang_label: 'PU',
         home: 'Home',
@@ -286,7 +286,7 @@ const I18N = {
         phone_not_found: 'Eh number nahi labbha. Dubara check karo, ja instructor nu pucho.',
         something_wrong: 'Kujh galat ho gaya. Dubara koshish karo ja instructor nu pucho.',
         who_are_you: 'Tusi kaun ho?',
-        pick_self: 'Is number te ikk ton vadh member registered han — apna naam chuno.',
+        pick_self: 'Is number te ikk ton vadh member registered han, apna naam chuno.',
         use_diff_number: '← Koi hor number varto',
         checking_in_pending: '📍 Check-in ho riha hai…',
         branch_confirmed: '📍✓ Tusi saadi Cremona branch te ho',
@@ -296,11 +296,11 @@ const I18N = {
         not_setup: 'Check-in ajje set nahi hoya. Instructor nu pucho.',
         notify_from_closed: 'Check-in nahi ho riha? Instructor nu daso',
         too_far_heading: 'Tusi studio ton door lagde ho',
-        too_far_body: 'Tuhade phone di location mutabik tusi Bhangra Sway Cremona ton 500m ton vadh door ho, is layi self check-in band hai. Ho sakda browser ne location theek share nahi kiti — tusi instructor nu das sakde ho.',
+        too_far_body: 'Tuhade phone di location mutabik tusi Bhangra Sway Cremona ton 500m ton vadh door ho, is layi self check-in band hai. Ho sakda browser ne location theek share nahi kiti, tusi instructor nu das sakde ho.',
         request_attendance: 'Haazri di request bhejo',
         mark_yourself: 'Apni haazri lagao',
         notify_heading: 'Instructor nu daso',
-        enter_phone_notify: 'Apna register hoya mobile number likho — instructor tuhadi haazri khud lagauga.',
+        enter_phone_notify: 'Apna register hoya mobile number likho, instructor tuhadi haazri khud lagauga.',
         greeting: 'Sat Sri Akal, {name} 👋',
         ready_to_mark: 'Ajj di haazri pakki kariye?',
         send_request_q: 'Request bhejiye taan jo instructor tuhadi haazri khud lagave?',
@@ -330,30 +330,30 @@ const I18N = {
         no_attendance: 'Koi haazri record nahi',
         launch_note: 'ℹ️ June 2026 ton pehlan diyan classes ethe record nahi han.',
         membership_heading: '💳 Membership Status',
-        guarantee_note: 'ℹ️ Fikar na karo — har cycle vich 4 classes pakkiyan han. Je kujh reh jaan, plan aap hi vadhda hai (2 mahine takk) jadon takk 4 puriyan na hon.',
+        guarantee_note: 'ℹ️ Fikar na karo, har cycle vich 4 classes pakkiyan han. Je kujh reh jaan, plan aap hi vadhda hai (2 mahine takk) jadon takk 4 puriyan na hon.',
         current_cycle: 'Chalda cycle',
         previous_cycle: 'Pichhla cycle',
         badge_paid: '🟢 Chalu / Bharia hoya',
         badge_overdue: '🔴 Fees late han',
         badge_unpaid: '🟡 Payment baaki hai',
         month_one: 'mahine', month_many: 'mahine',
-        overdue_note: '🔴 Tuhade {months} de paise baaki han (€{amount}) — kirpa karke jaldi fees bharo.',
+        overdue_note: '🔴 Tuhade {months} de paise baaki han (€{amount}), kirpa karke jaldi fees bharo.',
         extended_tag: '⏳ vadhaya gaya',
         pill_paid: '✅ Bharia',
         pill_unpaid: '❌ Baaki',
         classes_progress: '{a}/{b} classes lagiyan',
-        extra_gifted_one: ' — {n} extra class tohfe vich! 🎁',
-        extra_gifted_many: ' — {n} extra classes tohfe vich! 🎁',
+        extra_gifted_one: ', {n} extra class tohfe vich! 🎁',
+        extra_gifted_many: ', {n} extra classes tohfe vich! 🎁',
         carried_note: ' ({n} pichhle cycle ton naal aiyan)',
         starts_first_class: 'Tuhadi pehli class ton shuru hovega',
         demo_taken_pill: '🎁 Demo layi',
         na: 'N/A',
-        demo_note: '🎁 Demo class layi gayi — tuhada plan agli attend kiti class ton shuru hovega.',
-        paused_note: '⏸ Tuhada plan pause hai — jadon tusi vapas aaoge, {a}/{b} classes naal jud jangiyan.',
+        demo_note: '🎁 Demo class layi gayi, tuhada plan agli attend kiti class ton shuru hovega.',
+        paused_note: '⏸ Tuhada plan pause hai, jadon tusi vapas aaoge, {a}/{b} classes naal jud jangiyan.',
         more_classes_one: '{n} hor class',
         more_classes_many: '{n} hor classes',
-        ext_note_paid: '⏳ Koi kaahli nahi — is cycle vich tusi {a}/{b} classes te ho. Eh {left} ja {date} ton baad pura hovega (je tusi nahi aunde taan dates aap hi vadh jandiyan han).',
-        ext_note_unpaid: '⏳ Tuhada plan cycle {left} ja {date} ton baad badlega (dates aap hi vadh jandiyan han) — tuhadi payment baaki hai, kirpa karke jaldi bharo.',
+        ext_note_paid: '⏳ Koi kaahli nahi, is cycle vich tusi {a}/{b} classes te ho. Eh {left} ja {date} ton baad pura hovega (je tusi nahi aunde taan dates aap hi vadh jandiyan han).',
+        ext_note_unpaid: '⏳ Tuhada plan cycle {left} ja {date} ton baad badlega (dates aap hi vadh jandiyan han), tuhadi payment baaki hai, kirpa karke jaldi bharo.',
         payments_heading: '💶 Payments',
         last_payment: 'Aakhri payment',
         total_pending: 'Kull baaki',
@@ -361,9 +361,9 @@ const I18N = {
         cycles_unpaid_one: '{n} cycle baaki',
         cycles_unpaid_many: '{n} cycle baaki',
         caught_up: 'Sab clear hai! 🎉',
-        next_payment_note: '🎉 Vadhaiyan! Tuhadi agli payment {date} ton baad banegi, ja {left} attend karan ton baad ({a}/{b} is cycle vich hun takk) — jehda pehlan aave.',
+        next_payment_note: '🎉 Vadhaiyan! Tuhadi agli payment {date} ton baad banegi, ja {left} attend karan ton baad ({a}/{b} is cycle vich hun takk), jehda pehlan aave.',
         someone_else_report: 'Kise hor di report vekho',
-        verify_failed: 'Asi tuhanu verify nahi kar sake — instructor nu pucho.',
+        verify_failed: 'Asi tuhanu verify nahi kar sake, instructor nu pucho.',
         report_load_failed: 'Report load nahi hoi ({err}). Dubara koshish karo.',
 
         // Public marketing homepage (index.html)
@@ -373,11 +373,11 @@ const I18N = {
         nav_gallery: 'Gallery',
         nav_contact: 'Contact',
         nav_members: 'Members',
-        hero_tagline: 'Punjab da Josh — Cremona vich',
+        hero_tagline: 'Punjab da Josh, Cremona vich',
         about_heading: 'Saade Baare',
         about_body: 'Bhangra Sway Cremona Baccheaan, Waddheaan, Naveyaan te tajurbekaar dancers, Punjabi community, Italian Community te hor v Bhangre te Punjabi Culture nu pyar karan wale har kise da sawagat karde haan. Shuru karan lyi kise Tajurbe di lorh nahi.',
         classes_heading: 'Saadiyan Classes',
-        classes_note: 'Timing kadi kadi badal sakdi hai — auan ton pehlan message ja call zaroor karo.',
+        classes_note: 'Timing kadi kadi badal sakdi hai, auan ton pehlan message ja call zaroor karo.',
         class_advance_name: 'Advance',
         class_advance_time: 'Saturday, 1:30 PM – 3:30 PM',
         class_intermediate_name: 'Intermediate',
@@ -386,24 +386,24 @@ const I18N = {
         class_beginner_time: 'Sunday, 2:00 PM – 4:00 PM',
         directions_btn: 'Raah Dasso',
         trial_heading: 'Naveen Ho? Ikk Free Class Try Karo',
-        trial_body: 'Har naveen dancer nu ikk free demo class mildi hai — koi shart nahi. WhatsApp te message karo, asi sab set kar dvange.',
+        trial_body: 'Har naveen dancer nu ikk free demo class mildi hai, koi shart nahi. WhatsApp te message karo, asi sab set kar dvange.',
         trial_btn: 'Free Trial Book Karo',
         videos_heading: 'Saanu Naach Dekho',
         videos_note: 'Saadiyan classes te performances de highlights.',
-        videos_empty_note: 'Naveen videos jaldi aa rahiyan han — subscribe karo taan ki miss na hovan.',
+        videos_empty_note: 'Naveen videos jaldi aa rahiyan han, subscribe karo taan ki miss na hovan.',
         videos_cta: 'Saada YouTube Channel Dekho',
         gallery_heading: 'Gallery',
-        gallery_note: 'Saadiyan classes te performances diyan photos — jaldi aa rahiyan han!',
+        gallery_note: 'Saadiyan classes te performances diyan photos, jaldi aa rahiyan han!',
         contact_heading: 'Sampark Karo',
         footer_members: 'Members Login'
     }
 };
 
 // Flag icons for the language dropdown, drawn inline as SVG: emoji flags
-// render as plain letters on Windows, and Punjab has no emoji flag at all —
+// render as plain letters on Windows, and Punjab has no emoji flag at all ,
 // its icon is the yellow state-map sticker with "PUNJAB" lettered across it.
 const I18N_FLAGS = {
-    // English — the Union Jack (more recognizable at small size than
+    // English, the Union Jack (more recognizable at small size than
     // England's St George's Cross, which reads as the Swiss flag to many)
     en: '<svg class="lang-flag" viewBox="0 0 30 20" aria-hidden="true">' +
         '<rect width="30" height="20" fill="#012169"/>' +
@@ -412,13 +412,13 @@ const I18N_FLAGS = {
         '<path d="M15 0 v20 M0 10 h30" stroke="#fff" stroke-width="6.6"/>' +
         '<path d="M15 0 v20 M0 10 h30" stroke="#C8102E" stroke-width="4"/>' +
         '</svg>',
-    // Italy — il Tricolore
+    // Italy, il Tricolore
     it: '<svg class="lang-flag" viewBox="0 0 30 20" aria-hidden="true">' +
         '<rect width="10" height="20" fill="#009246"/>' +
         '<rect x="10" width="10" height="20" fill="#fff"/>' +
         '<rect x="20" width="10" height="20" fill="#ce2b37"/>' +
         '</svg>',
-    // Punjab — the real state boundary (simplified from geohacker/india's
+    // Punjab, the real state boundary (simplified from geohacker/india's
     // open GeoJSON), styled like the studio's sticker: yellow fill, black
     // outline, PUNJAB lettered across the widest part of the state
     pa: '<svg class="lang-flag lang-flag-map" viewBox="0 0 100 100" aria-hidden="true">' +
@@ -458,7 +458,7 @@ const I18N_FLAGS = {
 };
 
 // Full language names for the dropdown menu (the closed pill shows only the
-// flag — no text code).
+// flag, no text code).
 const I18N_LANG_NAMES = { en: 'English', it: 'Italiano', pa: 'Punjabi' };
 
 // All dropdown + flag styling lives here so every page that drops in a
@@ -523,7 +523,7 @@ function applyI18n() {
     document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
         el.placeholder = t(el.dataset.i18nPlaceholder);
     });
-    // The closed pill is flag-only (plus a caret) — no EN/IT/PU text.
+    // The closed pill is flag-only (plus a caret), no EN/IT/PU text.
     const toggle = document.querySelector('#langPicker .lang-dd-toggle');
     if (toggle) {
         toggle.innerHTML = (I18N_FLAGS[currentLang] || '') +

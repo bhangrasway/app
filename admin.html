@@ -797,7 +797,7 @@
                 <div style="margin-bottom:28px;">
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
                         <span style="background:#e67e22; color:#fff; border-radius:6px; padding:3px 10px; font-weight:700; font-size:0.85em;">OVERDUE</span>
-                        <span style="color:#333; font-size:0.9em;">Cycle ended — payment not received</span>
+                        <span style="color:#333; font-size:0.9em;">Cycle ended, payment not received</span>
                     </div>
                     <div id="overdueStudentsList"></div>
                 </div>
@@ -1116,14 +1116,14 @@
         // ===== TAX RECORDS =====
         const TAX_BUCKET = 'tax-pdfs';
 
-        // In-memory cache for tax records — loaded from Supabase on startup
+        // In-memory cache for tax records, loaded from Supabase on startup
         let taxRecordsCache = {};
 
         async function loadTaxRecords() {
             try {
                 const { data, error } = await supabaseClient.from('tax_records').select('*');
                 if (error) {
-                    // Table may not exist yet — fall back to localStorage
+                    // Table may not exist yet, fall back to localStorage
                     const local = JSON.parse(localStorage.getItem('taxRecords') || '{}');
                     taxRecordsCache = local;
                     return;
@@ -1241,8 +1241,8 @@
             list.innerHTML = rec.payments.map((p, i) => `
                 <div style="display:flex; flex-wrap:nowrap; align-items:center; gap:6px; padding:8px 12px; background:${i%2===0?'#f9fafb':'#fff'}; border-radius:8px; margin-bottom:6px; border:1px solid #e8e8e8; overflow-x:auto;">
                     <span style="font-size:0.76em; font-weight:700; color:#999; flex-shrink:0;">#${i+1}</span>
-                    <span style="font-size:0.85em; white-space:nowrap; flex-shrink:0;"><strong>📅</strong> ${p.date || '—'}</span>
-                    <span style="font-size:0.8em; font-family:monospace; background:#f0f0f0; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0;">${p.taxFileNo || '—'}</span>
+                    <span style="font-size:0.85em; white-space:nowrap; flex-shrink:0;"><strong>📅</strong> ${p.date || ','}</span>
+                    <span style="font-size:0.8em; font-family:monospace; background:#f0f0f0; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0;">${p.taxFileNo || ','}</span>
                     <span style="flex:1; font-size:0.85em; min-width:0;">
                         ${p.pdfName
                             ? `<button onclick="viewTaxPdf('${p.pdfPath}')" style="background:#2980b9;color:white;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.78em;white-space:nowrap;">👁 View PDF</button>`
@@ -1429,7 +1429,7 @@
                 : 'No attendance records';
 
             // Payment/membership: single source of truth, same trust-based
-            // timeline the admin dashboard and report.html use — this used to be
+            // timeline the admin dashboard and report.html use, this used to be
             // built from an older, separate cycle calculation and then had a
             // "friendly note" bolted on afterward from the newer system, which is
             // why unpaid students used to get the payment reminder twice.
@@ -1453,7 +1453,7 @@
             else if (timeline.owedCycles.length > 0) paymentStatus = 'OVERDUE';
 
             // Fees are collected in advance, so the current cycle counts as due
-            // too even before it's "complete" by the attendance rule — plus every
+            // too even before it's "complete" by the attendance rule, plus every
             // already-owed (complete-and-unpaid) past cycle. This is the combined
             // total across previous month(s) AND this month, not just one or the
             // other.
@@ -1468,7 +1468,7 @@
             const extraClasses = displayCycle ? Math.max(0, displayCycle.attended - AUTO_EXTENSION_CLASS_TARGET) : 0;
 
             // The cycle immediately before this one in the actual chain (mirrors
-            // report.html's "Previous Cycle" card) — shown regardless of whether
+            // report.html's "Previous Cycle" card), shown regardless of whether
             // it was ever paid, so a never-paid student's overdue month is visible
             // here, not just folded into a number.
             const displayIndex = displayCycle ? timeline.cycles.indexOf(displayCycle) : -1;
@@ -1500,11 +1500,11 @@
             message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
 
             if (extraClasses > 0) {
-                message += `🎁 Bonus: you attended ${extraClasses} extra class${extraClasses > 1 ? 'es' : ''} this cycle beyond the ${AUTO_EXTENSION_CLASS_TARGET}-class minimum — enjoy!\n\n`;
+                message += `🎁 Bonus: you attended ${extraClasses} extra class${extraClasses > 1 ? 'es' : ''} this cycle beyond the ${AUTO_EXTENSION_CLASS_TARGET}-class minimum, enjoy!\n\n`;
             } else if (autoExt.isExtended) {
                 const classesLeft = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - autoExt.attendedCount);
                 message += paymentStatus === 'PAID'
-                    ? `⏳ No rush — you're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`
+                    ? `⏳ No rush, you're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`
                     : `⏳ You're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`;
             }
 
@@ -1512,8 +1512,8 @@
                 message += `🥳 You're all set! Enjoy your classes and keep shining on the dance floor! 💃🕺\n`;
             } else {
                 message += paymentStatus === 'OVERDUE'
-                    ? `😊 This is a friendly reminder — ${timeline.owedCycles.length} previous month${timeline.owedCycles.length > 1 ? 's are' : ' is'} still unpaid${currentCycleAlsoPending ? ', along with this cycle' : ''}.\n\n`
-                    : `😊 Your fee for this cycle is still pending — you can pay anytime at class.\n\n`;
+                    ? `😊 This is a friendly reminder, ${timeline.owedCycles.length} previous month${timeline.owedCycles.length > 1 ? 's are' : ' is'} still unpaid${currentCycleAlsoPending ? ', along with this cycle' : ''}.\n\n`
+                    : `😊 Your fee for this cycle is still pending, you can pay anytime at class.\n\n`;
                 message += `💶 Total Payment To Be Paid = €${Math.round(totalPendingAmount)}\n`;
                 message += `Thank you! ❤️🙏\n`;
             }
@@ -1689,8 +1689,8 @@
                             ${hasPdf ? '<span style="background:#e8f4fd;color:#1a6ea8;border-radius:5px;padding:1px 8px;font-size:0.75em;font-weight:700;">📎 PDF</span>' : ''}
                         </div>
                         <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px; font-size:0.84em; color:#555;">
-                            <span>👤 ${s.parentName || '—'}</span>
-                            <span>📞 ${s.phone || '—'}</span>
+                            <span>👤 ${s.parentName || ','}</span>
+                            <span>📞 ${s.phone || ','}</span>
                             ${age > 0 ? `<span style="color:${ageColor}; font-weight:700;">Age: ${age}</span>` : ''}
                             ${s.codiceFiscale ? `<span style="font-family:monospace; background:#f5f5f5; padding:1px 6px; border-radius:4px;">CF: ${s.codiceFiscale}</span>` : ''}
                             ${lastPay ? `<span style="color:#27ae60; font-weight:600;">Last paid: ${lastPay.date}</span>` : ''}
@@ -2378,7 +2378,7 @@
                     const editingId = currentEditingStudentId;
                     await updateStudentWithSchemaFallback(editingId, studentData);
                     // Cycle anchor / extension overrides are managed via Extend Plan
-                    // and "Next cycle starts from" — edits never touch them.
+                    // and "Next cycle starts from", edits never touch them.
                     // If Paid at registration is checked, ensure a fee record exists for the first cycle
                     if (studentData.paidAtRegistration) {
                         const paidMonth = String(studentData.joinDate || '').slice(0, 7);
@@ -2439,7 +2439,7 @@
                     }
 
                     // Auto-record the first class on the join date. If they didn't
-                    // pay at registration it's a FREE DEMO — the plan starts on
+                    // pay at registration it's a FREE DEMO, the plan starts on
                     // their next attended class.
                     const recordAsDemo = !studentData.paidAtRegistration;
                     if (newStudentId && studentData.joinDate) {
@@ -2455,8 +2455,8 @@
                         }
                     }
                     showSuccessMessage(recordAsDemo
-                        ? '✓ Student added — today\'s class recorded as FREE DEMO. Plan starts at their next class!'
-                        : '✓ Student added — first class attendance recorded!');
+                        ? '✓ Student added, today\'s class recorded as FREE DEMO. Plan starts at their next class!'
+                        : '✓ Student added, first class attendance recorded!');
                 }
 
                 document.getElementById('studentNome').value = '';
@@ -2554,11 +2554,11 @@
                 const currentCycleDates = getTodayCycleDates(student);
                 // Once the extension has actually started, show the extended end
                 const cycleDisplayEnd = autoExt.isExtended ? currentCycleDates.effectiveEnd : currentCycleDates.end;
-                const currentCycleLabel = currentCycleDates.start ? formatCycleLabel(currentCycleDates.start, cycleDisplayEnd) : '—';
+                const currentCycleLabel = currentCycleDates.start ? formatCycleLabel(currentCycleDates.start, cycleDisplayEnd) : ',';
                 // NEXT = the cycle after the current one (chains after the extended end)
                 const nextCycleStart = cycleDisplayEnd ? addDaysToDate(cycleDisplayEnd, 1) : (getEffectiveNextCycleStart(student) || joinDate);
                 const nextCycleDates = getPaymentCycleDates(nextCycleStart);
-                const nextPayLabel = nextCycleDates.start ? formatCycleLabel(nextCycleDates.start, nextCycleDates.end) : '—';
+                const nextPayLabel = nextCycleDates.start ? formatCycleLabel(nextCycleDates.start, nextCycleDates.end) : ',';
 
                 const card = document.createElement('div');
 
@@ -2572,7 +2572,7 @@
                 card.innerHTML = `
                     <div style="min-width:0;">
                         <div style="font-weight:800; font-size:1.08em; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${student.name}</div>
-                        <div style="color:#1a1a1a; font-size:0.95em; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || '—'} &nbsp;·&nbsp; 📞 ${student.phone || '—'}</div>
+                        <div style="color:#1a1a1a; font-size:0.95em; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || ','} &nbsp;·&nbsp; 📞 ${student.phone || ','}</div>
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
                             <span style="background:${batchColor}22; color:${batchColor}; border:1px solid ${batchColor}44; border-radius:20px; padding:3px 10px; font-size:0.88em; font-weight:700;">${student.batch}</span>
                             <span style="color:#1a1a1a; font-size:0.92em;">€${Math.round(student.monthlyFees)}</span>
@@ -2589,8 +2589,8 @@
                         <span style="color:#3498db; background:#eaf4fd; border-radius:4px; padding:2px 8px;">${nextPayLabel}</span>
                         <span class="fees-status ${isPaid ? 'fees-paid' : 'fees-unpaid'}" style="margin-top:4px;">${isPaid ? '✓ PAID' : '⏳ PENDING'}</span>
                         ${autoExt.isExtended ? `<span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⏳ Auto-ext ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span>` : ''}
-                        ${autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⏸ Paused — ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over</span>` : ''}
-                        ${autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">🎁 Demo taken — plan starts at next class</span>` : ''}
+                        ${autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⏸ Paused, ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over</span>` : ''}
+                        ${autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">🎁 Demo taken, plan starts at next class</span>` : ''}
                         ${autoExt.owedCount > 0 ? `<span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">💶 To pay: ${autoExt.owedCount} month${autoExt.owedCount > 1 ? 's' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span>` : ''}
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:130px;">
@@ -2652,7 +2652,7 @@
             student.nextPaymentDate = newDate;
             student.next_payment_date = newDate;
             student.nextpaymentdate = newDate;
-            // Try minimal DB patch — each column name variant
+            // Try minimal DB patch, each column name variant
             let savedToDb = false;
             for (const patch of [{nextpaymentdate:newDate},{next_payment_date:newDate},{nextPaymentDate:newDate}]) {
                 const { error } = await supabaseClient.from('students').update(patch).eq('id', studentId);
@@ -2774,7 +2774,7 @@
             return Object.keys(demoAttendance).some((dateKey) => demoAttendance[dateKey][studentId]);
         }
 
-        // Demo (free) classes are excluded — they never count toward the target.
+        // Demo (free) classes are excluded, they never count toward the target.
         function countAttendanceInRange(studentId, startDate, endDate) {
             if (!startDate || !endDate) return 0;
             let count = 0;
@@ -2798,7 +2798,7 @@
         }
 
         // All non-demo attended dates for a student strictly after startDate, up
-        // through endDate — sorted ascending. Used to find the EXACT day an
+        // through endDate, sorted ascending. Used to find the EXACT day an
         // extension target is met, instead of rounding up to a week boundary.
         function attendedDatesInRange(studentId, startDate, endDate) {
             const dates = [];
@@ -2820,7 +2820,7 @@
                 const explicitStart = String(record.paid_start_date ?? record.paidStartDate ?? '').slice(0, 10);
                 const startDate = explicitStart || (joinDate ? addMonthsToDate(joinDate, index) : '');
                 const isLastRecord = index === paidRecords.length - 1;
-                // Always use the natural cycle end — stable regardless of which record is last.
+                // Always use the natural cycle end, stable regardless of which record is last.
                 // Override-based extension is handled separately in isStudentPaymentActive.
                 const endDate = startDate ? getPaymentCycleDates(startDate).end : '';
 
@@ -2889,7 +2889,7 @@
         }
 
         // The membership cycle containing today, from the trust-based timeline
-        // (chained cycles with class-based extension — see getMembershipTimeline).
+        // (chained cycles with class-based extension, see getMembershipTimeline).
         // For a paused plan, returns the last (incomplete) cycle with paused=true.
         function getTodayCycleDates(student) {
             const timeline = getMembershipTimeline(student);
@@ -2917,7 +2917,7 @@
         }
 
         // Extension state of the membership's current (or last, if paused) cycle.
-        // Applies to paid AND unpaid cycles alike — students pay on trust.
+        // Applies to paid AND unpaid cycles alike, students pay on trust.
         function getAutoExtension(student) {
             return buildAutoExtension(student, membershipOpts(student));
         }
@@ -2928,7 +2928,7 @@
         }
 
         function getPreviousCycleMonth(student) {
-            // Most recent owed (complete, unpaid) cycle before the current one — "YYYY-MM"
+            // Most recent owed (complete, unpaid) cycle before the current one, "YYYY-MM"
             const timeline = getMembershipTimeline(student);
             const owed = timeline.owedCycles.filter((cycle) => cycle !== timeline.current);
             if (owed.length === 0) return null;
@@ -3001,11 +3001,11 @@
                     <div><strong>Monthly Fee:</strong> €${Math.round(student.monthlyFees || 0)}</div>
                     <div><strong>Join Date:</strong> ${student.joinDate ? formatDisplayDate(student.joinDate) : ''}</div>
                     <div><strong>Current Status:</strong> <span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span></div>
-                    ${autoExt.isExtended ? `<div><span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏳ Auto-extended — ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} classes · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span></div>` : ''}
-                    ${autoExt.paused ? `<div><span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏸ Plan paused — ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over when he returns</span></div>` : ''}
-                    ${autoExt.awaitingFirstClass ? `<div><span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">🎁 Demo taken — plan starts on their next attended class</span></div>` : ''}
+                    ${autoExt.isExtended ? `<div><span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏳ Auto-extended, ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} classes · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span></div>` : ''}
+                    ${autoExt.paused ? `<div><span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏸ Plan paused, ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over when he returns</span></div>` : ''}
+                    ${autoExt.awaitingFirstClass ? `<div><span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">🎁 Demo taken, plan starts on their next attended class</span></div>` : ''}
                     ${autoExt.owedCount > 0 ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">💶 To pay: ${autoExt.owedCount} month${autoExt.owedCount > 1 ? 's' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span></div>` : ''}
-                    ${prevCycleUnpaid && prevMonth ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⚠️ Last cycle unpaid — ${formatMonthLabel(prevMonth)}</span></div>` : ''}
+                    ${prevCycleUnpaid && prevMonth ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⚠️ Last cycle unpaid, ${formatMonthLabel(prevMonth)}</span></div>` : ''}
                     <button class="btn-small" onclick="extendStudentPlan(${student.id})" style="background:#8e44ad;" title="Manually set next payment date to extend the plan">Extend Plan</button>
                 </div>
                 <h3 style="margin-top:16px; margin-bottom:8px;">Payment History</h3>
@@ -3031,12 +3031,12 @@
                 const label = formatCycleLabel(cycle.start, showExtended ? cycle.effectiveEnd : cycle.naturalEnd)
                     + (showExtended ? ` <span style="color:#00796b; font-size:0.82em; font-weight:700;">⏳ extended</span>` : '');
                 const carryNote = cycle.carriedIn > 0 ? ` (incl. ${cycle.carriedIn} carried over)` : '';
-                // 5-weekend months mean attended can exceed the 4-class minimum —
+                // 5-weekend months mean attended can exceed the 4-class minimum ,
                 // there's a floor, not a cap, so keep the fraction but call out
                 // the bonus too.
                 const extra = cycle.attended - AUTO_EXTENSION_CLASS_TARGET;
                 const classesLabel = extra > 0
-                    ? `${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes — ${extra} extra class${extra === 1 ? '' : 'es'} gifted! 🎁`
+                    ? `${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes, ${extra} extra class${extra === 1 ? '' : 'es'} gifted! 🎁`
                     : `${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes`;
                 const classesLine = `<div style="font-size:0.82em; color:#555; margin-top:2px;">🏃 ${classesLabel}${carryNote}</div>`;
 
@@ -3057,7 +3057,7 @@
                     statusChip = `<div class="fees-status fees-unpaid">PENDING</div>`;
                     actionBtn = `<button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">Mark Paid</button>`;
                 } else {
-                    // Incomplete unpaid past cycle — its classes carried into the next cycle
+                    // Incomplete unpaid past cycle, its classes carried into the next cycle
                     statusChip = `<div style="background:#eceff1; color:#546e7a; border-radius:5px; padding:3px 9px; font-size:0.82em; font-weight:700;">CLASSES CARRIED OVER</div>`;
                 }
 
@@ -3083,7 +3083,7 @@
 
             let historyHtml = overrideBar;
             if (timeline.awaitingFirstClass) {
-                historyHtml += `<div style="padding:10px 14px; background:#fff3e0; border:1px solid #ffe0b2; border-radius:8px; color:#e65100; font-size:0.9em; font-weight:600;">🎁 Demo class taken (free) — the first cycle starts automatically on their next attended class.</div>`;
+                historyHtml += `<div style="padding:10px 14px; background:#fff3e0; border:1px solid #ffe0b2; border-radius:8px; color:#e65100; font-size:0.9em; font-weight:600;">🎁 Demo class taken (free), the first cycle starts automatically on their next attended class.</div>`;
             } else if (timeline.cycles.length === 0) {
                 historyHtml += '<div class="empty-message" style="padding:12px;">No membership cycles yet.</div>';
             }
@@ -3101,7 +3101,7 @@
             if (timeline.paused) {
                 const lastCycle = timeline.cycles[timeline.cycles.length - 1];
                 const carryCount = lastCycle?.attended || 0;
-                historyHtml += `<div style="margin-top:12px; padding:10px 14px; background:#eceff1; border:1px solid #cfd8dc; border-radius:8px; color:#546e7a; font-size:0.9em; font-weight:600;">⏸ Plan paused — the next cycle starts on the day they attend again${carryCount > 0 ? `, carrying over ${carryCount} attended class${carryCount > 1 ? 'es' : ''}` : ''}.</div>`;
+                historyHtml += `<div style="margin-top:12px; padding:10px 14px; background:#eceff1; border:1px solid #cfd8dc; border-radius:8px; color:#546e7a; font-size:0.9em; font-weight:600;">⏸ Plan paused, the next cycle starts on the day they attend again${carryCount > 0 ? `, carrying over ${carryCount} attended class${carryCount > 1 ? 'es' : ''}` : ''}.</div>`;
             }
 
             if (timeline.unmatchedRecords.length > 0) {
@@ -3509,7 +3509,7 @@
             try {
                 // Every deliberate change (checkbox tap, Mark All Present/Absent)
                 // is already recorded in pendingAttendanceChanges by its own
-                // handler. Only those explicit changes may override the database —
+                // handler. Only those explicit changes may override the database ,
                 // an untouched checkbox must NOT write back this screen's possibly
                 // stale snapshot, or it would erase check-ins that happened after
                 // this page loaded (e.g. a student self-checking-in by phone).
@@ -3687,7 +3687,7 @@
                 }
 
                 // Mark paid: best-effort delete of any existing record for THIS specific month (avoid duplicates)
-                // Non-blocking — if delete fails (column name / RLS), the insert still proceeds
+                // Non-blocking, if delete fails (column name / RLS), the insert still proceeds
                 await supabaseClient.from('fees_paid').delete()
                     .eq('studentid', studentId).eq('month', safeMonth).then(() => {}).catch(() => {});
                 await supabaseClient.from('fees_paid').delete()
@@ -3708,7 +3708,7 @@
                 }]);
 
                 // Clear nextPaymentDate override so the cycle system computes the next date
-                // from payment history — prevents the "New cycle starts from" bar changing automatically
+                // from payment history, prevents the "New cycle starts from" bar changing automatically
                 await setNextPaymentOverride(studentId, null);
                 await loadAllData();
                 refreshStudentDetailView(studentId);
@@ -3809,7 +3809,7 @@
             try {
                 const date = new Date().toISOString().split('T')[0];
 
-                // Sheet 1 — Students
+                // Sheet 1, Students
                 const studentHeaders = ['ID','Name','Parent','Phone','Age','Address','Codice Fiscale','Batch','Monthly Fee (€)','Join Date','Status'];
                 const studentRows = students.map(s => [
                     s.id, s.name, s.parentName, s.phone, s.age, s.address, s.codiceFiscale,
@@ -3817,7 +3817,7 @@
                     isStudentPaymentActive(s) ? 'PAID' : 'PENDING'
                 ]);
 
-                // Sheet 2 — Payments
+                // Sheet 2, Payments
                 const payHeaders = ['Payment ID','Student Name','Paid Date','Month','Amount (€)','Status'];
                 const payRows = (feePayments || []).map(r => {
                     const sid = r.studentid ?? r.studentId ?? r.student_id;
@@ -3832,11 +3832,11 @@
                     ];
                 });
 
-                // Sheet 3 — Expenses
+                // Sheet 3, Expenses
                 const expHeaders = ['ID','Description','Amount (€)','Date'];
                 const expRows = expenses.map(e => [e.id, e.description, e.amount, e.expenseDate]);
 
-                // Sheet 4 — Attendance (one row per student per date)
+                // Sheet 4, Attendance (one row per student per date)
                 const attHeaders = ['Date','Student ID','Student Name','Present'];
                 const attRows = [];
                 Object.keys(attendance).sort().forEach(date => {
@@ -4356,7 +4356,7 @@
                 .eq('status', 'pending')
                 .order('requested_at', { ascending: false });
 
-            // Badge on the Attendance tab button — visible from every tab, so a
+            // Badge on the Attendance tab button, visible from every tab, so a
             // student's "please mark me present" request is noticed even while
             // the instructor is looking at Payments or Reports.
             const badge = document.getElementById('checkinReqBadge');
@@ -4364,7 +4364,7 @@
             badge.textContent = pendingCount;
             badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
 
-            // Only rebuild the list when its contents actually changed —
+            // Only rebuild the list when its contents actually changed ,
             // otherwise the 30s poll would replace the buttons right as the
             // instructor is about to tap one. (The poll never touches anything
             // outside this box: forms and the attendance grid are untouched.)
@@ -4405,7 +4405,7 @@
         async function approveCheckinRequest(requestId, studentId, studentName) {
             try {
                 // Local date, not toISOString(): after 22:00 in Italy the UTC
-                // date is already tomorrow's yesterday — see parseLocalDate.
+                // date is already tomorrow's yesterday, see parseLocalDate.
                 const todayStr = formatLocalDate(new Date());
                 await deleteAttendanceByDateAndStudentsWithSchemaFallback(todayStr, [studentId]);
                 await insertAttendanceWithSchemaFallback([
@@ -4645,10 +4645,10 @@
                 const extendBtn = `<button onclick="extendStudentPlan(${student.id})" title="Extend plan" style="background:#8e44ad;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Extend</button>`;
 
                 const overrideTag = hasOverride ? `<span style="background:#f0e6fa;color:#8e44ad;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">EXTENDED</span>` : '';
-                const autoExtTag = autoExt.isExtended ? `<span style="background:#e0f2f1;color:#00796b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏳ AUTO-EXTENDED — ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} CLASSES</span>` : '';
-                const pausedTag = autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏸ PAUSED — ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} CARRY OVER</span>` : '';
-                const owedTag = autoExt.owedCount > 0 ? `<span style="background:#fdecea;color:#c0392b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">💶 TO PAY — ${autoExt.owedCount} MONTH${autoExt.owedCount > 1 ? 'S' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span>` : '';
-                const demoTag = autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">🎁 DEMO TAKEN — PLAN STARTS AT NEXT CLASS</span>` : '';
+                const autoExtTag = autoExt.isExtended ? `<span style="background:#e0f2f1;color:#00796b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏳ AUTO-EXTENDED, ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} CLASSES</span>` : '';
+                const pausedTag = autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏸ PAUSED, ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} CARRY OVER</span>` : '';
+                const owedTag = autoExt.owedCount > 0 ? `<span style="background:#fdecea;color:#c0392b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">💶 TO PAY, ${autoExt.owedCount} MONTH${autoExt.owedCount > 1 ? 'S' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span>` : '';
+                const demoTag = autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">🎁 DEMO TAKEN, PLAN STARTS AT NEXT CLASS</span>` : '';
                 const overdueTag = isOverdue ? `<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">OVERDUE</span>` : '';
                 const waBtn = student.phone ? `<button onclick="sendStudentWhatsAppReport(${student.id})" title="Send WhatsApp Report" style="background:#25D366;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;font-size:0.85em;">📱 WA</button>` : '';
 
@@ -4683,7 +4683,7 @@
             });
 
             if (paidCount === 0) paidList.innerHTML = '<div class="empty-message" style="padding:14px;">No paid students yet.</div>';
-            if (unpaidCount === 0) unpaidList.innerHTML = '<div class="empty-message" style="padding:14px;">No pending students — all caught up!</div>';
+            if (unpaidCount === 0) unpaidList.innerHTML = '<div class="empty-message" style="padding:14px;">No pending students, all caught up!</div>';
             if (overdueCount === 0) overdueList.innerHTML = '<div class="empty-message" style="padding:14px;">No overdue students.</div>';
 
             document.getElementById('paidCount').textContent = paidCount;
@@ -4854,14 +4854,14 @@
             // and who have not already paid for the upcoming cycle
             const dueThisMonth = students.filter((student) => {
                 if (isStudentPaymentActive(student)) {
-                    // Already paid — check if their paid cycle ends this month (renewal due)
+                    // Already paid, check if their paid cycle ends this month (renewal due)
                     const latestRec = getLatestPaymentRecord(student.id);
                     const paidEnd = String(latestRec?.paid_end_date ?? latestRec?.paidEndDate ?? '').slice(0, 10);
                     if (!paidEnd) return false;
                     const endDate = new Date(paidEnd + 'T23:59:59');
                     return endDate <= lastDayOfMonth;
                 } else {
-                    // Unpaid — cycle end is derived from next cycle start
+                    // Unpaid, cycle end is derived from next cycle start
                     const cycleStart = getEffectiveNextCycleStart(student) || String(student.joinDate || '').slice(0, 10);
                     const cycleDates = getPaymentCycleDates(cycleStart);
                     if (!cycleDates.end) return false;
@@ -4907,7 +4907,7 @@
                             ? `Expires ${paidEnd}`
                             : formatCycleLabel(cycleDates.start, cycleDates.end);
                         const statusTag = isPaidStudent
-                            ? `<span style="background:#d4edda;color:#155724;border-radius:5px;padding:2px 8px;font-size:0.78em;font-weight:700;">PAID — RENEWAL DUE</span>`
+                            ? `<span style="background:#d4edda;color:#155724;border-radius:5px;padding:2px 8px;font-size:0.78em;font-weight:700;">PAID, RENEWAL DUE</span>`
                             : `<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:2px 8px;font-size:0.78em;font-weight:700;">UNPAID</span>`;
                         return `
                             <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; padding:14px 16px; border:1px solid #eee; border-left:4px solid #e67e22; border-radius:10px; margin-bottom:10px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.06);">

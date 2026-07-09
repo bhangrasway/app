@@ -254,7 +254,7 @@
             <p class="sub" id="errorMessage"></p>
         </div>
 
-        <!-- PHONE ENTRY (the "home" screen — no names are ever listed) -->
+        <!-- PHONE ENTRY (the "home" screen, no names are ever listed) -->
         <div id="phoneState" class="hidden">
             <h2 data-i18n="view_report">View Your Report</h2>
             <p class="sub" data-i18n="enter_phone">Enter the mobile number we have on file for you.</p>
@@ -263,10 +263,10 @@
             <button class="primary" id="phoneContinueBtn" data-i18n="continue">Continue</button>
         </div>
 
-        <!-- PICK (several members share this phone — one household only) -->
+        <!-- PICK (several members share this phone, one household only) -->
         <div id="pickState" class="hidden">
             <h2 data-i18n="who_are_you">Who are you?</h2>
-            <p class="sub" data-i18n="pick_self">More than one member is registered under this number — pick yourself.</p>
+            <p class="sub" data-i18n="pick_self">More than one member is registered under this number, pick yourself.</p>
             <div class="student-list" id="memberList"></div>
             <button class="link-btn" id="pickBackBtn" data-i18n="use_diff_number">← Use a different number</button>
         </div>
@@ -287,7 +287,7 @@
 
             <div class="report-section">
                 <h3 data-i18n="membership_heading">💳 Membership Status</h3>
-                <p style="color:#888; font-size:0.8em; margin:0 0 8px;" data-i18n="guarantee_note">ℹ️ Don't worry — every cycle guarantees you 4 classes. If you miss some, your plan automatically extends (up to 2 months) until you get all 4.</p>
+                <p style="color:#888; font-size:0.8em; margin:0 0 8px;" data-i18n="guarantee_note">ℹ️ Don't worry, every cycle guarantees you 4 classes. If you miss some, your plan automatically extends (up to 2 months) until you get all 4.</p>
                 <span class="status-badge" id="reportStatusBadge"></span>
                 <p id="reportOverdueNote" class="hidden" style="background:#fdecea; color:#c0392b; padding:8px 12px; border-radius:8px; font-size:0.85em; font-weight:600; margin-top:8px;"></p>
 
@@ -322,12 +322,12 @@
                 <h3 data-i18n="payments_heading">💶 Payments</h3>
                 <div class="stat-grid">
                     <div class="stat-box">
-                        <div class="stat-value" id="reportLastPaymentAmount">—</div>
+                        <div class="stat-value" id="reportLastPaymentAmount">,</div>
                         <div class="stat-label" data-i18n="last_payment">Last Payment</div>
                         <div class="stat-sub" id="reportLastPaymentSub"></div>
                     </div>
                     <div class="stat-box">
-                        <div class="stat-value" id="reportTotalPendingAmount">—</div>
+                        <div class="stat-value" id="reportTotalPendingAmount">,</div>
                         <div class="stat-label" data-i18n="total_pending">Total Pending</div>
                         <div class="stat-sub" id="reportTotalPendingSub"></div>
                     </div>
@@ -359,7 +359,7 @@
             return div.innerHTML;
         }
 
-        // Surname shown as an initial only in the household picker — siblings
+        // Surname shown as an initial only in the household picker, siblings
         // sharing a phone don't need each other's full surnames on screen.
         function maskName(full) {
             const parts = String(full || '').trim().split(/\s+/);
@@ -456,7 +456,7 @@
         }
 
         // ===== Render the report =====
-        // All payment/cycle math comes from membership.js — the exact same
+        // All payment/cycle math comes from membership.js, the exact same
         // engine the admin dashboard runs, fed with the rows the RPC returned.
         let lastReport = null; // kept so a language switch can re-render in place
 
@@ -465,7 +465,7 @@
             show('loadingState');
 
             // The RPC's student object carries the profile fields the engine and
-            // this renderer need (lowercase DB column names — the shared engine
+            // this renderer need (lowercase DB column names, the shared engine
             // reads those spellings too). Phone is never included.
             const student = {
                 id: report.student.id,
@@ -513,7 +513,7 @@
                 });
             }
 
-            // Payment/membership: IS the admin dashboard's trust-based timeline —
+            // Payment/membership: IS the admin dashboard's trust-based timeline ,
             // same engine, same file (membership.js).
             const timeline = buildMembershipTimeline(student, membership);
             const autoExt = buildAutoExtension(student, membership);
@@ -532,14 +532,14 @@
 
             // Fees are collected in advance, so the current cycle counts as due too
             // even before it's "complete" by the attendance rule (that rule only
-            // governs when a cycle becomes overdue admin-side) — plus every
+            // governs when a cycle becomes overdue admin-side), plus every
             // already-owed (complete-and-unpaid) past cycle.
             const currentCycleAlsoPending = displayCycle && !displayCycle.paid && !timeline.owedCycles.includes(displayCycle);
             const owedCount = timeline.owedCycles.length + (currentCycleAlsoPending ? 1 : 0);
             const totalPendingAmount = owedCount * (student.monthlyFees || 0);
 
             // A direct payment reminder whenever there's a genuinely overdue
-            // (complete-and-unpaid) past cycle — independent of whether the
+            // (complete-and-unpaid) past cycle, independent of whether the
             // current cycle's attendance-extension note happens to show below,
             // so an overdue student is never left without a clear call to pay.
             const overdueEl = document.getElementById('reportOverdueNote');
@@ -555,7 +555,7 @@
 
             // A cycle whose effective end got pushed past its natural end (via the
             // 4-classes auto-extension) shows a small "extended" tag next to its
-            // dates — but for the CURRENT cycle, only once the extension has
+            // dates, but for the CURRENT cycle, only once the extension has
             // actually started (now > naturalEnd), never as a preview of the
             // theoretical max extension the algorithm projects internally. Past
             // cycles are already locked in, so they always show it if it applied.
@@ -570,7 +570,7 @@
             }
 
             // Renders a cycle's dates/pill/attendance-progress into one of the two
-            // cycle cards (prefix 'Current' or 'Previous') — so it's obvious at a
+            // cycle cards (prefix 'Current' or 'Previous'), so it's obvious at a
             // glance whether someone actually came to class or just paid.
             function renderCycleCard(prefix, cycle, isCurrent) {
                 document.getElementById(`report${prefix}CycleDates`).innerHTML = cycleDateLabel(cycle, isCurrent);
@@ -588,7 +588,7 @@
                 }
                 const carryNote = cycle.carriedIn > 0 ? t('carried_note', { n: cycle.carriedIn }) : '';
                 // Some months have 5 weekends, so attended can exceed the 4-class
-                // minimum — there's no cap on how many classes someone can take,
+                // minimum, there's no cap on how many classes someone can take,
                 // just a floor, so keep the fraction but call out the bonus too.
                 const extra = cycle.attended - AUTO_EXTENSION_CLASS_TARGET;
                 let classesLabel = t('classes_progress', { a: cycle.attended, b: AUTO_EXTENSION_CLASS_TARGET });
@@ -623,9 +623,9 @@
                 renderCycleCard('Previous', previousCycle, false);
             }
 
-            // Surface whichever plan-status note applies — extension/pause/demo are
+            // Surface whichever plan-status note applies, extension/pause/demo are
             // mutually exclusive states in this system, so at most one shows. The
-            // wording differs for a paid vs. still-unpaid cycle — "no rush" would be
+            // wording differs for a paid vs. still-unpaid cycle, "no rush" would be
             // a wrong thing to say to someone who also owes money.
             const extensionEl = document.getElementById('reportExtensionNote');
             if (timeline.awaitingFirstClass) {
@@ -657,9 +657,9 @@
                 const lastAmount = String(Math.round(Number(lastRecord.amount ?? student.monthlyFees ?? 0)));
                 const lastPaidDateRaw = String(lastRecord.paiddate ?? lastRecord.paidDate ?? lastRecord.paid_date ?? '').slice(0, 10);
                 document.getElementById('reportLastPaymentAmount').textContent = `€${lastAmount}`;
-                document.getElementById('reportLastPaymentSub').textContent = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : '—';
+                document.getElementById('reportLastPaymentSub').textContent = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : ',';
             } else {
-                document.getElementById('reportLastPaymentAmount').textContent = '—';
+                document.getElementById('reportLastPaymentAmount').textContent = ',';
                 document.getElementById('reportLastPaymentSub').textContent = t('no_payments');
             }
 
@@ -671,7 +671,7 @@
                 ? tCount(owedCount, 'cycles_unpaid_one', 'cycles_unpaid_many')
                 : t('caught_up');
 
-            // When paid up, tell them when they're due again — by date or by class count.
+            // When paid up, tell them when they're due again, by date or by class count.
             const nextPaymentEl = document.getElementById('reportNextPayment');
             if (paymentStatus === 'PAID' && displayCycle) {
                 const classesRemaining = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - displayCycle.attended);

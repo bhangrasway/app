@@ -5,7 +5,7 @@
 // between what the admin sees and what a student sees.
 //
 // Policy (see the comment above buildMembershipTimeline for the walk):
-// cycles run on attendance, not payment — every monthly cycle guarantees
+// cycles run on attendance, not payment, every monthly cycle guarantees
 // AUTO_EXTENSION_CLASS_TARGET classes, extending week-by-week up to
 // AUTO_EXTENSION_MAX_MONTHS; cycles chain after the effective end; an
 // incomplete unpaid cycle pauses the plan and carries its classes into the
@@ -21,8 +21,8 @@
 const AUTO_EXTENSION_CLASS_TARGET = 4; // classes guaranteed per cycle
 const AUTO_EXTENSION_MAX_MONTHS = 2;   // max extension past a cycle's natural end
 
-// ===== Local-date helpers (no UTC shift — the studio runs on Europe/Rome) ==
-// Parse "YYYY-MM-DD" as LOCAL midnight — avoids UTC timezone shift (e.g. CEST UTC+2)
+// ===== Local-date helpers (no UTC shift, the studio runs on Europe/Rome) ==
+// Parse "YYYY-MM-DD" as LOCAL midnight, avoids UTC timezone shift (e.g. CEST UTC+2)
 function parseLocalDate(dateStr) {
     const s = String(dateStr || '').slice(0, 10);
     const parts = s.split('-').map(Number);
@@ -84,7 +84,7 @@ function getPaymentCycleDates(startDateValue) {
     };
 }
 
-// Classes run Saturdays and Sundays — the next such date on or after dateStr.
+// Classes run Saturdays and Sundays, the next such date on or after dateStr.
 function nextSundayOnOrAfter(dateStr) {
     const date = parseLocalDate(dateStr);
     if (Number.isNaN(date.getTime())) return dateStr;
@@ -118,7 +118,7 @@ function getStudentPaidRecordsFromRows(studentId, feesRows) {
         });
 }
 
-// This student's PRESENT attendance rows normalized to { date, isDemo } —
+// This student's PRESENT attendance rows normalized to { date, isDemo } ,
 // the input for makeRowMembershipOpts below. One entry per date (duplicate
 // rows for the same day count once, matching the dashboard's date-keyed
 // map); a date with both a demo and a real row counts as real.
@@ -178,7 +178,7 @@ function makeRowMembershipOpts(student, feesRows, studentAttendanceRows) {
 //     past its natural end (classes during the extension count),
 //   - chains: the next cycle starts the day after the previous cycle's
 //     effective (possibly extended) end,
-//   - if it ends incomplete AND unpaid, the plan PAUSES — no new cycles
+//   - if it ends incomplete AND unpaid, the plan PAUSES, no new cycles
 //     (no debt piles up) until the student attends again; his attended
 //     classes carry over into the cycle that starts the day he returns,
 //   - is "owed" only when complete (got its classes / full month with
@@ -251,7 +251,7 @@ function buildMembershipTimeline(student, opts) {
         if (attended < AUTO_EXTENSION_CLASS_TARGET) {
             const maxEnd = addMonthsToDate(naturalEnd, AUTO_EXTENSION_MAX_MONTHS);
             // The cycle ends exactly on whichever real attended class reaches
-            // the target — never rounded up to a week boundary.
+            // the target, never rounded up to a week boundary.
             const extraDates = opts.attendedDatesInRange(naturalEnd, maxEnd);
             let completedOn = '';
             for (const date of extraDates) {
@@ -261,7 +261,7 @@ function buildMembershipTimeline(student, opts) {
             if (completedOn) {
                 effectiveEnd = completedOn;
             } else if (todayStr < maxEnd) {
-                // Still open — classes run weekends, so the rolling deadline
+                // Still open, classes run weekends, so the rolling deadline
                 // is the coming Sunday, not the theoretical 2-month max.
                 const reference = todayStr > naturalEnd ? todayStr : naturalEnd;
                 const nextSunday = nextSundayOnOrAfter(addDaysToDate(reference, 1));
@@ -312,7 +312,7 @@ function buildMembershipTimeline(student, opts) {
 }
 
 // Extension state of the membership's current (or last, if paused) cycle.
-// Applies to paid AND unpaid cycles alike — students pay on trust.
+// Applies to paid AND unpaid cycles alike, students pay on trust.
 function buildAutoExtension(student, opts) {
     const none = { isExtended: false, attendedCount: 0, carriedIn: 0, effectiveEndDate: '', weeksUsed: 0, naturalEndDate: '', paused: false, owedCount: 0, awaitingFirstClass: false };
     const timeline = buildMembershipTimeline(student, opts);
@@ -329,7 +329,7 @@ function buildAutoExtension(student, opts) {
     const weeksUsed = isExtended ? Math.ceil((now - naturalEnd) / (7 * 86400000)) : 0;
 
     // Fees are collected in advance, so the current cycle counts as owed
-    // too even before it's "complete" by the attendance rule — that rule
+    // too even before it's "complete" by the attendance rule, that rule
     // only governs when a cycle becomes overdue, not whether it's due.
     const currentCycleAlsoOwed = !cycle.paid && !timeline.owedCycles.includes(cycle);
     const owedCount = timeline.owedCycles.length + (currentCycleAlsoOwed ? 1 : 0);

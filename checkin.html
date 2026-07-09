@@ -188,11 +188,11 @@
         <!-- TOO FAR (device location confirms they're not near the studio) -->
         <div id="tooFarState" class="hidden">
             <h2 data-i18n="too_far_heading">You seem far from the studio</h2>
-            <p class="sub" data-i18n="too_far_body">Your phone's location says you're more than 500m from Bhangra Sway Cremona, so self check-in is blocked. Maybe your browser hasn't shared your location correctly — you can notify your instructor instead.</p>
+            <p class="sub" data-i18n="too_far_body">Your phone's location says you're more than 500m from Bhangra Sway Cremona, so self check-in is blocked. Maybe your browser hasn't shared your location correctly, you can notify your instructor instead.</p>
             <button class="primary" id="notifyFromTooFarBtn" data-i18n="request_attendance">Request Attendance</button>
         </div>
 
-        <!-- PHONE ENTRY (the "home" screen — no names are ever listed) -->
+        <!-- PHONE ENTRY (the "home" screen, no names are ever listed) -->
         <div id="phoneState" class="hidden">
             <h2 id="phoneHeading">Mark yourself present</h2>
             <p class="sub" id="phoneSub">Enter the mobile number we have on file for you.</p>
@@ -201,10 +201,10 @@
             <button class="primary" id="phoneContinueBtn" data-i18n="continue">Continue</button>
         </div>
 
-        <!-- PICK (several members share this phone — one household only) -->
+        <!-- PICK (several members share this phone, one household only) -->
         <div id="pickState" class="hidden">
             <h2 data-i18n="who_are_you">Who are you?</h2>
-            <p class="sub" data-i18n="pick_self">More than one member is registered under this number — pick yourself.</p>
+            <p class="sub" data-i18n="pick_self">More than one member is registered under this number, pick yourself.</p>
             <div class="student-list" id="memberList"></div>
             <button class="link-btn" id="pickBackBtn" data-i18n="use_diff_number">← Use a different number</button>
         </div>
@@ -278,7 +278,7 @@
             return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
         }
 
-        // Surnames are shown as initials only — the confirm screen can be read
+        // Surnames are shown as initials only, the confirm screen can be read
         // over a shoulder at the kiosk, and siblings in the household picker
         // don't need each other's full surnames on screen either.
         function maskName(full) {
@@ -307,7 +307,7 @@
         }
 
         // Returns 'confirmed' (at the studio), 'too-far' (definitely not), or
-        // 'unknown' (denied / unsupported / timed out — treated as a soft pass).
+        // 'unknown' (denied / unsupported / timed out, treated as a soft pass).
         async function checkLocationStatus() {
             if (!navigator.geolocation) return 'unknown';
 
@@ -487,7 +487,7 @@
         // The phone number is re-verified INSIDE the database (security definer
         // RPCs): this page never sees anyone's stored phone number, and the
         // check-in RPC also re-enforces the check-in window and records today's
-        // date in the studio's timezone (Europe/Rome) — not the browser's UTC date.
+        // date in the studio's timezone (Europe/Rome), not the browser's UTC date.
         async function handleConfirm() {
             if (!selectedMember) return;
             const confirmError = document.getElementById('confirmError');
@@ -578,7 +578,7 @@
             );
             document.getElementById('startOverBtn').addEventListener('click', () => {
                 // Re-run the full check (window + location) rather than jumping
-                // straight to the phone screen — otherwise someone routed to the
+                // straight to the phone screen, otherwise someone routed to the
                 // notify flow for being too far could tap this and land in
                 // self-check-in with zero re-verification.
                 selectedMember = null;
