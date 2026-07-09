@@ -338,6 +338,31 @@
             min-height: 46px;
         }
         .youtube-cta .icon { width: 18px; height: 18px; }
+        .videos-socials {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        .videos-socials .follow-label { color: #555; font-weight: 600; font-size: 0.95em; }
+        .social-btn {
+            display: inline-flex;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+            transition: transform 0.15s;
+        }
+        .social-btn:hover { transform: translateY(-2px); }
+        .social-btn .icon { width: 22px; height: 22px; }
+        .social-btn.yt { background: #ff0000; }
+        .social-btn.ig { background: radial-gradient(circle at 30% 110%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+        .social-btn.tt { background: #010101; }
 
         .gallery { background: #fff; }
         .gallery-carousel { max-width: 800px; margin: 0 auto; }
@@ -756,6 +781,12 @@
             <h2 class="section-heading" data-i18n="videos_heading">Watch Us Dance</h2>
             <p class="section-note" data-i18n="videos_note">Highlights from our classes and performances.</p>
             <div id="videosContainer"></div>
+            <div class="videos-socials">
+                <span class="follow-label" data-i18n="videos_follow">Follow us:</span>
+                <a class="social-btn yt" href="https://www.youtube.com/@BhangraSway" target="_blank" rel="noopener" aria-label="YouTube"><svg class="icon"><use href="#icon-youtube"/></svg></a>
+                <a class="social-btn ig" href="https://www.instagram.com/bhangrasway/" target="_blank" rel="noopener" aria-label="Instagram"><svg class="icon"><use href="#icon-instagram"/></svg></a>
+                <a class="social-btn tt" href="https://www.tiktok.com/@bhangrasway.italy" target="_blank" rel="noopener" aria-label="TikTok"><svg class="icon"><use href="#icon-tiktok"/></svg></a>
+            </div>
         </div>
     </section>
 
