@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bhangra Sway Cremona</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <script src="i18n.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -14,10 +19,41 @@
             font-family: 'Inter', 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
-            align-items: flex-start;
-            justify-content: center;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
             padding: 24px 14px;
         }
+        .top-bar {
+            width: 100%;
+            max-width: 440px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .site-link {
+            color: #fff;
+            font-size: 0.85em;
+            font-weight: 600;
+            opacity: 0.85;
+            text-decoration: none;
+        }
+        .site-link:hover { opacity: 1; text-decoration: underline; }
+        .lang-picker { display: flex; gap: 6px; }
+        .lang-btn {
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.45);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.78em;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .lang-btn.active { background: #fff; color: #5b3fa0; border-color: #fff; }
         .card {
             width: 100%;
             max-width: 440px;
@@ -62,14 +98,18 @@
     </style>
 </head>
 <body>
+    <div class="top-bar">
+        <a class="site-link" href="index.html">← bhangrasway.com</a>
+        <div class="lang-picker" id="langPicker"></div>
+    </div>
     <div class="card">
         <div class="logo-row">
             <img src="logo.png" alt="Bhangra Sway Logo">
             <h1>Bhangra Sway Cremona</h1>
         </div>
-        <p class="sub">What would you like to do?</p>
-        <a class="action-link attendance" href="checkin.html">✅ Mark Attendance</a>
-        <a class="action-link report" href="report.html">📋 See Your Report</a>
+        <p class="sub" data-i18n="what_would">What would you like to do?</p>
+        <a class="action-link attendance" href="checkin.html" data-i18n="mark_attendance">✅ Mark Attendance</a>
+        <a class="action-link report" href="report.html" data-i18n="see_report">📋 See Your Report</a>
     </div>
 </body>
 </html>

@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Check In - Bhangra Sway Cremona</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <script src="i18n.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -15,8 +20,9 @@
             font-family: 'Inter', 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
-            align-items: flex-start;
-            justify-content: center;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
             padding: 24px 14px;
         }
         .card {
@@ -53,14 +59,16 @@
         .branch-line.pending { color: #7f8c8d; }
         h2 { font-size: 1.3em; margin: 0 0 6px; color: #2c3e50; }
         p.sub { color: #555; margin: 0 0 18px; line-height: 1.5; }
-        input[type="text"], input[type="search"] {
+        input[type="tel"] {
             width: 100%;
             padding: 14px 14px;
-            font-size: 16px;
+            font-size: 18px;
+            letter-spacing: 1px;
             border: 1px solid #ddd;
             border-radius: 10px;
             margin-bottom: 12px;
         }
+        input[type="tel"]:focus { border-color: #667eea; outline: none; }
         .student-list { max-height: 300px; overflow-y: auto; }
         .student-row {
             width: 100%;
@@ -78,23 +86,6 @@
             border-color: #667eea;
         }
         .student-row .name { font-weight: 600; color: #2c3e50; }
-        .student-row .parent { font-size: 0.82em; color: #888; margin-top: 2px; }
-        .empty-note { color: #888; text-align: center; padding: 20px 0; }
-        .pin-row {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin: 18px 0;
-        }
-        .pin-box {
-            width: 52px;
-            height: 60px;
-            text-align: center;
-            font-size: 1.6em;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-        }
-        .pin-box:focus { border-color: #667eea; outline: none; }
         button.primary {
             width: 100%;
             padding: 15px;
@@ -122,6 +113,13 @@
         .result-icon { font-size: 3em; text-align: center; margin-bottom: 8px; }
         .result-title { text-align: center; font-size: 1.25em; font-weight: 700; color: #2c3e50; margin-bottom: 6px; }
         .result-sub { text-align: center; color: #666; margin-bottom: 20px; }
+        .greeting {
+            text-align: center;
+            font-size: 1.35em;
+            font-weight: 800;
+            color: #2c3e50;
+            margin: 8px 0 4px;
+        }
         .spinner {
             width: 34px; height: 34px; margin: 30px auto;
             border: 4px solid #eee; border-top-color: #667eea; border-radius: 50%;
@@ -129,15 +127,51 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .hidden { display: none !important; }
+        .top-bar {
+            width: 100%;
+            max-width: 440px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .lang-picker { display: flex; gap: 6px; }
+        .lang-btn {
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.45);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.78em;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .lang-btn.active { background: #fff; color: #5b3fa0; border-color: #fff; }
+        .top-home-btn {
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.45);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.78em;
+            padding: 6px 12px;
+            border-radius: 999px;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
+    <div class="top-bar">
+        <div class="lang-picker" id="langPicker"></div>
+        <a class="top-home-btn" href="home.html">🏠 <span data-i18n="home">Home</span></a>
+    </div>
     <div class="card">
         <div class="logo-row">
             <img src="logo.png" alt="Bhangra Sway Logo">
             <h1>Bhangra Sway Cremona</h1>
         </div>
-        <p class="branch-line pending" id="branchLine">📍 Checking in…</p>
+        <p class="branch-line pending" id="branchLine" data-i18n="checking_in_pending">📍 Checking in…</p>
 
         <!-- LOADING -->
         <div id="loadingState">
@@ -146,58 +180,42 @@
 
         <!-- CLOSED (outside check-in window) -->
         <div id="closedState" class="hidden">
-            <h2>Check-in isn't open right now</h2>
+            <h2 data-i18n="closed_heading">Check-in isn't open right now</h2>
             <p class="sub" id="closedMessage"></p>
-            <button class="link-btn" id="notifyFromClosedBtn">Can't check in? Notify your instructor</button>
+            <button class="link-btn" id="notifyFromClosedBtn" data-i18n="notify_from_closed">Can't check in? Notify your instructor</button>
         </div>
 
         <!-- TOO FAR (device location confirms they're not near the studio) -->
         <div id="tooFarState" class="hidden">
-            <h2>You seem far from the studio</h2>
-            <p class="sub">Your phone's location says you're more than 500m from Bhangra Sway Cremona, so self check-in is blocked. Maybe your browser hasn't shared your location correctly — you can notify your instructor instead.</p>
-            <button class="primary" id="notifyFromTooFarBtn">Request Attendance</button>
+            <h2 data-i18n="too_far_heading">You seem far from the studio</h2>
+            <p class="sub" data-i18n="too_far_body">Your phone's location says you're more than 500m from Bhangra Sway Cremona, so self check-in is blocked. Maybe your browser hasn't shared your location correctly — you can notify your instructor instead.</p>
+            <button class="primary" id="notifyFromTooFarBtn" data-i18n="request_attendance">Request Attendance</button>
         </div>
 
-        <!-- NOTIFY (manual check-in request) -->
-        <div id="notifyState" class="hidden">
-            <h2>Notify your instructor</h2>
-            <p class="sub">Pick your name — your instructor will mark you present manually.</p>
-            <input type="search" id="notifySearch" placeholder="Search your name…" autocomplete="off">
-            <div class="student-list" id="notifyStudentList"></div>
-
-            <div id="notifyPinSection" class="hidden">
-                <p class="sub" style="margin-top:16px;">Enter the last 4 digits of the mobile number on file for <strong id="notifySelectedName"></strong> to confirm it's you.</p>
-                <div class="pin-row">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="0">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="1">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="2">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="3">
-                </div>
-                <p class="error-text" id="notifyPinError"></p>
-                <button class="primary" id="notifyConfirmBtn">Send to Instructor</button>
-            </div>
+        <!-- PHONE ENTRY (the "home" screen — no names are ever listed) -->
+        <div id="phoneState" class="hidden">
+            <h2 id="phoneHeading">Mark yourself present</h2>
+            <p class="sub" id="phoneSub">Enter the mobile number we have on file for you.</p>
+            <input type="tel" id="phoneInput" inputmode="tel" placeholder="e.g. 333 123 4567" autocomplete="off" data-i18n-placeholder="phone_placeholder">
+            <p class="error-text" id="phoneError"></p>
+            <button class="primary" id="phoneContinueBtn" data-i18n="continue">Continue</button>
         </div>
 
-        <!-- PICKER -->
-        <div id="pickerState" class="hidden">
-            <h2>Mark yourself present</h2>
-            <p class="sub">Find your name, then confirm with your PIN.</p>
-            <input type="search" id="nameSearch" placeholder="Search your name…" autocomplete="off">
-            <div class="student-list" id="studentList"></div>
+        <!-- PICK (several members share this phone — one household only) -->
+        <div id="pickState" class="hidden">
+            <h2 data-i18n="who_are_you">Who are you?</h2>
+            <p class="sub" data-i18n="pick_self">More than one member is registered under this number — pick yourself.</p>
+            <div class="student-list" id="memberList"></div>
+            <button class="link-btn" id="pickBackBtn" data-i18n="use_diff_number">← Use a different number</button>
+        </div>
 
-            <div id="pinSection" class="hidden">
-                <p class="sub" style="margin-top:16px;">Enter the last 4 digits of the mobile number on file for <strong id="selectedName"></strong>.</p>
-                <div class="pin-row">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="0">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="1">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="2">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="3">
-                </div>
-                <p class="error-text" id="pinError"></p>
-                <button class="primary" id="confirmBtn">Confirm Check-In</button>
-                <button class="link-btn" id="changeNameBtn">Not you? Choose a different name</button>
-                <button class="link-btn" id="notifyFromPinBtn">Trouble with your PIN? Notify your instructor instead</button>
-            </div>
+        <!-- CONFIRM -->
+        <div id="confirmState" class="hidden">
+            <div class="greeting" id="confirmGreeting"></div>
+            <p class="sub" style="text-align:center;" id="confirmSub"></p>
+            <p class="error-text" id="confirmError"></p>
+            <button class="primary" id="confirmBtn">Confirm Check-In</button>
+            <button class="link-btn" id="confirmBackBtn" data-i18n="not_you">Not you? Use a different number</button>
         </div>
 
         <!-- RESULT -->
@@ -205,7 +223,7 @@
             <div class="result-icon" id="resultIcon"></div>
             <div class="result-title" id="resultTitle"></div>
             <div class="result-sub" id="resultSub"></div>
-            <button class="link-btn" id="startOverBtn">Check in someone else</button>
+            <button class="link-btn" id="startOverBtn" data-i18n="checkin_someone_else">Check in someone else</button>
         </div>
     </div>
 
@@ -220,22 +238,32 @@
         const STUDIO_LNG = 10.0288616;
         const STUDIO_RADIUS_METERS = 500;
 
-        const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-        let students = [];
-        let selectedStudent = null;
+        // ===== Identification =====
+        // No member names ever reach this page up-front: the member types their
+        // phone number and the find_members_by_phone RPC returns only the
+        // member(s) registered under that exact number (their own household).
+        // The phone number is then re-verified inside the database by every
+        // action RPC, so the id alone is never trusted.
+        let mode = 'checkin';            // 'checkin' | 'notify'
+        let notifyReason = '';
+        let enteredPhone = '';
+        let selectedMember = null;
         let awayFromHome = false;
+        // Last-shown dynamic texts, kept as {key, vars} so a language switch
+        // can re-render whatever screen is currently visible.
+        let branchKey = 'checking_in_pending';
+        let closedMsg = null;
 
         function show(id) {
-            ['loadingState', 'closedState', 'tooFarState', 'notifyState', 'pickerState', 'resultState'].forEach((s) => {
+            ['loadingState', 'closedState', 'tooFarState', 'phoneState', 'pickState', 'confirmState', 'resultState'].forEach((s) => {
                 document.getElementById(s).classList.toggle('hidden', s !== id);
             });
 
             // Give the browser's Back button something to land on: the first time
-            // we leave the picker (the "home" screen of this page), push one history
-            // entry. Popping it (Back) re-runs init(), which re-checks everything
-            // fresh and lands back on whichever screen is actually correct right now.
-            if (id === 'pickerState' || id === 'loadingState') {
+            // we leave the phone screen (the "home" screen of this page), push one
+            // history entry. Popping it (Back) re-runs init(), which re-checks
+            // everything fresh and lands back on whichever screen is correct now.
+            if (id === 'phoneState' || id === 'loadingState') {
                 awayFromHome = false;
             } else if (!awayFromHome) {
                 awayFromHome = true;
@@ -250,10 +278,25 @@
             return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
         }
 
-        // ===== Location is now requested automatically on every visit =====
-        // (no opt-in button, no skipping it) — but if it's denied, unsupported, or
-        // times out, we still fall back to the name+PIN flow rather than blocking
-        // check-in entirely, so a bad GPS signal never locks a real student out.
+        // Surnames are shown as initials only — the confirm screen can be read
+        // over a shoulder at the kiosk, and siblings in the household picker
+        // don't need each other's full surnames on screen either.
+        function maskName(full) {
+            const parts = String(full || '').trim().split(/\s+/);
+            if (parts.length <= 1) return parts[0] || '';
+            return parts[0] + ' ' + parts.slice(1).map((p) => p[0].toUpperCase() + '.').join(' ');
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ===== Location is requested automatically on every visit =====
+        // If it's denied, unsupported, or times out, we still fall back to the
+        // phone flow rather than blocking check-in entirely, so a bad GPS
+        // signal never locks a real student out.
         function haversineMeters(lat1, lng1, lat2, lng2) {
             const R = 6371000;
             const toRad = (d) => (d * Math.PI) / 180;
@@ -285,9 +328,8 @@
         async function confirmBranchSilently() {
             const status = await checkLocationStatus();
             const branchLine = document.getElementById('branchLine');
-            branchLine.textContent = status === 'confirmed'
-                ? "📍✓ You're at our Cremona branch"
-                : "📍 You're checking in at our Cremona branch";
+            branchKey = status === 'confirmed' ? 'branch_confirmed' : 'branch_default';
+            branchLine.textContent = t(branchKey);
             branchLine.classList.remove('pending');
             return status;
         }
@@ -301,8 +343,8 @@
                 .single();
 
             if (settingsError || !settings) {
-                document.getElementById('closedMessage').textContent =
-                    'Check-in isn\'t set up yet. Please ask your instructor.';
+                closedMsg = { key: 'not_setup', vars: null };
+                document.getElementById('closedMessage').textContent = t('not_setup');
                 show('closedState');
                 return;
             }
@@ -319,9 +361,8 @@
             const isOpen = activeDays.includes(day) && inWindow;
 
             if (!isOpen) {
-                const dayList = activeDays.map((d) => DAY_NAMES[d]).join(' & ');
-                document.getElementById('closedMessage').textContent =
-                    `Check-in is open ${dayList}, ${formatTime(settings.start_time)} - ${formatTime(settings.end_time)}. Come back then!`;
+                closedMsg = { key: 'closed_msg', days: activeDays, start: settings.start_time, end: settings.end_time };
+                renderClosedMessage();
                 show('closedState');
                 return;
             }
@@ -332,165 +373,186 @@
                 return;
             }
 
-            const ok = await loadStudents();
-            if (!ok) {
-                document.getElementById('closedMessage').textContent = 'Something went wrong loading the student list (' + lastStudentsError + '). Please ask your instructor.';
-                show('closedState');
+            startIdentify('checkin', '');
+        }
+
+        function renderClosedMessage() {
+            if (!closedMsg) return;
+            if (closedMsg.key === 'not_setup') {
+                document.getElementById('closedMessage').textContent = t('not_setup');
+                return;
+            }
+            const dayList = closedMsg.days.map((d) => tDay(d)).join(' & ');
+            document.getElementById('closedMessage').textContent = t('closed_msg', {
+                days: dayList,
+                start: formatTime(closedMsg.start),
+                end: formatTime(closedMsg.end)
+            });
+        }
+
+        // Sets the phone screen's mode-dependent texts (also re-run on language
+        // switch, without clearing what the member already typed).
+        function renderIdentifyTexts() {
+            document.getElementById('phoneHeading').textContent = mode === 'notify'
+                ? t('notify_heading')
+                : t('mark_yourself');
+            document.getElementById('phoneSub').textContent = mode === 'notify'
+                ? t('enter_phone_notify')
+                : t('enter_phone');
+        }
+
+        function startIdentify(newMode, reason) {
+            mode = newMode;
+            notifyReason = reason || '';
+            selectedMember = null;
+
+            renderIdentifyTexts();
+            document.getElementById('phoneInput').value = '';
+            document.getElementById('phoneError').textContent = '';
+            show('phoneState');
+            document.getElementById('phoneInput').focus();
+        }
+
+        async function handlePhoneContinue() {
+            const phoneError = document.getElementById('phoneError');
+            phoneError.textContent = '';
+
+            const raw = document.getElementById('phoneInput').value;
+            const digits = raw.replace(/\D/g, '');
+            if (digits.length < 9) {
+                phoneError.textContent = t('phone_invalid');
                 return;
             }
 
-            show('pickerState');
-            renderList('studentList', '', selectStudent);
-        }
+            const btn = document.getElementById('phoneContinueBtn');
+            btn.disabled = true;
+            btn.textContent = t('searching');
 
-        let lastStudentsError = '';
+            const { data: result, error } = await supabaseClient
+                .rpc('find_members_by_phone', { p_phone: raw });
 
-        async function loadStudents() {
-            if (students.length > 0) return true;
-
-            // students_public is a view exposing only id / name / parent name /
-            // has_pin — phone numbers never reach the browser. The PIN itself is
-            // verified inside the database by the check-in RPCs.
-            const { data: studentsData, error } = await supabaseClient
-                .from('students_public')
-                .select('*');
+            btn.disabled = false;
+            btn.textContent = t('continue');
 
             if (error) {
-                lastStudentsError = error.message || String(error);
-                return false;
-            }
-
-            students = (studentsData || []).map((s) => ({
-                id: s.id,
-                name: s.name || '',
-                parentName: s.parentname ?? '',
-                hasPin: !!s.has_pin
-            }));
-
-            lastStudentsError = students.length === 0
-                ? 'Query succeeded but returned 0 rows — is the students_public view from security_lockdown.sql in place?'
-                : '';
-            return true;
-        }
-
-        function renderList(containerId, query, onSelect) {
-            const list = document.getElementById(containerId);
-            const q = query.trim().toLowerCase();
-            const matches = q
-                ? students.filter((s) => s.name.toLowerCase().includes(q) || s.parentName.toLowerCase().includes(q))
-                : students;
-
-            list.innerHTML = '';
-            if (matches.length === 0) {
-                list.innerHTML = students.length === 0
-                    ? `<div class="empty-note">No student list loaded.<br><span style="font-size:0.8em;">Reason: ${escapeHtml(lastStudentsError || 'unknown')}</span></div>`
-                    : '<div class="empty-note">No matching student. Check the spelling?</div>';
+                phoneError.textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
                 return;
             }
 
-            matches.slice(0, 30).forEach((s) => {
+            if (result?.status !== 'ok' || !Array.isArray(result.members) || result.members.length === 0) {
+                phoneError.textContent = t('phone_not_found');
+                return;
+            }
+
+            enteredPhone = raw;
+            if (result.members.length === 1) {
+                selectMember(result.members[0]);
+            } else {
+                renderMemberList(result.members);
+                show('pickState');
+            }
+        }
+
+        function renderMemberList(members) {
+            const list = document.getElementById('memberList');
+            list.innerHTML = '';
+            members.forEach((m) => {
                 const row = document.createElement('button');
                 row.type = 'button';
                 row.className = 'student-row';
-                row.innerHTML = `<div class="name">${escapeHtml(s.name)}</div>` +
-                    (s.parentName ? `<div class="parent">Parent: ${escapeHtml(s.parentName)}</div>` : '');
-                row.addEventListener('click', () => onSelect(s));
+                row.innerHTML = `<div class="name">${escapeHtml(maskName(m.name))}</div>`;
+                row.addEventListener('click', () => selectMember(m));
                 list.appendChild(row);
             });
         }
 
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
+        function renderConfirmTexts() {
+            if (!selectedMember) return;
+            document.getElementById('confirmGreeting').textContent = t('greeting', { name: maskName(selectedMember.name) });
+            document.getElementById('confirmSub').textContent = mode === 'notify'
+                ? t('send_request_q')
+                : t('ready_to_mark');
+            document.getElementById('confirmBtn').textContent = mode === 'notify'
+                ? t('send_to_instructor')
+                : t('confirm_checkin');
         }
 
-        function selectStudent(student) {
-            selectedStudent = student;
-
-            document.getElementById('selectedName').textContent = student.name;
-            document.getElementById('pinSection').classList.remove('hidden');
-            // No phone digits on file = no PIN to check against — say so up
-            // front instead of letting the confirm attempt fail.
-            document.getElementById('pinError').textContent = student.hasPin
-                ? ''
-                : "We don't have enough phone digits on file for you — please notify your instructor instead.";
-            clearPinBoxes('pinSection');
-            focusFirstPinBox('pinSection');
+        function selectMember(member) {
+            selectedMember = member;
+            renderConfirmTexts();
+            document.getElementById('confirmError').textContent = '';
+            show('confirmState');
         }
 
-        function clearPinBoxes(containerId) {
-            document.querySelectorAll(`#${containerId} .pin-box`).forEach((box) => { box.value = ''; });
-        }
-
-        function getEnteredPin(containerId) {
-            return Array.from(document.querySelectorAll(`#${containerId} .pin-box`)).map((b) => b.value).join('');
-        }
-
-        function focusFirstPinBox(containerId) {
-            document.querySelector(`#${containerId} .pin-box[data-pin-index="0"]`).focus();
-        }
-
-        function setupPinBoxes(containerId) {
-            const boxes = Array.from(document.querySelectorAll(`#${containerId} .pin-box`));
-            boxes.forEach((box, i) => {
-                box.addEventListener('input', () => {
-                    box.value = box.value.replace(/\D/g, '').slice(0, 1);
-                    if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
-                });
-                box.addEventListener('keydown', (e) => {
-                    if (e.key === 'Backspace' && !box.value && i > 0) boxes[i - 1].focus();
-                });
-            });
-        }
-
-        // The PIN is verified INSIDE the database (checkin_self RPC, security
-        // definer): this page never sees any phone number, and the RPC also
-        // re-enforces the check-in window and records today's date in the
-        // studio's timezone (Europe/Rome) — not the browser's UTC date.
+        // The phone number is re-verified INSIDE the database (security definer
+        // RPCs): this page never sees anyone's stored phone number, and the
+        // check-in RPC also re-enforces the check-in window and records today's
+        // date in the studio's timezone (Europe/Rome) — not the browser's UTC date.
         async function handleConfirm() {
-            const pinError = document.getElementById('pinError');
-            pinError.textContent = '';
+            if (!selectedMember) return;
+            const confirmError = document.getElementById('confirmError');
+            confirmError.textContent = '';
 
-            if (!selectedStudent) return;
+            const btn = document.getElementById('confirmBtn');
+            btn.disabled = true;
+            btn.textContent = mode === 'notify' ? t('sending') : t('checking_in_btn');
 
-            const enteredPin = getEnteredPin('pinSection');
-            if (enteredPin.length < 4) {
-                pinError.textContent = 'Enter all 4 digits.';
+            if (mode === 'notify') {
+                await submitCheckinRequest(selectedMember, notifyReason);
+                btn.disabled = false;
                 return;
             }
 
-            const confirmBtn = document.getElementById('confirmBtn');
-            confirmBtn.disabled = true;
-            confirmBtn.textContent = 'Checking in…';
-
             const { data: status, error } = await supabaseClient
-                .rpc('checkin_self', { p_student_id: selectedStudent.id, p_pin: enteredPin });
+                .rpc('checkin_self_by_phone', { p_student_id: selectedMember.id, p_phone: enteredPhone });
 
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm Check-In';
+            btn.disabled = false;
+            btn.textContent = t('confirm_checkin');
 
             if (error) {
-                pinError.textContent = 'Something went wrong. Please try again or ask your instructor. (' + (error.message || error) + ')';
+                confirmError.textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
                 return;
             }
 
             if (status === 'checked_in') {
-                showResult('✓', "You're checked in!", `See you in class, ${selectedStudent.name}.`);
+                showResult('✓', t('checked_in_title'), t('see_you_in_class', { name: maskName(selectedMember.name) }));
             } else if (status === 'already') {
-                showResult('✓', 'Already checked in', `${selectedStudent.name}, you're already marked present today.`);
-            } else if (status === 'bad_pin') {
-                pinError.textContent = 'Incorrect PIN. Please try again.';
-                clearPinBoxes('pinSection');
-                focusFirstPinBox('pinSection');
-            } else if (status === 'no_phone') {
-                pinError.textContent = "We don't have enough phone digits on file for you — please notify your instructor instead.";
+                showResult('✓', t('already_title'), t('already_sub', { name: maskName(selectedMember.name) }));
             } else if (status === 'closed') {
                 // The server-side window check disagrees with this device's clock.
                 init();
             } else {
-                pinError.textContent = 'Something went wrong. Please try again or ask your instructor.';
+                confirmError.textContent = t('something_wrong');
             }
+        }
+
+        // Requests are always reviewed by a human (the instructor taps "Mark
+        // Present" per name), and the RPC collapses duplicate same-day requests
+        // so nobody can spam.
+        async function submitCheckinRequest(member, reason) {
+            const { data: status, error } = await supabaseClient
+                .rpc('request_manual_checkin_by_phone', {
+                    p_student_id: member.id,
+                    p_phone: enteredPhone,
+                    p_reason: reason || 'Could not complete self check-in'
+                });
+
+            if (error) {
+                showResult('⚠️', t('notify_failed'), t('try_again_or_ask') + ' (' + (error.message || error) + ')');
+                return;
+            }
+
+            if (status === 'already') {
+                showResult('✓', t('already_title'), t('already_marked_sub', { name: maskName(member.name) }));
+                return;
+            }
+
+            if (status !== 'sent') {
+                showResult('⚠️', t('notify_failed'), t('try_again_or_ask'));
+                return;
+            }
+
+            showResult('📨', t('instructor_notified'), t('will_mark_manually', { name: maskName(member.name) }));
         }
 
         function showResult(icon, title, sub) {
@@ -500,108 +562,43 @@
             show('resultState');
         }
 
-        // The RPC checks the PIN server-side; a wrong/unverifiable PIN still
-        // goes through but is flagged "(PIN not verified)" on the instructor's
-        // list — these requests are always reviewed by a human anyway, and the
-        // RPC collapses duplicate same-day requests so nobody can spam.
-        async function submitCheckinRequest(student, pin, reason) {
-            const { data: status, error } = await supabaseClient
-                .rpc('request_manual_checkin', { p_student_id: student.id, p_pin: pin || '', p_reason: reason });
-
-            if (error) {
-                showResult('⚠️', 'Could not send notification', `Please try again, or ask your instructor directly. (${error.message || error})`);
-                return;
-            }
-
-            if (status === 'already') {
-                showResult('✓', 'Already checked in', `${student.name}, your attendance was already marked for today.`);
-                return;
-            }
-
-            showResult('📨', 'Instructor notified', `${student.name}, your instructor will mark you present manually.`);
-        }
-
-        let notifySelectedStudent = null;
-
-        async function showNotifyState() {
-            show('notifyState');
-            notifySelectedStudent = null;
-            document.getElementById('notifyPinSection').classList.add('hidden');
-            document.getElementById('notifyStudentList').innerHTML = '<div class="empty-note">Loading…</div>';
-            const ok = await loadStudents();
-            if (!ok) {
-                document.getElementById('notifyStudentList').innerHTML =
-                    `<div class="empty-note">Could not load the student list.<br><span style="font-size:0.8em;">Reason: ${escapeHtml(lastStudentsError)}</span></div>`;
-                return;
-            }
-            renderList('notifyStudentList', '', selectNotifyStudent);
-        }
-
-        // Picking a name here doesn't submit right away — it still asks for the
-        // same PIN as self check-in. A request whose PIN doesn't verify is still
-        // delivered, but flagged "(PIN not verified)" on the instructor's list.
-        function selectNotifyStudent(student) {
-            notifySelectedStudent = student;
-            document.getElementById('notifySelectedName').textContent = student.name;
-            document.getElementById('notifyPinSection').classList.remove('hidden');
-            document.getElementById('notifyPinError').textContent = '';
-            clearPinBoxes('notifyPinSection');
-            focusFirstPinBox('notifyPinSection');
-        }
-
-        async function handleNotifyConfirm() {
-            const pinError = document.getElementById('notifyPinError');
-            pinError.textContent = '';
-            if (!notifySelectedStudent) return;
-
-            const enteredPin = getEnteredPin('notifyPinSection');
-            if (enteredPin.length < 4) {
-                pinError.textContent = 'Enter all 4 digits.';
-                return;
-            }
-
-            const notifyConfirmBtn = document.getElementById('notifyConfirmBtn');
-            notifyConfirmBtn.disabled = true;
-            notifyConfirmBtn.textContent = 'Sending…';
-            await submitCheckinRequest(notifySelectedStudent, enteredPin, 'Could not complete self check-in');
-            notifyConfirmBtn.disabled = false;
-            notifyConfirmBtn.textContent = 'Send to Instructor';
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
-            setupPinBoxes('pinSection');
-            setupPinBoxes('notifyPinSection');
-            document.getElementById('nameSearch').addEventListener('input', (e) => renderList('studentList', e.target.value, selectStudent));
+            document.getElementById('phoneContinueBtn').addEventListener('click', handlePhoneContinue);
+            document.getElementById('phoneInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') handlePhoneContinue();
+            });
             document.getElementById('confirmBtn').addEventListener('click', handleConfirm);
-            document.getElementById('changeNameBtn').addEventListener('click', () => {
-                selectedStudent = null;
-                document.getElementById('pinSection').classList.add('hidden');
-                document.getElementById('nameSearch').focus();
-            });
-            document.getElementById('notifyFromClosedBtn').addEventListener('click', showNotifyState);
-            document.getElementById('notifyFromTooFarBtn').addEventListener('click', showNotifyState);
-            document.getElementById('notifyFromPinBtn').addEventListener('click', () => {
-                if (selectedStudent) submitCheckinRequest(selectedStudent, getEnteredPin('pinSection'), "PIN didn't match");
-            });
-            document.getElementById('notifySearch').addEventListener('input', (e) =>
-                renderList('notifyStudentList', e.target.value, selectNotifyStudent)
+            document.getElementById('confirmBackBtn').addEventListener('click', () => startIdentify(mode, notifyReason));
+            document.getElementById('pickBackBtn').addEventListener('click', () => startIdentify(mode, notifyReason));
+            document.getElementById('notifyFromClosedBtn').addEventListener('click', () =>
+                startIdentify('notify', 'Check-in window closed on their device')
             );
-            document.getElementById('notifyConfirmBtn').addEventListener('click', handleNotifyConfirm);
+            document.getElementById('notifyFromTooFarBtn').addEventListener('click', () =>
+                startIdentify('notify', 'Device location was far from the studio')
+            );
             document.getElementById('startOverBtn').addEventListener('click', () => {
-                selectedStudent = null;
-                document.getElementById('nameSearch').value = '';
-                document.getElementById('pinSection').classList.add('hidden');
                 // Re-run the full check (window + location) rather than jumping
-                // straight to the picker — otherwise someone routed to the notify
-                // flow for being too far could tap this and land in self-check-in
-                // with zero re-verification.
+                // straight to the phone screen — otherwise someone routed to the
+                // notify flow for being too far could tap this and land in
+                // self-check-in with zero re-verification.
+                selectedMember = null;
                 init();
             });
             window.addEventListener('popstate', () => {
-                selectedStudent = null;
-                document.getElementById('pinSection').classList.add('hidden');
+                selectedMember = null;
                 init();
             });
+
+            // Language switch: statics are re-applied by i18n.js; refresh the
+            // dynamic (state-dependent) texts of whatever screen is showing,
+            // without resetting the flow or clearing the typed number.
+            window.onLangChange = () => {
+                document.getElementById('branchLine').textContent = t(branchKey);
+                renderIdentifyTexts();
+                renderConfirmTexts();
+                renderClosedMessage();
+            };
+
             init();
         });
     </script>

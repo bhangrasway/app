@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your Report - Bhangra Sway Cremona</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <script src="i18n.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Shared trust-based membership engine (same file the admin dashboard
          loads, so this report can never drift from the admin's math) -->
@@ -18,8 +23,9 @@
             font-family: 'Inter', 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
-            align-items: flex-start;
-            justify-content: center;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
             padding: 24px 14px;
         }
         .card {
@@ -74,23 +80,17 @@
             border-color: #667eea;
         }
         .student-row .name { font-weight: 600; color: #2c3e50; }
-        .student-row .parent { font-size: 0.82em; color: #888; margin-top: 2px; }
         .empty-note { color: #888; text-align: center; padding: 20px 0; }
-        .pin-row {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin: 18px 0;
-        }
-        .pin-box {
-            width: 52px;
-            height: 60px;
-            text-align: center;
-            font-size: 1.6em;
-            border: 2px solid #ddd;
+        input[type="tel"] {
+            width: 100%;
+            padding: 14px 14px;
+            font-size: 18px;
+            letter-spacing: 1px;
+            border: 1px solid #ddd;
             border-radius: 10px;
+            margin-bottom: 12px;
         }
-        .pin-box:focus { border-color: #667eea; outline: none; }
+        input[type="tel"]:focus { border-color: #667eea; outline: none; }
         button.primary {
             width: 100%;
             padding: 15px;
@@ -122,6 +122,38 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .hidden { display: none !important; }
+        .top-bar {
+            width: 100%;
+            max-width: 440px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .lang-picker { display: flex; gap: 6px; }
+        .lang-btn {
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.45);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.78em;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .lang-btn.active { background: #fff; color: #5b3fa0; border-color: #fff; }
+        .top-home-btn {
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.45);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.78em;
+            padding: 6px 12px;
+            border-radius: 999px;
+            text-decoration: none;
+        }
 
         .report-section {
             margin-bottom: 20px;
@@ -201,6 +233,10 @@
     </style>
 </head>
 <body>
+    <div class="top-bar">
+        <div class="lang-picker" id="langPicker"></div>
+        <a class="top-home-btn" href="home.html">🏠 <span data-i18n="home">Home</span></a>
+    </div>
     <div class="card">
         <div class="logo-row">
             <img src="logo.png" alt="Bhangra Sway Logo">
@@ -214,54 +250,50 @@
 
         <!-- ERROR -->
         <div id="errorState" class="hidden">
-            <h2>Something went wrong</h2>
+            <h2 data-i18n="error_heading">Something went wrong</h2>
             <p class="sub" id="errorMessage"></p>
         </div>
 
-        <!-- PICKER -->
-        <div id="pickerState" class="hidden">
-            <h2>View Your Report</h2>
-            <p class="sub">Find your name, then confirm with your PIN.</p>
-            <input type="search" id="nameSearch" placeholder="Search your name…" autocomplete="off">
-            <div class="student-list" id="studentList"></div>
+        <!-- PHONE ENTRY (the "home" screen — no names are ever listed) -->
+        <div id="phoneState" class="hidden">
+            <h2 data-i18n="view_report">View Your Report</h2>
+            <p class="sub" data-i18n="enter_phone">Enter the mobile number we have on file for you.</p>
+            <input type="tel" id="phoneInput" inputmode="tel" placeholder="e.g. 333 123 4567" autocomplete="off" data-i18n-placeholder="phone_placeholder">
+            <p class="error-text" id="phoneError"></p>
+            <button class="primary" id="phoneContinueBtn" data-i18n="continue">Continue</button>
+        </div>
 
-            <div id="pinSection" class="hidden">
-                <p class="sub" style="margin-top:16px;">Enter the last 4 digits of the mobile number on file for <strong id="selectedName"></strong>.</p>
-                <div class="pin-row">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="0">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="1">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="2">
-                    <input class="pin-box" type="tel" inputmode="numeric" maxlength="1" data-pin-index="3">
-                </div>
-                <p class="error-text" id="pinError"></p>
-                <button class="primary" id="confirmBtn">View Report</button>
-                <button class="link-btn" id="changeNameBtn">Not you? Choose a different name</button>
-            </div>
+        <!-- PICK (several members share this phone — one household only) -->
+        <div id="pickState" class="hidden">
+            <h2 data-i18n="who_are_you">Who are you?</h2>
+            <p class="sub" data-i18n="pick_self">More than one member is registered under this number — pick yourself.</p>
+            <div class="student-list" id="memberList"></div>
+            <button class="link-btn" id="pickBackBtn" data-i18n="use_diff_number">← Use a different number</button>
         </div>
 
         <!-- REPORT -->
         <div id="reportState" class="hidden">
-            <h2>Hi, <span id="reportStudentName"></span> 👋</h2>
-            <p class="sub">Here's your Bhangra progress report.</p>
+            <h2><span data-i18n="report_hi">Hi,</span> <span id="reportStudentName"></span> 👋</h2>
+            <p class="sub" data-i18n="progress_intro">Here's your Bhangra progress report.</p>
 
             <div class="report-section">
-                <h3>📅 Attendance (last 2 months)</h3>
-                <p><strong id="reportClassCount"></strong> classes attended</p>
+                <h3 data-i18n="attendance_heading">📅 Attendance (last 2 months)</h3>
+                <p><strong id="reportClassCount"></strong> <span data-i18n="classes_attended_suffix">classes attended</span></p>
                 <div class="chip-row" id="reportAttendanceChips"></div>
                 <!-- Launch note: auto-hides from 1 September 2026 -->
-                <p id="launchNote" style="display:none; margin:8px 0 0; font-size:0.8em; color:#888;">ℹ️ Classes before June 2026 are not recorded here.</p>
+                <p id="launchNote" style="display:none; margin:8px 0 0; font-size:0.8em; color:#888;" data-i18n="launch_note">ℹ️ Classes before June 2026 are not recorded here.</p>
                 <script>if (new Date() < new Date('2026-09-01T00:00:00')) document.getElementById('launchNote').style.display = 'block';</script>
             </div>
 
             <div class="report-section">
-                <h3>💳 Membership Status</h3>
-                <p style="color:#888; font-size:0.8em; margin:0 0 8px;">ℹ️ Don't worry — every cycle guarantees you 4 classes. If you miss some, your plan automatically extends (up to 2 months) until you get all 4.</p>
+                <h3 data-i18n="membership_heading">💳 Membership Status</h3>
+                <p style="color:#888; font-size:0.8em; margin:0 0 8px;" data-i18n="guarantee_note">ℹ️ Don't worry — every cycle guarantees you 4 classes. If you miss some, your plan automatically extends (up to 2 months) until you get all 4.</p>
                 <span class="status-badge" id="reportStatusBadge"></span>
                 <p id="reportOverdueNote" class="hidden" style="background:#fdecea; color:#c0392b; padding:8px 12px; border-radius:8px; font-size:0.85em; font-weight:600; margin-top:8px;"></p>
 
                 <div class="cycle-card">
                     <div class="cycle-card-top">
-                        <span class="cycle-label">Current Cycle</span>
+                        <span class="cycle-label" data-i18n="current_cycle">Current Cycle</span>
                         <span class="pill" id="reportCurrentCyclePill"></span>
                     </div>
                     <div class="cycle-dates" id="reportCurrentCycleDates"></div>
@@ -272,7 +304,7 @@
                 </div>
                 <div class="cycle-card" id="reportPreviousCycleRow">
                     <div class="cycle-card-top">
-                        <span class="cycle-label">Previous Cycle</span>
+                        <span class="cycle-label" data-i18n="previous_cycle">Previous Cycle</span>
                         <span class="pill" id="reportPreviousCyclePill"></span>
                     </div>
                     <div class="cycle-dates" id="reportPreviousCycleDates"></div>
@@ -287,22 +319,22 @@
             </div>
 
             <div class="report-section">
-                <h3>💶 Payments</h3>
+                <h3 data-i18n="payments_heading">💶 Payments</h3>
                 <div class="stat-grid">
                     <div class="stat-box">
                         <div class="stat-value" id="reportLastPaymentAmount">—</div>
-                        <div class="stat-label">Last Payment</div>
+                        <div class="stat-label" data-i18n="last_payment">Last Payment</div>
                         <div class="stat-sub" id="reportLastPaymentSub"></div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-value" id="reportTotalPendingAmount">—</div>
-                        <div class="stat-label">Total Pending</div>
+                        <div class="stat-label" data-i18n="total_pending">Total Pending</div>
                         <div class="stat-sub" id="reportTotalPendingSub"></div>
                     </div>
                 </div>
             </div>
 
-            <button class="link-btn" id="reportStartOverBtn">Check someone else's report</button>
+            <button class="link-btn" id="reportStartOverBtn" data-i18n="someone_else_report">Check someone else's report</button>
         </div>
     </div>
 
@@ -312,12 +344,11 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        let students = [];
-        let selectedStudent = null;
-        let lastStudentsError = '';
+        let enteredPhone = '';
+        let selectedMember = null;
 
         function show(id) {
-            ['loadingState', 'errorState', 'pickerState', 'reportState'].forEach((s) => {
+            ['loadingState', 'errorState', 'phoneState', 'pickState', 'reportState'].forEach((s) => {
                 document.getElementById(s).classList.toggle('hidden', s !== id);
             });
         }
@@ -328,137 +359,96 @@
             return div.innerHTML;
         }
 
-        // ===== Student identification (same pattern as checkin.html) =====
-        // students_public exposes only id / name / parent name / has_pin — no
-        // phone numbers, no payment data. Everything else arrives via the
-        // get_student_report RPC only AFTER the PIN is verified in the database.
-        async function loadStudents() {
-            if (students.length > 0) return true;
-
-            const { data: studentsData, error } = await supabaseClient
-                .from('students_public')
-                .select('*');
-
-            if (error) {
-                lastStudentsError = error.message || String(error);
-                return false;
-            }
-
-            students = (studentsData || []).map((s) => ({
-                id: s.id,
-                name: s.name || '',
-                parentName: s.parentname ?? '',
-                hasPin: !!s.has_pin
-            }));
-
-            lastStudentsError = students.length === 0
-                ? 'Query succeeded but returned 0 rows — is the students_public view from security_lockdown.sql in place?'
-                : '';
-            return true;
+        // Surname shown as an initial only in the household picker — siblings
+        // sharing a phone don't need each other's full surnames on screen.
+        function maskName(full) {
+            const parts = String(full || '').trim().split(/\s+/);
+            if (parts.length <= 1) return parts[0] || '';
+            return parts[0] + ' ' + parts.slice(1).map((p) => p[0].toUpperCase() + '.').join(' ');
         }
 
-        function renderList(containerId, query, onSelect) {
-            const list = document.getElementById(containerId);
-            const q = query.trim().toLowerCase();
-            const matches = q
-                ? students.filter((s) => s.name.toLowerCase().includes(q) || s.parentName.toLowerCase().includes(q))
-                : students;
+        // ===== Member identification (same pattern as checkin.html) =====
+        // No member names ever reach this page up-front: the member types their
+        // phone number and the find_members_by_phone RPC returns only the
+        // member(s) registered under that exact number (their own household).
+        // The report data itself arrives via get_student_report_by_phone, which
+        // re-verifies id + phone together inside the database.
+        async function handlePhoneContinue() {
+            const phoneError = document.getElementById('phoneError');
+            phoneError.textContent = '';
 
-            list.innerHTML = '';
-            if (matches.length === 0) {
-                list.innerHTML = students.length === 0
-                    ? `<div class="empty-note">No student list loaded.<br><span style="font-size:0.8em;">Reason: ${escapeHtml(lastStudentsError || 'unknown')}</span></div>`
-                    : '<div class="empty-note">No matching student. Check the spelling?</div>';
+            const raw = document.getElementById('phoneInput').value;
+            const digits = raw.replace(/\D/g, '');
+            if (digits.length < 9) {
+                phoneError.textContent = t('phone_invalid');
                 return;
             }
 
-            matches.slice(0, 30).forEach((s) => {
+            const btn = document.getElementById('phoneContinueBtn');
+            btn.disabled = true;
+            btn.textContent = t('searching');
+
+            const { data: result, error } = await supabaseClient
+                .rpc('find_members_by_phone', { p_phone: raw });
+
+            btn.disabled = false;
+            btn.textContent = t('continue');
+
+            if (error) {
+                phoneError.textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
+                return;
+            }
+
+            if (result?.status !== 'ok' || !Array.isArray(result.members) || result.members.length === 0) {
+                phoneError.textContent = t('phone_not_found');
+                return;
+            }
+
+            enteredPhone = raw;
+            if (result.members.length === 1) {
+                loadReport(result.members[0]);
+            } else {
+                renderMemberList(result.members);
+                show('pickState');
+            }
+        }
+
+        function renderMemberList(members) {
+            const list = document.getElementById('memberList');
+            list.innerHTML = '';
+            members.forEach((m) => {
                 const row = document.createElement('button');
                 row.type = 'button';
                 row.className = 'student-row';
-                row.innerHTML = `<div class="name">${escapeHtml(s.name)}</div>` +
-                    (s.parentName ? `<div class="parent">Parent: ${escapeHtml(s.parentName)}</div>` : '');
-                row.addEventListener('click', () => onSelect(s));
+                row.innerHTML = `<div class="name">${escapeHtml(maskName(m.name))}</div>`;
+                row.addEventListener('click', () => loadReport(m));
                 list.appendChild(row);
             });
         }
 
-        function selectStudent(student) {
-            selectedStudent = student;
-            document.getElementById('selectedName').textContent = student.name;
-            document.getElementById('pinSection').classList.remove('hidden');
-            document.getElementById('pinError').textContent = '';
-            clearPinBoxes('pinSection');
-            focusFirstPinBox('pinSection');
+        function backToPhoneEntry(message) {
+            document.getElementById('phoneInput').value = '';
+            document.getElementById('phoneError').textContent = message || '';
+            show('phoneState');
+            document.getElementById('phoneInput').focus();
         }
 
-        function clearPinBoxes(containerId) {
-            document.querySelectorAll(`#${containerId} .pin-box`).forEach((box) => { box.value = ''; });
-        }
+        async function loadReport(member) {
+            selectedMember = member;
+            show('loadingState');
 
-        function getEnteredPin(containerId) {
-            return Array.from(document.querySelectorAll(`#${containerId} .pin-box`)).map((b) => b.value).join('');
-        }
-
-        function focusFirstPinBox(containerId) {
-            document.querySelector(`#${containerId} .pin-box[data-pin-index="0"]`).focus();
-        }
-
-        function setupPinBoxes(containerId) {
-            const boxes = Array.from(document.querySelectorAll(`#${containerId} .pin-box`));
-            boxes.forEach((box, i) => {
-                box.addEventListener('input', () => {
-                    box.value = box.value.replace(/\D/g, '').slice(0, 1);
-                    if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
-                });
-                box.addEventListener('keydown', (e) => {
-                    if (e.key === 'Backspace' && !box.value && i > 0) boxes[i - 1].focus();
-                });
-            });
-        }
-
-        async function handleViewReport() {
-            const pinError = document.getElementById('pinError');
-            pinError.textContent = '';
-            if (!selectedStudent) return;
-
-            if (!selectedStudent.hasPin) {
-                pinError.textContent = "We don't have enough phone digits on file for you — please ask your instructor.";
-                return;
-            }
-
-            const enteredPin = getEnteredPin('pinSection');
-            if (enteredPin.length < 4) {
-                pinError.textContent = 'Enter all 4 digits.';
-                return;
-            }
-
-            const confirmBtn = document.getElementById('confirmBtn');
-            confirmBtn.disabled = true;
-            confirmBtn.textContent = 'Loading…';
-
-            // The PIN is verified inside the database; on success the RPC returns
-            // ONLY this student's profile, attendance, and payment rows.
+            // The phone is re-verified inside the database; on success the RPC
+            // returns ONLY this student's profile, attendance, and payment rows.
             const { data: report, error } = await supabaseClient
-                .rpc('get_student_report', { p_student_id: selectedStudent.id, p_pin: enteredPin });
-
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'View Report';
+                .rpc('get_student_report_by_phone', { p_student_id: member.id, p_phone: enteredPhone });
 
             if (error) {
-                pinError.textContent = 'Could not load your report (' + (error.message || 'unknown error') + '). Please try again.';
-                return;
-            }
-
-            if (report?.status === 'bad_pin') {
-                pinError.textContent = 'Incorrect PIN. Please try again.';
-                clearPinBoxes('pinSection');
-                focusFirstPinBox('pinSection');
+                backToPhoneEntry(t('report_load_failed', { err: error.message || 'unknown error' }));
                 return;
             }
 
             if (report?.status !== 'ok') {
-                pinError.textContent = "We couldn't verify you — please ask your instructor.";
+                backToPhoneEntry(t('verify_failed'));
                 return;
             }
 
@@ -468,7 +458,10 @@
         // ===== Render the report =====
         // All payment/cycle math comes from membership.js — the exact same
         // engine the admin dashboard runs, fed with the rows the RPC returned.
+        let lastReport = null; // kept so a language switch can re-render in place
+
         function renderReport(report) {
+            lastReport = report;
             show('loadingState');
 
             // The RPC's student object carries the profile fields the engine and
@@ -508,7 +501,7 @@
             const chipsEl = document.getElementById('reportAttendanceChips');
             chipsEl.innerHTML = '';
             if (recentDates.length === 0) {
-                chipsEl.innerHTML = '<span class="empty-note">No attendance records</span>';
+                chipsEl.innerHTML = `<span class="empty-note">${t('no_attendance')}</span>`;
             } else {
                 recentDates.forEach((d) => {
                     const dt = new Date(d + 'T00:00:00');
@@ -535,7 +528,7 @@
 
             const badge = document.getElementById('reportStatusBadge');
             badge.className = 'status-badge status-' + paymentStatus.toLowerCase();
-            badge.textContent = paymentStatus === 'PAID' ? '🟢 Active / Paid' : paymentStatus === 'OVERDUE' ? '🔴 Overdue' : '🟡 Payment Pending';
+            badge.textContent = paymentStatus === 'PAID' ? t('badge_paid') : paymentStatus === 'OVERDUE' ? t('badge_overdue') : t('badge_unpaid');
 
             // Fees are collected in advance, so the current cycle counts as due too
             // even before it's "complete" by the attendance rule (that rule only
@@ -552,7 +545,10 @@
             const overdueEl = document.getElementById('reportOverdueNote');
             if (paymentStatus === 'OVERDUE') {
                 overdueEl.classList.remove('hidden');
-                overdueEl.textContent = `🔴 You have ${timeline.owedCycles.length} month${timeline.owedCycles.length > 1 ? 's' : ''} overdue (€${Math.round(timeline.owedCycles.length * (student.monthlyFees || 0))}) — please pay your fees as soon as possible.`;
+                overdueEl.textContent = t('overdue_note', {
+                    months: tCount(timeline.owedCycles.length, 'month_one', 'month_many'),
+                    amount: Math.round(timeline.owedCycles.length * (student.monthlyFees || 0))
+                });
             } else {
                 overdueEl.classList.add('hidden');
             }
@@ -569,7 +565,7 @@
                 const end = showExtended ? cycle.effectiveEnd : cycle.naturalEnd;
                 const base = `${formatDisplayDate(cycle.start)} → ${formatDisplayDate(end)}`;
                 return showExtended
-                    ? `${base} <span style="color:#00796b;font-weight:700;">⏳ extended</span>`
+                    ? `${base} <span style="color:#00796b;font-weight:700;">${t('extended_tag')}</span>`
                     : base;
             }
 
@@ -581,7 +577,7 @@
 
                 const pill = document.getElementById(`report${prefix}CyclePill`);
                 pill.className = 'pill ' + (cycle.paid ? 'pill-paid' : 'pill-unpaid');
-                pill.textContent = cycle.paid ? '✅ Paid' : '❌ Unpaid';
+                pill.textContent = cycle.paid ? t('pill_paid') : t('pill_unpaid');
 
                 const dotsEl = document.getElementById(`report${prefix}Dots`);
                 dotsEl.innerHTML = '';
@@ -590,28 +586,27 @@
                     dot.className = 'dot' + (i < cycle.attended ? ' filled' : '');
                     dotsEl.appendChild(dot);
                 }
-                const carryNote = cycle.carriedIn > 0 ? ` (incl. ${cycle.carriedIn} carried over)` : '';
+                const carryNote = cycle.carriedIn > 0 ? t('carried_note', { n: cycle.carriedIn }) : '';
                 // Some months have 5 weekends, so attended can exceed the 4-class
                 // minimum — there's no cap on how many classes someone can take,
                 // just a floor, so keep the fraction but call out the bonus too.
                 const extra = cycle.attended - AUTO_EXTENSION_CLASS_TARGET;
-                const classesLabel = extra > 0
-                    ? `${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes attended — ${extra} extra class${extra === 1 ? '' : 'es'} gifted! 🎁`
-                    : `${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes attended`;
+                let classesLabel = t('classes_progress', { a: cycle.attended, b: AUTO_EXTENSION_CLASS_TARGET });
+                if (extra > 0) classesLabel += tCount(extra, 'extra_gifted_one', 'extra_gifted_many');
                 document.getElementById(`report${prefix}ClassesText`).textContent = `${classesLabel}${carryNote}`;
             }
 
             if (timeline.awaitingFirstClass) {
-                document.getElementById('reportCurrentCycleDates').textContent = 'Starts on your first class';
+                document.getElementById('reportCurrentCycleDates').textContent = t('starts_first_class');
                 const currentPill = document.getElementById('reportCurrentCyclePill');
                 currentPill.className = 'pill pill-unpaid';
-                currentPill.textContent = '🎁 Demo taken';
+                currentPill.textContent = t('demo_taken_pill');
                 document.getElementById('reportCurrentDots').innerHTML = '';
                 document.getElementById('reportCurrentClassesText').textContent = '';
             } else if (displayCycle) {
                 renderCycleCard('Current', displayCycle, displayCycle === timeline.current);
             } else {
-                document.getElementById('reportCurrentCycleDates').textContent = 'N/A';
+                document.getElementById('reportCurrentCycleDates').textContent = t('na');
                 document.getElementById('reportCurrentCyclePill').textContent = '';
             }
 
@@ -635,18 +630,23 @@
             const extensionEl = document.getElementById('reportExtensionNote');
             if (timeline.awaitingFirstClass) {
                 extensionEl.classList.remove('hidden');
-                extensionEl.textContent = '🎁 Demo class taken — your plan officially starts on your next attended class.';
+                extensionEl.textContent = t('demo_note');
             } else if (autoExt.paused) {
                 extensionEl.classList.remove('hidden');
-                extensionEl.textContent = `⏸ Your plan is paused — ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes will carry over when you return.`;
+                extensionEl.textContent = t('paused_note', { a: autoExt.attendedCount, b: AUTO_EXTENSION_CLASS_TARGET });
             } else if (autoExt.isExtended) {
                 const classesLeft = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - autoExt.attendedCount);
+                const left = tCount(classesLeft, 'more_classes_one', 'more_classes_many');
                 extensionEl.classList.remove('hidden');
-                if (displayCycle && displayCycle.paid) {
-                    extensionEl.textContent = `⏳ No rush — you're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).`;
-                } else {
-                    extensionEl.textContent = `⏳ Your plan cycle will change after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come) — since you're unpaid, please pay as soon as possible.`;
-                }
+                extensionEl.textContent = t(
+                    displayCycle && displayCycle.paid ? 'ext_note_paid' : 'ext_note_unpaid',
+                    {
+                        a: autoExt.attendedCount,
+                        b: AUTO_EXTENSION_CLASS_TARGET,
+                        left,
+                        date: formatDisplayDate(autoExt.effectiveEndDate)
+                    }
+                );
             } else {
                 extensionEl.classList.add('hidden');
             }
@@ -660,7 +660,7 @@
                 document.getElementById('reportLastPaymentSub').textContent = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : '—';
             } else {
                 document.getElementById('reportLastPaymentAmount').textContent = '—';
-                document.getElementById('reportLastPaymentSub').textContent = 'No payments yet';
+                document.getElementById('reportLastPaymentSub').textContent = t('no_payments');
             }
 
             // Total pending stat box (owedCount/totalPendingAmount computed above).
@@ -668,15 +668,20 @@
             totalPendingAmountEl.textContent = `€${Math.round(totalPendingAmount)}`;
             totalPendingAmountEl.className = 'stat-value ' + (owedCount > 0 ? 'negative' : 'positive');
             document.getElementById('reportTotalPendingSub').textContent = owedCount > 0
-                ? `${owedCount} cycle${owedCount > 1 ? 's' : ''} unpaid`
-                : 'All caught up! 🎉';
+                ? tCount(owedCount, 'cycles_unpaid_one', 'cycles_unpaid_many')
+                : t('caught_up');
 
             // When paid up, tell them when they're due again — by date or by class count.
             const nextPaymentEl = document.getElementById('reportNextPayment');
             if (paymentStatus === 'PAID' && displayCycle) {
                 const classesRemaining = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - displayCycle.attended);
                 const nextPayDate = formatDisplayDate(addDaysToDate(displayCycle.effectiveEnd, 1));
-                nextPaymentEl.textContent = `🎉 Congratulations! Your next payment is due after ${nextPayDate}, or after ${classesRemaining} more class${classesRemaining === 1 ? '' : 'es'} attended (${Math.min(displayCycle.attended, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} so far this cycle) — whichever comes first.`;
+                nextPaymentEl.textContent = t('next_payment_note', {
+                    date: nextPayDate,
+                    left: tCount(classesRemaining, 'more_classes_one', 'more_classes_many'),
+                    a: Math.min(displayCycle.attended, AUTO_EXTENSION_CLASS_TARGET),
+                    b: AUTO_EXTENSION_CLASS_TARGET
+                });
             } else {
                 nextPaymentEl.textContent = '';
             }
@@ -684,36 +689,29 @@
             show('reportState');
         }
 
-        // ===== Main flow =====
-        async function init() {
-            const ok = await loadStudents();
-            if (!ok) {
-                document.getElementById('errorMessage').textContent =
-                    'Could not load the student list (' + lastStudentsError + '). Please ask your instructor.';
-                show('errorState');
-                return;
-            }
-            show('pickerState');
-            renderList('studentList', '', selectStudent);
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
-            setupPinBoxes('pinSection');
-            document.getElementById('nameSearch').addEventListener('input', (e) => renderList('studentList', e.target.value, selectStudent));
-            document.getElementById('confirmBtn').addEventListener('click', handleViewReport);
-            document.getElementById('changeNameBtn').addEventListener('click', () => {
-                selectedStudent = null;
-                document.getElementById('pinSection').classList.add('hidden');
-                document.getElementById('nameSearch').focus();
+            document.getElementById('phoneContinueBtn').addEventListener('click', handlePhoneContinue);
+            document.getElementById('phoneInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') handlePhoneContinue();
             });
+            document.getElementById('pickBackBtn').addEventListener('click', () => backToPhoneEntry(''));
             document.getElementById('reportStartOverBtn').addEventListener('click', () => {
-                selectedStudent = null;
-                document.getElementById('nameSearch').value = '';
-                document.getElementById('pinSection').classList.add('hidden');
-                show('pickerState');
-                renderList('studentList', '', selectStudent);
+                selectedMember = null;
+                enteredPhone = '';
+                lastReport = null;
+                backToPhoneEntry('');
             });
-            init();
+
+            // Language switch: statics are re-applied by i18n.js; if a report is
+            // on screen, re-render it in place so every dynamic sentence (badge,
+            // notes, cycle labels) switches too.
+            window.onLangChange = () => {
+                if (lastReport && !document.getElementById('reportState').classList.contains('hidden')) {
+                    renderReport(lastReport);
+                }
+            };
+
+            backToPhoneEntry('');
         });
     </script>
 </body>
