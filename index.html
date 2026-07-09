@@ -637,7 +637,7 @@
             <h1>Bhangra Sway Cremona</h1>
             <p class="tagline" data-i18n="hero_tagline">Feel the Rhythm of Punjab, Right Here in Cremona</p>
             <div class="hero-ctas">
-                <a class="btn btn-primary" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="trial_btn">Book Your Free Trial</span></a>
+                <a class="btn btn-primary" data-wa-text="Hi! I'd like to try a free Bhangra class 🙌" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="trial_btn">Book Your Free Trial</span></a>
                 <a class="btn btn-secondary" href="#classes" data-i18n="nav_classes">Classes</a>
             </div>
         </div>
@@ -706,7 +706,7 @@
                 </div>
             </div>
             <div class="services-cta-wrap">
-                <a class="btn btn-primary" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20ask%20about%20your%20other%20services" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="services_cta">Ask About This Service</span></a>
+                <a class="btn btn-primary" data-wa-text="Hi! I'd like to ask about your other services 🙌" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20ask%20about%20your%20other%20services" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="services_cta">Ask About This Service</span></a>
             </div>
         </div>
     </section>
@@ -722,7 +722,7 @@
         <div class="section-inner">
             <h2 class="section-heading" data-i18n="trial_heading">New Here? Try a Class for Free</h2>
             <p data-i18n="trial_body">Every new dancer gets a free demo class, no strings attached. Message us on WhatsApp and we'll set it up.</p>
-            <a class="btn btn-primary" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="trial_btn">Book Your Free Trial</span></a>
+            <a class="btn btn-primary" data-wa-text="Hi! I'd like to try a free Bhangra class 🙌" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="trial_btn">Book Your Free Trial</span></a>
         </div>
     </section>
 
@@ -798,10 +798,19 @@
         </div>
     </footer>
 
-    <a class="wa-float" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class" target="_blank" rel="noopener" aria-label="Chat on WhatsApp"><svg class="icon"><use href="#icon-whatsapp"/></svg></a>
+    <a class="wa-float" data-wa-text="Hi! I'd like to try a free Bhangra class 🙌" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class" target="_blank" rel="noopener" aria-label="Chat on WhatsApp"><svg class="icon"><use href="#icon-whatsapp"/></svg></a>
 
     <script>
         document.getElementById('footerYear').textContent = new Date().getFullYear();
+
+        // WhatsApp CTA links: build the URL the same way admin.html's
+        // openWhatsApp() does (raw message + encodeURIComponent on
+        // api.whatsapp.com/send), so emoji survive on every client. The
+        // static wa.me href stays as a plain-text fallback if JS is off.
+        const WA_PHONE = '393445667033';
+        document.querySelectorAll('a[data-wa-text]').forEach(a => {
+            a.href = `https://api.whatsapp.com/send?phone=${WA_PHONE}&text=${encodeURIComponent(a.dataset.waText)}`;
+        });
 
         // Mobile nav toggle
         const navToggle = document.getElementById('navToggle');
