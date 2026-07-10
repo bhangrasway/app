@@ -679,10 +679,18 @@
             const nextPaymentEl = document.getElementById('reportNextPayment');
             const advanceCount = timeline.unmatchedRecords.length;
             if (paymentStatus === 'PAID' && advanceCount > 0) {
-                nextPaymentEl.textContent = tCount(advanceCount, 'advance_paid_note_one', 'advance_paid_note_many');
+                const paidThrough = projectAdvancePaidThrough(timeline, autoExt.isExtended);
+                nextPaymentEl.textContent = t(advanceCount === 1 ? 'advance_paid_note_one' : 'advance_paid_note_many', {
+                    n: advanceCount,
+                    date: paidThrough ? formatDisplayDate(paidThrough) : '—'
+                });
             } else if (paymentStatus === 'PAID' && displayCycle) {
                 const classesRemaining = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - displayCycle.attended);
-                const nextPayDate = formatDisplayDate(addDaysToDate(displayCycle.effectiveEnd, 1));
+                // Natural end until the auto-extension actually starts:
+                // effectiveEnd is a rolling next-Sunday projection mid-cycle,
+                // which read as "your payment is due weeks after your cycle".
+                const nextPayBase = autoExt.isExtended ? displayCycle.effectiveEnd : displayCycle.naturalEnd;
+                const nextPayDate = formatDisplayDate(addDaysToDate(nextPayBase, 1));
                 nextPaymentEl.textContent = t('next_payment_note', {
                     date: nextPayDate,
                     left: tCount(classesRemaining, 'more_classes_one', 'more_classes_many'),

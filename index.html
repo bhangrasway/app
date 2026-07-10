@@ -48,7 +48,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 32px;
         }
         .brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .brand-row img { height: 38px; width: auto; border-radius: 8px; flex-shrink: 0; }
@@ -246,6 +246,7 @@
         .services-cta-wrap { text-align: center; }
 
         .events { background: #f7f7fb; }
+        .recent-events { background: #fff; }
         .events-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -315,29 +316,117 @@
         .trial h2 { color: #fff; }
         .trial p { color: rgba(255,255,255,0.92); max-width: 560px; margin: 0 auto 26px; font-size: clamp(1em, 2.6vw, 1.08em); line-height: 1.6; }
 
-        .videos-grid {
+        .videos { background: #f7f7fb; }
+        .social-columns {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 20px;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            align-items: start;
         }
-        .video-embed {
+        @media (max-width: 900px) { .social-columns { grid-template-columns: 1fr; } }
+        .social-panel {
+            background: #fff;
+            border-radius: 18px;
+            padding: 24px 20px;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.08);
+        }
+        .social-panel-heading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 0 0 18px;
+            font-size: clamp(1.05em, 2.6vw, 1.25em);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #2c3e50;
+        }
+        .social-panel-heading .icon { width: 22px; height: 22px; flex: none; }
+        .ig-heading .icon { color: #E4405F; }
+        .yt-heading .icon { color: #ff0000; }
+        .ig-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 14px;
+        }
+        .ig-embed {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #eee;
+            background: #fafafa;
+        }
+        .ig-embed iframe { display: block; width: 100%; height: 430px; border: 0; }
+        .yt-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 14px;
+        }
+        .yt-card {
             position: relative;
+            display: block;
             width: 100%;
             aspect-ratio: 16 / 9;
-            border-radius: 14px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 10px 28px rgba(0,0,0,0.12);
             background: #000;
+            border: 0;
+            padding: 0;
+            cursor: pointer;
         }
-        .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        .yt-card .yt-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
+        .yt-card:hover .yt-thumb { transform: scale(1.04); }
+        .yt-card .yt-play {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 54px;
+            height: 38px;
+            border-radius: 10px;
+            background: rgba(255,0,0,0.92);
+            color: #fff;
+        }
+        .yt-card .yt-play .icon { width: 18px; height: 18px; }
+        .yt-card .yt-title {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 26px 10px 8px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.85));
+            color: #fff;
+            font-size: 0.8em;
+            font-weight: 700;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .yt-card iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        .panel-cta-row { text-align: center; margin-top: 18px; }
+        .instagram-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 13px 24px;
+            border-radius: 999px;
+            background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.95em;
+            min-height: 46px;
+        }
+        .instagram-cta .icon { width: 18px; height: 18px; }
         .videos-empty {
             text-align: center;
             background: #f7f7fb;
-            border-radius: 18px;
-            padding: 44px 24px;
-            max-width: 560px;
-            margin: 0 auto;
+            border-radius: 14px;
+            padding: 36px 20px;
         }
+        .videos-empty .icon.ig { color: #E4405F; }
         .videos-empty .icon { width: 46px; height: 46px; color: #ff0000; margin-bottom: 14px; }
         .videos-empty p { color: #666; margin: 0 0 20px; }
         .youtube-cta {
@@ -756,28 +845,29 @@
         <div class="nav-row">
             <div class="brand-row">
                 <img src="logo.png" alt="Bhangra Sway Cremona logo">
-                <span>Bhangra Sway Cremona</span>
+                <span>Bhangra Sway</span>
             </div>
             <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Toggle menu">
                 <svg class="icon icon-menu"><use href="#icon-menu"/></svg>
                 <svg class="icon icon-close"><use href="#icon-close"/></svg>
             </button>
             <div class="nav-links" id="navLinks">
+                <!-- Slim menu: every section is still on the page (and Free
+                     Trial keeps its hero CTA button) — these are just the
+                     entry points, kept few enough to fit a phone screen. -->
                 <a href="#classes" data-i18n="nav_classes">Classes</a>
                 <a href="#services" data-i18n="nav_services">Services</a>
                 <a href="#events" data-i18n="nav_events">Events</a>
-                <a href="#trial" data-i18n="nav_trial">Free Trial</a>
                 <a href="#videos" data-i18n="nav_videos">Videos</a>
                 <a href="#gallery" data-i18n="nav_gallery">Gallery</a>
-                <a href="#reviews" data-i18n="nav_reviews">Reviews</a>
                 <a href="#contact" data-i18n="nav_contact">Contact</a>
                 <a class="members-link" href="home.html"><svg class="icon"><use href="#icon-home"/></svg><span data-i18n="nav_members">Members</span></a>
                 <div id="langPicker"></div>
             </div>
         </div>
         <div class="hero-body">
-            <h1>Bhangra Sway Cremona</h1>
-            <p class="tagline" data-i18n="hero_tagline">Feel the Rhythm of Punjab, Right Here in Cremona</p>
+            <h1>Bhangra Sway Italy</h1>
+            <p class="tagline" data-i18n="hero_tagline">Feel the Rhythm of Punjab, Here in Cremona</p>
             <div class="hero-ctas">
                 <a class="btn btn-primary" data-wa-text="Hi! I'd like to try a free Bhangra class 🙌" href="https://wa.me/393445667033?text=Hi!%20I%27d%20like%20to%20try%20a%20free%20Bhangra%20class" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-whatsapp"/></svg><span data-i18n="trial_btn">Book Your Free Trial</span></a>
                 <a class="btn btn-secondary" href="#classes" data-i18n="nav_classes">Classes</a>
@@ -860,6 +950,15 @@
         </div>
     </section>
 
+    <!-- Past events, managed from the admin "Website" tab (Supabase). The
+         section stays hidden until there is at least one past event. -->
+    <section class="events recent-events" id="recent-events" style="display:none;">
+        <div class="section-inner">
+            <h2 class="section-heading" data-i18n="recent_events_heading">Recent Events</h2>
+            <div id="recentEventsContainer"></div>
+        </div>
+    </section>
+
     <section class="trial" id="trial">
         <div class="section-inner">
             <h2 class="section-heading" data-i18n="trial_heading">New Here? Try a Class for Free</h2>
@@ -872,7 +971,16 @@
         <div class="section-inner">
             <h2 class="section-heading" data-i18n="videos_heading">Watch Us Dance</h2>
             <p class="section-note" data-i18n="videos_note">Highlights from our classes and performances.</p>
-            <div id="videosContainer"></div>
+            <div class="social-columns">
+                <div class="social-panel">
+                    <h3 class="social-panel-heading ig-heading"><svg class="icon"><use href="#icon-instagram"/></svg><span data-i18n="social_ig_heading">Follow Us on Instagram</span></h3>
+                    <div id="instagramContainer"></div>
+                </div>
+                <div class="social-panel">
+                    <h3 class="social-panel-heading yt-heading"><svg class="icon"><use href="#icon-youtube"/></svg><span data-i18n="social_yt_heading">Latest YouTube Videos</span></h3>
+                    <div id="videosContainer"></div>
+                </div>
+            </div>
             <div class="videos-socials">
                 <span class="follow-label" data-i18n="videos_follow">Follow us:</span>
                 <div class="social-row">
@@ -926,10 +1034,9 @@
                     <li><a href="#classes" data-i18n="nav_classes">Classes</a></li>
                     <li><a href="#services" data-i18n="nav_services">Services</a></li>
                     <li><a href="#events" data-i18n="nav_events">Events</a></li>
-                    <li><a href="#trial" data-i18n="nav_trial">Free Trial</a></li>
                     <li><a href="#videos" data-i18n="nav_videos">Videos</a></li>
                     <li><a href="#gallery" data-i18n="nav_gallery">Gallery</a></li>
-                    <li><a href="#reviews" data-i18n="nav_reviews">Reviews</a></li>
+                    <li><a href="#trial" data-i18n="nav_trial">Free Trial</a></li>
                     <li><a href="home.html" data-i18n="nav_members">Members</a></li>
                 </ul>
             </div>
@@ -980,27 +1087,65 @@
         }));
 
         // ------------------------------------------------------------------
-        // YouTube videos, add real video IDs here (the part after "v=" in
-        // a youtube.com/watch?v=... URL, or after youtu.be/) to show them as
-        // playable embeds. Leave empty to show a "visit our channel" card.
+        // Social feeds.
+        // Instagram: paste post/reel links (https://www.instagram.com/reel/XXXX/
+        // or .../p/XXXX/) into INSTAGRAM_POST_URLS to show them as official
+        // embeds. Leave empty to show a follow card.
+        // YouTube: the latest uploads are fetched automatically from the
+        // channel's public RSS feed (no API key). To pin specific videos
+        // instead, add their IDs to YOUTUBE_VIDEO_IDS (the part after "v="
+        // in a youtube.com/watch?v=... URL, or after youtu.be/).
         // ------------------------------------------------------------------
+        const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/bhangrasway/';
+        // FALLBACK only: loadSiteContent() replaces this list with the reels
+        // managed from the admin "Website" tab (site_instagram table).
+        let INSTAGRAM_POST_URLS = [
+            'https://www.instagram.com/reel/DaZ4fXdMW8J/',
+            'https://www.instagram.com/reel/DX3y2NEM2q4/',
+            'https://www.instagram.com/reel/DWXDTvPDLb9/',
+            'https://www.instagram.com/reel/DULjUSXjIwX/',
+            'https://www.instagram.com/reel/DTvJRBPjF9u/',
+            'https://www.instagram.com/reel/DZ1vQOfsM4-/'
+        ];
         const YOUTUBE_VIDEO_IDS = [];
+        const YOUTUBE_CHANNEL_ID = 'UCUAxmNKQKlnOKzDp8bx0xvw';
         const YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/@BhangraSway';
+        const YOUTUBE_MAX_VIDEOS = 4;
 
-        function renderVideos() {
-            const container = document.getElementById('videosContainer');
-            if (YOUTUBE_VIDEO_IDS.length) {
+        function panelCta(className, href, iconId, i18nKey, fallbackText) {
+            const row = document.createElement('div');
+            row.className = 'panel-cta-row';
+            const a = document.createElement('a');
+            a.className = className;
+            a.href = href;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.innerHTML = `<svg class="icon"><use href="#${iconId}"/></svg>`;
+            const span = document.createElement('span');
+            span.dataset.i18n = i18nKey;
+            span.textContent = fallbackText;
+            a.appendChild(span);
+            row.appendChild(a);
+            return row;
+        }
+
+        function renderInstagram() {
+            const container = document.getElementById('instagramContainer');
+            const codes = INSTAGRAM_POST_URLS
+                .map(u => (u.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/) || [])[1])
+                .filter(Boolean);
+            if (codes.length) {
                 const grid = document.createElement('div');
-                grid.className = 'videos-grid';
-                YOUTUBE_VIDEO_IDS.forEach(id => {
+                grid.className = 'ig-grid';
+                codes.forEach(code => {
                     const wrap = document.createElement('div');
-                    wrap.className = 'video-embed';
+                    wrap.className = 'ig-embed';
                     const iframe = document.createElement('iframe');
-                    iframe.src = `https://www.youtube-nocookie.com/embed/${id}`;
-                    iframe.title = 'Bhangra Sway Cremona video';
+                    iframe.src = `https://www.instagram.com/p/${code}/embed/`;
+                    iframe.title = 'Instagram post from Bhangra Sway Cremona';
                     iframe.loading = 'lazy';
-                    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-                    iframe.allowFullscreen = true;
+                    iframe.setAttribute('scrolling', 'no');
+                    iframe.allow = 'encrypted-media';
                     wrap.appendChild(iframe);
                     grid.appendChild(wrap);
                 });
@@ -1009,16 +1154,117 @@
                 const empty = document.createElement('div');
                 empty.className = 'videos-empty';
                 empty.innerHTML = `
-                    <svg class="icon"><use href="#icon-youtube"/></svg>
-                    <p data-i18n="videos_empty_note">New videos are on their way, subscribe so you don't miss them.</p>
-                    <a class="youtube-cta" href="${YOUTUBE_CHANNEL_URL}" target="_blank" rel="noopener">
-                        <svg class="icon"><use href="#icon-play"/></svg>
-                        <span data-i18n="videos_cta">Visit Our YouTube Channel</span>
-                    </a>
+                    <svg class="icon ig"><use href="#icon-instagram"/></svg>
+                    <p data-i18n="ig_empty_note">Our latest reels and photos live on Instagram, come say hi!</p>
                 `;
                 container.replaceChildren(empty);
-                if (window.applyI18n) window.applyI18n();
             }
+            container.appendChild(panelCta('instagram-cta', INSTAGRAM_PROFILE_URL, 'icon-instagram', 'events_follow_instagram', 'Follow on Instagram'));
+            if (window.applyI18n) window.applyI18n();
+        }
+
+        async function getLatestVideos() {
+            const CACHE_KEY = 'ytFeedCache_v1';
+            let cached = null;
+            try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) {}
+            if (cached && Date.now() - cached.at < 3600000 && cached.videos.length) return cached.videos;
+            const save = videos => {
+                videos = videos.slice(0, YOUTUBE_MAX_VIDEOS);
+                try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), videos })); } catch (e) {}
+                return videos;
+            };
+            // 1. Same-origin snapshot, refreshed every 6h by the
+            //    update-youtube-feed GitHub Action (no third-party dependency).
+            try {
+                const res = await fetch('data/youtube.json', { cache: 'no-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.videos && data.videos.length) return save(data.videos);
+                }
+            } catch (e) {}
+            // 2. Live RSS feed through public CORS proxies (best effort).
+            const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${YOUTUBE_CHANNEL_ID}`;
+            const proxies = [
+                u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+                u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+                u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+            ];
+            for (const proxy of proxies) {
+                try {
+                    const res = await fetch(proxy(feedUrl));
+                    if (!res.ok) continue;
+                    const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+                    const videos = [...xml.getElementsByTagName('entry')].map(entry => {
+                        const link = entry.getElementsByTagName('link')[0];
+                        const id = ((link && link.getAttribute('href') || '').match(/[?&]v=([A-Za-z0-9_-]{6,})/) || [])[1];
+                        const title = entry.getElementsByTagName('title')[0];
+                        return { id, title: title ? title.textContent : '' };
+                    }).filter(v => v.id);
+                    if (videos.length) return save(videos);
+                } catch (e) {}
+            }
+            // 3. Stale cache beats an empty panel.
+            if (cached && cached.videos.length) return cached.videos;
+            throw new Error('could not load videos');
+        }
+
+        function makeVideoCard(video) {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'yt-card';
+            card.setAttribute('aria-label', `Play video: ${video.title || 'Bhangra Sway Cremona video'}`);
+            const thumb = document.createElement('img');
+            thumb.className = 'yt-thumb';
+            thumb.src = `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
+            thumb.alt = '';
+            thumb.loading = 'lazy';
+            card.appendChild(thumb);
+            const play = document.createElement('span');
+            play.className = 'yt-play';
+            play.innerHTML = '<svg class="icon"><use href="#icon-play"/></svg>';
+            card.appendChild(play);
+            if (video.title) {
+                const title = document.createElement('span');
+                title.className = 'yt-title';
+                title.textContent = video.title;
+                card.appendChild(title);
+            }
+            card.addEventListener('click', () => {
+                const holder = document.createElement('div');
+                holder.className = 'yt-card';
+                const iframe = document.createElement('iframe');
+                iframe.src = `https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1`;
+                iframe.title = video.title || 'Bhangra Sway Cremona video';
+                iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                iframe.allowFullscreen = true;
+                holder.appendChild(iframe);
+                card.replaceWith(holder);
+            }, { once: true });
+            return card;
+        }
+
+        async function renderVideos() {
+            const container = document.getElementById('videosContainer');
+            let videos = YOUTUBE_VIDEO_IDS.map(id => ({ id, title: '' }));
+            if (!videos.length) {
+                try { videos = await getLatestVideos(); } catch (e) { videos = []; }
+            }
+            if (videos.length) {
+                const grid = document.createElement('div');
+                grid.className = 'yt-grid';
+                videos.forEach(v => grid.appendChild(makeVideoCard(v)));
+                container.replaceChildren(grid);
+            } else {
+                const empty = document.createElement('div');
+                empty.className = 'videos-empty';
+                empty.innerHTML = `
+                    <svg class="icon"><use href="#icon-youtube"/></svg>
+                    <p data-i18n="videos_empty_note">New videos are on their way, subscribe so you don't miss them.</p>
+                `;
+                container.replaceChildren(empty);
+            }
+            container.appendChild(panelCta('youtube-cta', YOUTUBE_CHANNEL_URL, 'icon-play', 'videos_cta', 'Visit Our YouTube Channel'));
+            if (window.applyI18n) window.applyI18n();
         }
 
         // ------------------------------------------------------------------
@@ -1026,8 +1272,11 @@
         // their filenames here (see gallery/README.md) to show them as an
         // auto-swiping slideshow with a thumbnail strip. Leave empty to show
         // placeholder tiles.
+        // These are only the FALLBACK: once photos are uploaded from the
+        // admin "Website" tab, loadSiteContent() replaces this list with the
+        // Supabase-hosted ones.
         // ------------------------------------------------------------------
-        const GALLERY_IMAGES = [
+        let GALLERY_IMAGES = [
             'gallery/photo-01.jpg',
             'gallery/photo-02.jpg',
             'gallery/photo-03.jpg',
@@ -1180,7 +1429,10 @@
         // titleKey points into i18n.js so event titles switch language with the
         // page; venue stays literal (place names and times don't translate).
         // tba: true = only the month is known, the date box shows "MON / TBA".
-        const UPCOMING_EVENTS = [
+        // FALLBACK only: once site_content.sql has been run in Supabase,
+        // loadSiteContent() replaces this list with the events managed from
+        // the admin "Website" tab (their titles are literal, not titleKeys).
+        let UPCOMING_EVENTS = [
             { date: '2026-07-25', titleKey: 'event_castelvetro_title', venue: 'Castelvetro · 7:00 PM', img: 'gallery/photo-14.jpg' },
             { date: '2026-10-01', tba: true, titleKey: 'event_competition_title', venue: 'Bhangra Sway Studio, Cremona', img: 'gallery/photo-01.jpg' }
         ];
@@ -1200,13 +1452,13 @@
                     card.className = 'event-card' + (ev.img ? ' has-photo' : '');
                     if (ev.img) {
                         card.style.backgroundImage =
-                            `linear-gradient(rgba(18,14,34,0.55), rgba(18,14,34,0.72)), url('${ev.img}')`;
+                            `linear-gradient(rgba(18,14,34,0.55), rgba(18,14,34,0.72)), url('${cssUrl(ev.img)}')`;
                     }
                     card.innerHTML = `
                         <div class="event-date">${dateHtml}</div>
                         <div>
-                            <h3 class="event-title">${ev.titleKey ? t(ev.titleKey) : ev.title}</h3>
-                            <p class="event-venue"><svg class="icon"><use href="#icon-pin"/></svg>${ev.venue}</p>
+                            <h3 class="event-title">${ev.titleKey ? t(ev.titleKey) : escHtml(ev.title)}</h3>
+                            <p class="event-venue"><svg class="icon"><use href="#icon-pin"/></svg>${escHtml(ev.venue)}</p>
                         </div>
                     `;
                     grid.appendChild(card);
@@ -1225,6 +1477,105 @@
                 `;
                 container.replaceChildren(empty);
                 if (window.applyI18n) window.applyI18n();
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Recent (past) events — only ever populated from Supabase via
+        // loadSiteContent(); the section stays hidden while this is empty.
+        // ------------------------------------------------------------------
+        let PAST_EVENTS = [];
+
+        function renderRecentEvents() {
+            const section = document.getElementById('recent-events');
+            const container = document.getElementById('recentEventsContainer');
+            if (!PAST_EVENTS.length) {
+                section.style.display = 'none';
+                return;
+            }
+            section.style.display = '';
+            const grid = document.createElement('div');
+            grid.className = 'events-grid';
+            PAST_EVENTS.forEach(ev => {
+                const d = new Date(ev.date + 'T00:00:00');
+                const month = d.toLocaleDateString('en-US', { month: 'short' });
+                const yy = String(d.getFullYear()).slice(-2);
+                const card = document.createElement('div');
+                card.className = 'event-card' + (ev.img ? ' has-photo' : '');
+                if (ev.img) {
+                    card.style.backgroundImage =
+                        `linear-gradient(rgba(18,14,34,0.55), rgba(18,14,34,0.72)), url('${cssUrl(ev.img)}')`;
+                }
+                card.innerHTML = `
+                    <div class="event-date"><span class="day">${d.getDate()}</span><span class="month">${month} '${yy}</span></div>
+                    <div>
+                        <h3 class="event-title">${escHtml(ev.title)}</h3>
+                        ${ev.venue ? `<p class="event-venue"><svg class="icon"><use href="#icon-pin"/></svg>${escHtml(ev.venue)}</p>` : ''}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            container.replaceChildren(grid);
+        }
+
+        // ------------------------------------------------------------------
+        // Admin-managed content: gallery photos and events edited from the
+        // admin dashboard's "Website" tab live in Supabase (site_gallery /
+        // site_events, anon read-only — see site_content.sql). When the
+        // fetch succeeds it replaces the hardcoded fallbacks above; when it
+        // fails (offline, tables not created yet) the fallbacks stay.
+        // ------------------------------------------------------------------
+        const SITE_DB_URL = 'https://geeqcyfnkgamcjclulay.supabase.co';
+        const SITE_DB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
+
+        function escHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+        // For url('…') inside a style attribute: strip characters that could
+        // terminate the url() or the declaration.
+        function cssUrl(s) {
+            return String(s ?? '').replace(/['"\\()\s]/g, '');
+        }
+
+        async function loadSiteContent() {
+            const headers = { apikey: SITE_DB_KEY, Authorization: 'Bearer ' + SITE_DB_KEY };
+            const get = async (path) => {
+                const res = await fetch(`${SITE_DB_URL}/rest/v1/${path}`, { headers });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            };
+            try {
+                const [photos, events] = await Promise.all([
+                    get('site_gallery?select=image_url&order=sort_order.asc,id.asc'),
+                    get('site_events?select=kind,event_date,tba,title,venue,image_url&order=event_date.asc')
+                ]);
+                if (photos.length) {
+                    GALLERY_IMAGES = photos.map(p => p.image_url);
+                    renderGallery();
+                }
+                const mapEv = e => ({ date: e.event_date, tba: !!e.tba, title: e.title, venue: e.venue || '', img: e.image_url || '' });
+                UPCOMING_EVENTS = events.filter(e => e.kind === 'upcoming').map(mapEv);
+                PAST_EVENTS = events.filter(e => e.kind === 'past').map(mapEv).reverse(); // newest first
+                renderEvents();
+                renderRecentEvents();
+            } catch (err) {
+                // Keep the built-in fallback content.
+            }
+            // Separate fetch: site_instagram was added after the tables above,
+            // so its absence must not take down the gallery/events load.
+            try {
+                const posts = await get('site_instagram?select=url&order=sort_order.asc,id.asc');
+                const urls = posts.map(p => p.url);
+                // Skip the re-render (which reloads all embed iframes) when
+                // the admin list matches the built-in fallback.
+                if (urls.length && JSON.stringify(urls) !== JSON.stringify(INSTAGRAM_POST_URLS)) {
+                    INSTAGRAM_POST_URLS = urls;
+                    renderInstagram();
+                }
+            } catch (err) {
+                // Keep the built-in fallback reels.
             }
         }
 
@@ -1286,11 +1637,13 @@
             track.style.animationDuration = (GOOGLE_REVIEWS.length * 6) + 's';
         }
 
+        renderInstagram();
         renderVideos();
         renderGallery();
         renderEvents();
         renderReviews();
-        window.onLangChange = () => { renderVideos(); renderGallery(); renderEvents(); };
+        loadSiteContent();
+        window.onLangChange = () => { renderInstagram(); renderVideos(); renderGallery(); renderEvents(); renderRecentEvents(); };
     </script>
 </body>
 </html>

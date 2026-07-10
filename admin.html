@@ -474,13 +474,14 @@
                 min-width: 140px;
             }
 
-            #studentsTableContainer {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
+            /* Student list cards are a 3-column grid (info | cycles | buttons):
+               on narrow screens the fixed middle/right columns crush the name
+               column to zero and nowrap text overpaints itself — stack them. */
+            #studentsTableBody > div {
+                grid-template-columns: 1fr !important;
             }
-
-            #studentsTable {
-                min-width: 860px;
+            #studentsTableBody > div > div {
+                white-space: normal !important;
             }
 
             #attendanceGridContainer,
@@ -644,6 +645,7 @@
                 <button class="tab-btn" onclick="switchTab('attendance')">Attendance<span id="checkinReqBadge" style="display:none; pointer-events:none; margin-left:6px; background:#e74c3c; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.75em; font-weight:700; vertical-align:middle;"></span></button>
                 <button class="tab-btn" onclick="switchTab('fees')">Income & Expense</button>
                 <button class="tab-btn" onclick="switchTab('reports')">Reports</button>
+                <button class="tab-btn" onclick="switchTab('website')">Website</button>
             </div>
 
             <div class="success-message" id="successMsg"></div>
@@ -1068,6 +1070,105 @@
                     <input type="file" id="restoreFileInput" accept=".zip,.json,.csv,.txt" style="display:none" onchange="handleRestoreFile(event)">
                     <div class="backup-info" style="border-left-color: #27ae60;">
                         <strong>✓ Last Backup Info:</strong> <span id="lastBackupInfo">No backup created yet</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WEBSITE TAB -->
+            <div id="website" class="tab-content">
+                <h2>🌐 Website Content</h2>
+                <div style="background:#f0f4ff; border:1px solid #d0deff; border-radius:8px; padding:10px 16px; margin:12px 0 24px; font-size:0.9em; color:#2c5aa0;">
+                    Everything you change here goes live on the public homepage automatically — no code changes needed.
+                </div>
+                <div id="websiteSetupHint" style="display:none; background:#fdf2e9; border:1px solid #f5cba7; border-radius:8px; padding:12px 16px; margin-bottom:24px; font-size:0.9em; color:#9c640c;">
+                    ⚠️ Couldn't load website content. One-time setup: open the Supabase <strong>SQL Editor</strong> and run the file <strong>site_content.sql</strong> from the project, then reload this page.
+                </div>
+
+                <!-- GALLERY PHOTOS -->
+                <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:6px;">
+                        <div>
+                            <h3 style="margin:0;">📸 Gallery Photos</h3>
+                            <div style="color:#555; font-size:0.88em; margin-top:4px;">Exactly what the homepage slideshow shows, in this order. Use ◀ ▶ to reorder and 🗑 to remove a photo from the website. If you delete every photo, the homepage falls back to the built-in ones.</div>
+                        </div>
+                        <label style="display:inline-flex; align-items:center; gap:8px; padding:10px 18px; background:#27ae60; color:white; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.95em; white-space:nowrap;">
+                            ⬆ Upload Photos
+                            <input type="file" id="galleryUploadInput" accept="image/*" multiple style="display:none;" onchange="uploadGalleryPhotos(this.files)">
+                        </label>
+                    </div>
+                    <div id="galleryUploadStatus" style="font-size:0.88em; color:#2c5aa0; font-weight:600; min-height:1.3em; margin-bottom:10px;"></div>
+                    <div id="siteGalleryGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px;"></div>
+                </div>
+
+                <!-- UPCOMING EVENTS -->
+                <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                    <h3 style="margin:0 0 4px;">📅 Upcoming Events</h3>
+                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">Listed in the "Upcoming Events" section of the homepage. When an event is over, click "✓ Done" to move it to Recent Events.</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:14px 16px; margin-bottom:16px;">
+                        <div>
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">DATE *</label>
+                            <input type="date" id="upcomingDate" style="padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; color:#555; padding-bottom:9px; cursor:pointer;">
+                            <input type="checkbox" id="upcomingTba" style="width:15px; height:15px;"> Date TBA (only month known)
+                        </label>
+                        <div style="flex:1; min-width:180px;">
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">EVENT TITLE *</label>
+                            <input type="text" id="upcomingTitle" placeholder="e.g. Performance by our students" style="width:100%; padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <div style="flex:1; min-width:180px;">
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">VENUE / TIME</label>
+                            <input type="text" id="upcomingVenue" placeholder="e.g. Castelvetro · 7:00 PM" style="width:100%; padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">PHOTO (optional)</label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; background:#fff; border:1.5px solid #ddd; border-radius:6px; cursor:pointer; font-size:0.82em; color:#555; white-space:nowrap;">
+                                📎 <span id="upcomingPhotoLabel">Choose photo…</span>
+                                <input type="file" id="upcomingPhoto" accept="image/*" style="display:none;" onchange="document.getElementById('upcomingPhotoLabel').textContent = this.files[0]?.name || 'Choose photo…'">
+                            </label>
+                        </div>
+                        <button id="addUpcomingBtn" onclick="addSiteEvent('upcoming')" style="padding:9px 22px; background:#27ae60; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.95em; white-space:nowrap;">+ Add Event</button>
+                    </div>
+                    <div id="upcomingEventsList"></div>
+                </div>
+
+                <!-- PAST / RECENT EVENTS -->
+                <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                    <h3 style="margin:0 0 4px;">🏆 Latest Events We've Done</h3>
+                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">Listed in the "Recent Events" section of the homepage (newest first). Add past performances and events here, with a photo if you have one.</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:14px 16px; margin-bottom:16px;">
+                        <div>
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">DATE *</label>
+                            <input type="date" id="pastDate" style="padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <div style="flex:1; min-width:180px;">
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">EVENT TITLE *</label>
+                            <input type="text" id="pastTitle" placeholder="e.g. Vaisakhi Mela performance" style="width:100%; padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <div style="flex:1; min-width:180px;">
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">VENUE / NOTE</label>
+                            <input type="text" id="pastVenue" placeholder="e.g. Piazza del Comune, Cremona" style="width:100%; padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">PHOTO (optional)</label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; background:#fff; border:1.5px solid #ddd; border-radius:6px; cursor:pointer; font-size:0.82em; color:#555; white-space:nowrap;">
+                                📎 <span id="pastPhotoLabel">Choose photo…</span>
+                                <input type="file" id="pastPhoto" accept="image/*" style="display:none;" onchange="document.getElementById('pastPhotoLabel').textContent = this.files[0]?.name || 'Choose photo…'">
+                            </label>
+                        </div>
+                        <button id="addPastBtn" onclick="addSiteEvent('past')" style="padding:9px 22px; background:#8e44ad; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.95em; white-space:nowrap;">+ Add Event</button>
+                    </div>
+                    <div id="pastEventsList"></div>
+                </div>
+
+                <!-- INSTAGRAM REELS -->
+                <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                    <h3 style="margin:0 0 4px;">🎬 Instagram Reels on Homepage</h3>
+                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">The 6 reels shown in the homepage's "Follow Us on Instagram" panel, in this order. Open a reel on Instagram, copy its link, and paste it here. Leave a slot blank to show fewer.</div>
+                    <div id="igLinksList" style="display:grid; gap:10px; margin-bottom:14px;"></div>
+                    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                        <button id="saveIgLinksBtn" onclick="saveInstagramLinks()" style="padding:9px 22px; background:#e1306c; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.95em;">💾 Save Reels</button>
+                        <span id="igLinksStatus" style="font-size:0.88em; font-weight:600;"></span>
                     </div>
                 </div>
             </div>
@@ -1560,7 +1661,8 @@
                     // student who paid ahead gets a message that never acknowledges it.
                     const advanceCount = timeline.unmatchedRecords.length;
                     if (advanceCount > 0) {
-                        message += `💚 Your next ${advanceCount > 1 ? `${advanceCount} cycles are` : 'cycle is'} already paid in advance — nothing more to pay. It starts automatically when this cycle wraps up.\n\n`;
+                        const paidThrough = projectAdvancePaidThrough(timeline, autoExt.isExtended);
+                        message += `💚 Your next ${advanceCount > 1 ? `${advanceCount} cycles are` : 'cycle is'} already paid in advance — nothing more to pay. It starts automatically when this cycle wraps up${paidThrough ? `, and your next payment will most probably be due after ${formatDisplayDate(paidThrough)} if you attend regularly (otherwise it extends)` : ''}.\n\n`;
                     }
                     message += `🥳 You're all set! Enjoy your classes and keep shining on the dance floor! 💃🕺\n`;
                 } else {
@@ -1754,6 +1856,304 @@
                 </div>`;
             }).join('');
             updatePdfStats();
+        }
+
+        // ===== WEBSITE CONTENT (public homepage gallery + events) =====
+        // Backed by the site_gallery / site_events tables and the public
+        // 'site-gallery' storage bucket — created by site_content.sql.
+        const SITE_GALLERY_BUCKET = 'site-gallery';
+        let siteGalleryCache = [];
+        let siteEventsCache = [];
+
+        function escSiteHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        async function loadWebsiteTab() {
+            const hint = document.getElementById('websiteSetupHint');
+            const [g, e, ig] = await Promise.all([
+                supabaseClient.from('site_gallery').select('*').order('sort_order').order('id'),
+                supabaseClient.from('site_events').select('*').order('event_date'),
+                supabaseClient.from('site_instagram').select('*').order('sort_order').order('id')
+            ]);
+            // site_instagram was added later: if only it is missing, keep the
+            // rest of the tab working and point at the setup hint from its card.
+            if (g.error || e.error || ig.error) {
+                hint.style.display = 'block';
+                console.error('Website tab load failed:', g.error || e.error || ig.error);
+                if (g.error || e.error) return;
+            } else {
+                hint.style.display = 'none';
+            }
+            siteGalleryCache = g.data || [];
+            siteEventsCache = e.data || [];
+            siteInstagramCache = ig.error ? null : (ig.data || []);
+            renderSiteGallery();
+            renderSiteEvents();
+            renderInstagramLinks();
+        }
+
+        // ---- Instagram reels (homepage "Follow Us on Instagram" panel) ----
+        const IG_SLOTS = 6;
+        const IG_URL_RE = /^https?:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/[A-Za-z0-9_-]+/;
+        let siteInstagramCache = [];
+
+        function renderInstagramLinks() {
+            const list = document.getElementById('igLinksList');
+            const status = document.getElementById('igLinksStatus');
+            if (siteInstagramCache === null) {
+                list.innerHTML = '<div style="color:#9c640c; font-size:0.9em;">⚠️ Table missing — re-run <strong>site_content.sql</strong> in the Supabase SQL Editor (safe to run again), then reload.</div>';
+                document.getElementById('saveIgLinksBtn').disabled = true;
+                return;
+            }
+            document.getElementById('saveIgLinksBtn').disabled = false;
+            status.textContent = '';
+            list.innerHTML = Array.from({ length: IG_SLOTS }, (_, i) => `
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-weight:700; color:#888; width:20px; text-align:right;">${i + 1}.</span>
+                    <input type="url" id="igLink${i}" value="${escSiteHtml(siteInstagramCache[i]?.url || '')}"
+                        placeholder="https://www.instagram.com/reel/…"
+                        style="flex:1; padding:9px 12px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                </div>
+            `).join('');
+        }
+
+        async function saveInstagramLinks() {
+            const status = document.getElementById('igLinksStatus');
+            const btn = document.getElementById('saveIgLinksBtn');
+            const urls = [];
+            for (let i = 0; i < IG_SLOTS; i++) {
+                const raw = document.getElementById(`igLink${i}`).value.trim();
+                if (!raw) continue;
+                if (!IG_URL_RE.test(raw)) {
+                    status.style.color = '#c0392b';
+                    status.textContent = `Link ${i + 1} doesn't look like an Instagram post/reel link.`;
+                    return;
+                }
+                // strip tracking params, keep just the post
+                urls.push(raw.match(IG_URL_RE)[0].replace(/\/?$/, '/'));
+            }
+            btn.disabled = true;
+            status.style.color = '#2c5aa0';
+            status.textContent = 'Saving…';
+            // replace-all: wipe and reinsert in slot order
+            const del = await supabaseClient.from('site_instagram').delete().gte('id', 0);
+            const ins = urls.length
+                ? await supabaseClient.from('site_instagram').insert(urls.map((url, i) => ({ url, sort_order: i + 1 })))
+                : { error: null };
+            btn.disabled = false;
+            if (del.error || ins.error) {
+                status.style.color = '#c0392b';
+                status.textContent = 'Save failed: ' + (del.error || ins.error).message;
+                return;
+            }
+            await loadWebsiteTab();
+            status.style.color = '#27ae60';
+            status.textContent = `✓ Saved — the homepage now shows ${urls.length} reel${urls.length === 1 ? '' : 's'}.`;
+        }
+
+        // ---- Gallery ----
+        // Mirrors the fallback list hardcoded in index.html: the 24 photos
+        // shipped in the repo's gallery/ folder. Used only by the one-time
+        // import below, which brings them under admin control.
+        const BUILTIN_GALLERY = Array.from({ length: 24 }, (_, i) =>
+            `gallery/photo-${String(i + 1).padStart(2, '0')}.jpg`);
+
+        async function importBuiltinGallery() {
+            const btn = document.getElementById('importGalleryBtn');
+            btn.disabled = true;
+            btn.textContent = 'Importing…';
+            // storage_path '' = not our upload; delete only removes the row
+            // (the repo file stays, it's just no longer shown on the site).
+            const { error } = await supabaseClient.from('site_gallery').insert(
+                BUILTIN_GALLERY.map((url, i) => ({ storage_path: '', image_url: url, sort_order: i + 1 }))
+            );
+            if (error) {
+                alert('Import failed: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '📥 Import current website photos';
+                return;
+            }
+            await loadWebsiteTab();
+        }
+
+        function renderSiteGallery() {
+            const grid = document.getElementById('siteGalleryGrid');
+            if (!siteGalleryCache.length) {
+                grid.innerHTML = `
+                    <div style="grid-column:1/-1; color:#888; padding:14px 0;">
+                        The homepage is currently showing the ${BUILTIN_GALLERY.length} built-in photos. Import them to see them here and delete or reorder any of them directly:
+                        <div style="margin-top:10px;">
+                            <button id="importGalleryBtn" onclick="importBuiltinGallery()" style="padding:9px 18px; background:#3498db; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.9em;">📥 Import current website photos</button>
+                        </div>
+                    </div>`;
+                return;
+            }
+            grid.innerHTML = siteGalleryCache.map((p, i) => `
+                <div style="position:relative; border:1px solid #eee; border-radius:8px; overflow:hidden; background:#fafafa;">
+                    <img src="${escSiteHtml(p.image_url)}" alt="" loading="lazy" style="width:100%; height:110px; object-fit:cover; display:block;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 8px;">
+                        <span style="font-size:0.75em; color:#888;">#${i + 1}</span>
+                        <div style="display:flex; gap:4px;">
+                            <button onclick="moveGalleryPhoto(${p.id}, -1)" ${i === 0 ? 'disabled' : ''} title="Move earlier" style="border:none; background:#ecf0f1; border-radius:4px; cursor:pointer; padding:2px 7px; font-size:0.85em;">◀</button>
+                            <button onclick="moveGalleryPhoto(${p.id}, 1)" ${i === siteGalleryCache.length - 1 ? 'disabled' : ''} title="Move later" style="border:none; background:#ecf0f1; border-radius:4px; cursor:pointer; padding:2px 7px; font-size:0.85em;">▶</button>
+                            <button onclick="deleteGalleryPhoto(${p.id})" title="Delete photo" style="border:none; background:#fdecea; color:#c0392b; border-radius:4px; cursor:pointer; padding:2px 7px; font-size:0.85em;">🗑</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function uploadGalleryPhotos(files) {
+            if (!files || !files.length) return;
+            const status = document.getElementById('galleryUploadStatus');
+            const list = Array.from(files);
+            let nextOrder = siteGalleryCache.reduce((m, p) => Math.max(m, p.sort_order), 0) + 1;
+            let ok = 0;
+            for (let i = 0; i < list.length; i++) {
+                status.textContent = `Uploading ${i + 1} of ${list.length}…`;
+                try {
+                    const url = await uploadSitePhoto(list[i], 'photos');
+                    const { error } = await supabaseClient.from('site_gallery').insert({
+                        storage_path: sitePathFromUrl(url),
+                        image_url: url,
+                        sort_order: nextOrder++
+                    });
+                    if (error) throw error;
+                    ok++;
+                } catch (err) {
+                    console.error('Gallery upload failed:', err);
+                }
+            }
+            status.textContent = ok === list.length
+                ? `✓ Uploaded ${ok} photo${ok === 1 ? '' : 's'}.`
+                : `⚠️ Uploaded ${ok} of ${list.length} photos — check your connection and try the rest again.`;
+            document.getElementById('galleryUploadInput').value = '';
+            await loadWebsiteTab();
+        }
+
+        // Uploads one image to the public site-gallery bucket, returns its
+        // public URL. Path is timestamped so re-uploads never collide.
+        async function uploadSitePhoto(file, folder) {
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const path = `${folder}/${Date.now()}-${safeName}`;
+            const { error } = await supabaseClient.storage.from(SITE_GALLERY_BUCKET)
+                .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false });
+            if (error) throw error;
+            return supabaseClient.storage.from(SITE_GALLERY_BUCKET).getPublicUrl(path).data.publicUrl;
+        }
+
+        // Reverse of getPublicUrl: extract the in-bucket path from a public
+        // URL (…/object/public/site-gallery/<path>). Returns null for URLs
+        // that don't point into our bucket (e.g. relative repo paths).
+        function sitePathFromUrl(url) {
+            const marker = `/object/public/${SITE_GALLERY_BUCKET}/`;
+            const idx = (url || '').indexOf(marker);
+            return idx === -1 ? null : decodeURIComponent(url.slice(idx + marker.length));
+        }
+
+        async function deleteGalleryPhoto(id) {
+            const photo = siteGalleryCache.find(p => p.id === id);
+            if (!photo || !confirm('Delete this photo from the website gallery?')) return;
+            if (photo.storage_path) {
+                await supabaseClient.storage.from(SITE_GALLERY_BUCKET).remove([photo.storage_path]);
+            }
+            const { error } = await supabaseClient.from('site_gallery').delete().eq('id', id);
+            if (error) { alert('Delete failed: ' + error.message); return; }
+            await loadWebsiteTab();
+        }
+
+        async function moveGalleryPhoto(id, dir) {
+            const i = siteGalleryCache.findIndex(p => p.id === id);
+            const j = i + dir;
+            if (i === -1 || j < 0 || j >= siteGalleryCache.length) return;
+            const a = siteGalleryCache[i], b = siteGalleryCache[j];
+            // Swap sort_order values (cache is already sorted by sort_order).
+            // If both rows share the same sort_order (legacy data), fall back
+            // to index-based orders so the swap actually changes something.
+            let orderA = b.sort_order, orderB = a.sort_order;
+            if (orderA === orderB) { orderA = j + 1; orderB = i + 1; }
+            await Promise.all([
+                supabaseClient.from('site_gallery').update({ sort_order: orderA }).eq('id', a.id),
+                supabaseClient.from('site_gallery').update({ sort_order: orderB }).eq('id', b.id)
+            ]);
+            await loadWebsiteTab();
+        }
+
+        // ---- Events (kind = 'upcoming' | 'past') ----
+        function renderSiteEvents() {
+            const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            const rowHtml = ev => `
+                <div style="display:flex; align-items:center; gap:12px; border:1px solid #eee; border-radius:8px; padding:10px 14px; margin-bottom:8px; background:#fff;">
+                    ${ev.image_url ? `<img src="${escSiteHtml(ev.image_url)}" alt="" loading="lazy" style="width:52px; height:40px; object-fit:cover; border-radius:6px; flex-shrink:0;">` : `<div style="width:52px; height:40px; border-radius:6px; background:#f0f0f5; display:flex; align-items:center; justify-content:center; flex-shrink:0;">📅</div>`}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:700;">${escSiteHtml(ev.title)}</div>
+                        <div style="font-size:0.85em; color:#666;">${ev.tba ? new Date(ev.event_date + 'T00:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) + ' · date TBA' : fmt(ev.event_date)}${ev.venue ? ' · ' + escSiteHtml(ev.venue) : ''}</div>
+                    </div>
+                    ${ev.kind === 'upcoming' ? `<button onclick="markEventDone(${ev.id})" title="Move to Recent Events" style="border:none; background:#eafaf1; color:#27ae60; border-radius:6px; cursor:pointer; padding:6px 12px; font-weight:700; font-size:0.85em; white-space:nowrap;">✓ Done</button>` : ''}
+                    <button onclick="deleteSiteEvent(${ev.id})" title="Delete event" style="border:none; background:#fdecea; color:#c0392b; border-radius:6px; cursor:pointer; padding:6px 12px; font-weight:700; font-size:0.85em;">🗑</button>
+                </div>`;
+            const upcoming = siteEventsCache.filter(e => e.kind === 'upcoming');
+            const past = siteEventsCache.filter(e => e.kind === 'past').slice().reverse(); // newest first
+            document.getElementById('upcomingEventsList').innerHTML = upcoming.length
+                ? upcoming.map(rowHtml).join('')
+                : '<div style="color:#888; padding:6px 0;">No upcoming events — the homepage shows a "follow us" card instead.</div>';
+            document.getElementById('pastEventsList').innerHTML = past.length
+                ? past.map(rowHtml).join('')
+                : '<div style="color:#888; padding:6px 0;">No past events added yet — the "Recent Events" section stays hidden on the homepage.</div>';
+        }
+
+        async function addSiteEvent(kind) {
+            const p = kind === 'upcoming' ? 'upcoming' : 'past';
+            const date = document.getElementById(p + 'Date').value;
+            const title = document.getElementById(p + 'Title').value.trim();
+            const venue = document.getElementById(p + 'Venue').value.trim();
+            const tba = kind === 'upcoming' && document.getElementById('upcomingTba').checked;
+            const photoInput = document.getElementById(p + 'Photo');
+            if (!date || !title) { alert('Please fill in the date and event title.'); return; }
+            const btn = document.getElementById(kind === 'upcoming' ? 'addUpcomingBtn' : 'addPastBtn');
+            btn.disabled = true;
+            btn.textContent = 'Adding…';
+            try {
+                let imageUrl = null;
+                if (photoInput.files[0]) imageUrl = await uploadSitePhoto(photoInput.files[0], 'events');
+                const { error } = await supabaseClient.from('site_events').insert({
+                    kind, event_date: date, tba, title, venue, image_url: imageUrl
+                });
+                if (error) throw error;
+                document.getElementById(p + 'Date').value = '';
+                document.getElementById(p + 'Title').value = '';
+                document.getElementById(p + 'Venue').value = '';
+                if (kind === 'upcoming') document.getElementById('upcomingTba').checked = false;
+                photoInput.value = '';
+                document.getElementById(p + 'PhotoLabel').textContent = 'Choose photo…';
+                await loadWebsiteTab();
+            } catch (err) {
+                alert('Could not add the event: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '+ Add Event';
+            }
+        }
+
+        async function markEventDone(id) {
+            const { error } = await supabaseClient.from('site_events').update({ kind: 'past' }).eq('id', id);
+            if (error) { alert('Update failed: ' + error.message); return; }
+            await loadWebsiteTab();
+        }
+
+        async function deleteSiteEvent(id) {
+            const ev = siteEventsCache.find(e => e.id === id);
+            if (!ev || !confirm(`Delete "${ev.title}"?`)) return;
+            // Clean up the event's uploaded photo too — but only if it lives in
+            // our bucket (seeded events reference repo photos we must keep).
+            const path = sitePathFromUrl(ev.image_url);
+            if (path) await supabaseClient.storage.from(SITE_GALLERY_BUCKET).remove([path]);
+            const { error } = await supabaseClient.from('site_events').delete().eq('id', id);
+            if (error) { alert('Delete failed: ' + error.message); return; }
+            await loadWebsiteTab();
         }
 
         // ===== SUPABASE CONFIGURATION =====
@@ -2600,7 +3000,7 @@
             document.getElementById('studentsListHeader').textContent =
                 `${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''} found`;
             if (filteredStudents.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">No students found</td></tr>';
+                tbody.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">No students found</div>';
                 return;
             }
             const batchColors = { Beginner:'#3498db', Intermediate:'#8e44ad', Advanced:'#e67e22', Professional:'#27ae60' };
@@ -4565,6 +4965,8 @@
             } else if (tabName === 'reports') {
                 displayReports();
                 renderTaxRecords();
+            } else if (tabName === 'website') {
+                loadWebsiteTab();
             }
         }
 
@@ -4785,9 +5187,14 @@
                 if (owedCount > 0) {
                     statusLine = `<div style="margin-top:4px; font-size:0.95em; font-weight:700; color:#c0392b;">💶 Pending: €${Math.round(totalPending)} (${owedCount} month${owedCount > 1 ? 's' : ''} × €${Math.round(student.monthlyFees || 0)})</div>`;
                 } else if (advanceCount > 0) {
-                    statusLine = `<div style="margin-top:4px; font-size:0.92em; font-weight:700; color:#00796b;">💚 Next ${advanceCount > 1 ? `${advanceCount} cycles` : 'cycle'} already paid in advance</div>`;
+                    const paidThrough = projectAdvancePaidThrough(timeline, autoExt.isExtended);
+                    statusLine = `<div style="margin-top:4px; font-size:0.92em; font-weight:700; color:#00796b;">💚 Next ${advanceCount > 1 ? `${advanceCount} cycles` : 'cycle'} already paid in advance${paidThrough ? ` (most probably due after ${formatDisplayDate(paidThrough)} if they come regularly, otherwise it extends)` : ''}</div>`;
                 } else if (isPaid && displayCycle) {
-                    statusLine = `<div style="margin-top:4px; font-size:0.92em; color:#27ae60; font-weight:600;">✅ All caught up — next payment after ${formatDisplayDate(addDaysToDate(displayCycle.effectiveEnd, 1))}</div>`;
+                    // Match the cycle row: the natural end until the auto-
+                    // extension has actually started — effectiveEnd is a rolling
+                    // projection mid-cycle and would show a date weeks too late.
+                    const dueBase = autoExt.isExtended ? displayCycle.effectiveEnd : displayCycle.naturalEnd;
+                    statusLine = `<div style="margin-top:4px; font-size:0.92em; color:#27ae60; font-weight:600;">✅ All caught up — next payment after ${formatDisplayDate(addDaysToDate(dueBase, 1))} (auto-extends if fewer than ${AUTO_EXTENSION_CLASS_TARGET} classes)</div>`;
                 }
                 const pausedLine = autoExt.paused
                     ? `<div style="margin-top:4px; font-size:0.92em; color:#546e7a; font-weight:600;">⏸ Paused — next cycle starts when they attend again (${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} carry over)</div>`

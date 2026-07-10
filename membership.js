@@ -321,6 +321,27 @@ function buildMembershipTimeline(student, opts) {
     return { cycles, current, paused, owedCycles, unmatchedRecords, awaitingFirstClass: false };
 }
 
+// The natural end date of the LAST cycle already covered by advance payments
+// (unmatchedRecords), projecting cycles to chain after the current cycle's
+// display end. This is when the next payment would MOST LIKELY be due if
+// attendance stays regular — the 4-class guarantee can push it later, so
+// callers should phrase it as an estimate. '' when nothing is paid ahead.
+function projectAdvancePaidThrough(timeline, isExtendedNow) {
+    const records = timeline.unmatchedRecords || [];
+    const cycle = timeline.current || timeline.cycles[timeline.cycles.length - 1] || null;
+    if (records.length === 0 || !cycle) return '';
+    let cursor = addDaysToDate(isExtendedNow ? cycle.effectiveEnd : cycle.naturalEnd, 1);
+    let end = '';
+    for (const record of records) {
+        const recStart = membershipRecordStartDate(record);
+        const cycleDates = getPaymentCycleDates(recStart || cursor);
+        if (!cycleDates.start || !cycleDates.end) break;
+        end = cycleDates.end;
+        cursor = addDaysToDate(cycleDates.end, 1);
+    }
+    return end;
+}
+
 // Extension state of the membership's current (or last, if paused) cycle.
 // Applies to paid AND unpaid cycles alike, students pay on trust.
 function buildAutoExtension(student, opts) {
