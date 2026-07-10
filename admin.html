@@ -1164,7 +1164,7 @@
                 <!-- INSTAGRAM REELS -->
                 <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
                     <h3 style="margin:0 0 4px;">🎬 Instagram Reels on Homepage</h3>
-                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">The 6 reels shown in the homepage's "Follow Us on Instagram" panel, in this order. Open a reel on Instagram, copy its link, and paste it here. Leave a slot blank to show fewer.</div>
+                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">The 6 reels shown in the homepage's "Follow Us on Instagram" panel, in this order — they play right on the website as official Instagram embeds. Open a reel on Instagram, copy its link, and paste it here. Leave a slot blank to show fewer.</div>
                     <div id="igLinksList" style="display:grid; gap:10px; margin-bottom:14px;"></div>
                     <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                         <button id="saveIgLinksBtn" onclick="saveInstagramLinks()" style="padding:9px 22px; background:#e1306c; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.95em;">💾 Save Reels</button>
@@ -1923,7 +1923,7 @@
         async function saveInstagramLinks() {
             const status = document.getElementById('igLinksStatus');
             const btn = document.getElementById('saveIgLinksBtn');
-            const urls = [];
+            const rows = [];
             for (let i = 0; i < IG_SLOTS; i++) {
                 const raw = document.getElementById(`igLink${i}`).value.trim();
                 if (!raw) continue;
@@ -1932,16 +1932,17 @@
                     status.textContent = `Link ${i + 1} doesn't look like an Instagram post/reel link.`;
                     return;
                 }
-                // strip tracking params, keep just the post
-                urls.push(raw.match(IG_URL_RE)[0].replace(/\/?$/, '/'));
+                // strip tracking params, keep just the post — and KEEP the
+                // /reel/ vs /p/ part: the homepage embeds the URL as-is.
+                rows.push({ url: raw.match(IG_URL_RE)[0].replace(/\/?$/, '/'), sort_order: rows.length + 1 });
             }
             btn.disabled = true;
             status.style.color = '#2c5aa0';
             status.textContent = 'Saving…';
             // replace-all: wipe and reinsert in slot order
             const del = await supabaseClient.from('site_instagram').delete().gte('id', 0);
-            const ins = urls.length
-                ? await supabaseClient.from('site_instagram').insert(urls.map((url, i) => ({ url, sort_order: i + 1 })))
+            const ins = rows.length
+                ? await supabaseClient.from('site_instagram').insert(rows)
                 : { error: null };
             btn.disabled = false;
             if (del.error || ins.error) {
@@ -1951,7 +1952,7 @@
             }
             await loadWebsiteTab();
             status.style.color = '#27ae60';
-            status.textContent = `✓ Saved — the homepage now shows ${urls.length} reel${urls.length === 1 ? '' : 's'}.`;
+            status.textContent = `✓ Saved — the homepage now shows ${rows.length} reel${rows.length === 1 ? '' : 's'}.`;
         }
 
         // ---- Gallery ----
@@ -1961,15 +1962,19 @@
         const BUILTIN_GALLERY = Array.from({ length: 24 }, (_, i) =>
             `gallery/photo-${String(i + 1).padStart(2, '0')}.jpg`);
 
+        // storage_path '' = not our upload; delete only removes the row
+        // (the repo file stays, it's just no longer shown on the site).
+        function insertBuiltinRows(urls, startOrder) {
+            return supabaseClient.from('site_gallery').insert(
+                urls.map((url, i) => ({ storage_path: '', image_url: url, sort_order: startOrder + i }))
+            );
+        }
+
         async function importBuiltinGallery() {
             const btn = document.getElementById('importGalleryBtn');
             btn.disabled = true;
             btn.textContent = 'Importing…';
-            // storage_path '' = not our upload; delete only removes the row
-            // (the repo file stays, it's just no longer shown on the site).
-            const { error } = await supabaseClient.from('site_gallery').insert(
-                BUILTIN_GALLERY.map((url, i) => ({ storage_path: '', image_url: url, sort_order: i + 1 }))
-            );
+            const { error } = await insertBuiltinRows(BUILTIN_GALLERY, 1);
             if (error) {
                 alert('Import failed: ' + error.message);
                 btn.disabled = false;
@@ -1991,6 +1996,10 @@
                     </div>`;
                 return;
             }
+            // No "restore originals" banner here anymore: the owner re-uploaded
+            // the original photos manually (same files, new storage URLs), so a
+            // path-based "missing originals" check would always cry wolf and
+            // its restore button would duplicate every photo on the homepage.
             grid.innerHTML = siteGalleryCache.map((p, i) => `
                 <div style="position:relative; border:1px solid #eee; border-radius:8px; overflow:hidden; background:#fafafa;">
                     <img src="${escSiteHtml(p.image_url)}" alt="" loading="lazy" style="width:100%; height:110px; object-fit:cover; display:block;">
@@ -2011,6 +2020,13 @@
             const status = document.getElementById('galleryUploadStatus');
             const list = Array.from(files);
             let nextOrder = siteGalleryCache.reduce((m, p) => Math.max(m, p.sort_order), 0) + 1;
+            // First-ever upload: bring the built-in photos in first, so new
+            // uploads ADD to the current gallery instead of replacing it.
+            if (!siteGalleryCache.length) {
+                status.textContent = 'Importing the current website photos first…';
+                const { error } = await insertBuiltinRows(BUILTIN_GALLERY, 1);
+                if (!error) nextOrder = BUILTIN_GALLERY.length + 1;
+            }
             let ok = 0;
             for (let i = 0; i < list.length; i++) {
                 status.textContent = `Uploading ${i + 1} of ${list.length}…`;
