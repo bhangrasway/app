@@ -199,7 +199,17 @@ function buildMembershipTimeline(student, opts) {
     let anchor;
     if (paidRecords.length > 0) {
         const firstRecordStart = membershipRecordStartDate(paidRecords[0]);
-        anchor = firstRecordStart || joinDate;
+        if (firstRecordStart) {
+            anchor = firstRecordStart;
+        } else if (opts.hasDemoClass()) {
+            // Paid at registration but the first class was a free demo: the
+            // paid plan still starts on the first REAL class, same as for
+            // unpaid demo students, the payment attaches to that cycle.
+            anchor = opts.firstAttendanceAfter('');
+            if (!anchor) return { ...empty, awaitingFirstClass: true };
+        } else {
+            anchor = joinDate;
+        }
     } else {
         const override = opts.nextPaymentOverride;
         const autoDefault = joinDate ? addMonthsToDate(joinDate, 1) : '';

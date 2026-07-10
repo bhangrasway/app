@@ -1123,9 +1123,16 @@
             slidesWrap.querySelector('.gallery-arrow.prev').addEventListener('click', () => { prev(); startAutoplay(); });
             thumbs.forEach(t => t.addEventListener('click', () => { showSlide(Number(t.dataset.index)); startAutoplay(); }));
 
-            // Swipe support
+            // Swipe support. Never capture the pointer when the press starts
+            // on one of the overlay buttons: capturing retargets the pointerup
+            // (and the click derived from it) to the wrapper, which silently
+            // swallows the arrow/expand button clicks.
             let touchStartX = null;
-            slidesWrap.addEventListener('pointerdown', (e) => { touchStartX = e.clientX; slidesWrap.setPointerCapture(e.pointerId); });
+            slidesWrap.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('button')) return;
+                touchStartX = e.clientX;
+                slidesWrap.setPointerCapture(e.pointerId);
+            });
             slidesWrap.addEventListener('pointerup', (e) => {
                 if (touchStartX === null) return;
                 const delta = e.clientX - touchStartX;
@@ -1136,8 +1143,11 @@
                 }
             });
 
-            slidesWrap.addEventListener('pointerenter', stopAutoplay);
-            slidesWrap.addEventListener('pointerleave', startAutoplay);
+            // Pause on hover for mouse users only: on touch screens a tap
+            // fires pointerenter without a reliable pointerleave, which used
+            // to kill the autoplay for good after the first touch.
+            slidesWrap.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') stopAutoplay(); });
+            slidesWrap.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') startAutoplay(); });
 
             // Full-screen lightbox: expand button shows the CURRENT photo
             // whole (object-fit contain), since the carousel itself crops to

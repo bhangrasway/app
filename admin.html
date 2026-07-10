@@ -14,10 +14,38 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; }
+        /* iOS Safari: stop the automatic text inflation that makes some words
+           render bigger than their boxes and paint over their neighbours. */
+        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         body {
             font-family: 'Inter', 'Segoe UI', sans-serif;
             font-size: 16px;
             line-height: 1.6;
+            /* Long names/emails/addresses wrap instead of overflowing cards */
+            overflow-wrap: break-word;
+        }
+        /* iOS Safari squeezes checkboxes inside flex rows (flex-shrink), which
+           slides the tick box over the label text. Never shrink them. */
+        input[type="checkbox"] { flex: 0 0 auto; }
+        /* Older iOS ignores flex `gap`, leaving the tick glued to its text —
+           give every day-selector chip explicit spacing and a touch target. */
+        .checkin-day-label {
+            display: flex;
+            align-items: center;
+            font-size: 0.9em;
+            white-space: nowrap;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 7px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        .checkin-day-label input { margin: 0 6px 0 0; width: 16px; height: 16px; }
+        /* iOS collapses empty date/time inputs to near-zero width */
+        input[type="date"], input[type="time"], input[type="month"] {
+            min-height: 38px;
+            min-width: 120px;
+            background: #fff;
         }
         .login-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -456,9 +484,7 @@
             }
 
             #attendanceGridContainer,
-            #paidStudentsList,
-            #unpaidStudentsList,
-            #feesList,
+            #paymentsStudentsList,
             #expensesList,
             #reportsList {
                 max-height: 60vh;
@@ -512,6 +538,44 @@
 
             .backup-buttons button {
                 width: 100%;
+            }
+        }
+
+        /* Phones (iPhone Safari included): single-column forms, 2-up stat
+           boxes, smaller headings, and full-width action buttons so nothing
+           is squeezed into overlapping. */
+        @media (max-width: 480px) {
+            form [style*="grid-template-columns"] {
+                grid-template-columns: 1fr !important;
+            }
+
+            .stats {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+
+            .stat-number { font-size: 1.5em; }
+
+            header h1 { font-size: 1.4em; }
+
+            h2 { font-size: 1.2em; }
+
+            .tab-btn {
+                min-width: 110px;
+                padding: 10px 8px;
+                font-size: 0.9em;
+            }
+
+            /* Cards on the Payments tab: stack content above the buttons
+               instead of fighting for one row. */
+            #paymentsStudentsList > div {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+            #paymentsStudentsList > div > div:last-child {
+                flex-direction: row !important;
+                justify-content: flex-end;
+                align-items: center !important;
             }
         }
         /* Go to top button */
@@ -691,8 +755,16 @@
                     <!-- Row 6: Paid + Buttons -->
                     <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-top:6px;">
                         <label style="display:flex; align-items:center; gap:7px; margin:0; font-weight:600; cursor:pointer; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:7px; padding:8px 14px;">
-                            <input type="checkbox" id="paidAtRegistration" style="width:16px;height:16px; accent-color:#27ae60;">
+                            <input type="checkbox" id="paidAtRegistration" style="width:16px;height:16px; margin:0 6px 0 0; accent-color:#27ae60;">
                             ✅ Paid at registration
+                        </label>
+                        <!-- Deliberately vague wording: this is the "no free demo,
+                             first class counts, plan starts on join date" switch,
+                             but the label must not advertise that demos exist to
+                             anyone reading over the admin's shoulder. -->
+                        <label style="display:flex; align-items:center; gap:7px; margin:0; font-weight:600; cursor:pointer; background:#ede7f6; border:1px solid #c5b6e8; border-radius:7px; padding:8px 14px;" title="First class counts and the plan starts on the join date">
+                            <input type="checkbox" id="directJoin" style="width:16px;height:16px; margin:0 6px 0 0; accent-color:#8e44ad;">
+                            🚀 Direct join
                         </label>
                         <button type="submit" id="submitBtn" style="background:linear-gradient(135deg,#667eea,#764ba2);">🎉 Register Student</button>
                         <button type="button" onclick="cancelEdit()" id="cancelBtn" style="display:none; background:#95a5a6;">✖ Cancel Edit</button>
@@ -703,7 +775,7 @@
                 <div style="display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; margin-bottom:14px;">
                     <div>
                         <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Search</label>
-                        <input id="studentSearch" placeholder="Name, parent, batch…" oninput="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd; min-width:220px;">
+                        <input id="studentSearch" placeholder="Name, parent, batch, phone…" oninput="renderStudentsTable()" style="padding:8px 10px; border-radius:6px; border:1px solid #ddd; min-width:220px;">
                     </div>
                     <div>
                         <label style="display:block;font-size:0.82em;color:#333;margin-bottom:3px;">Batch</label>
@@ -759,66 +831,34 @@
                     <h2 style="margin:0;">Payments</h2>
                 </div>
 
-                <!-- Summary banner -->
+                <!-- Summary banner: tap a box to filter the single list below -->
                 <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;">
-                    <div style="background:#fff; border:1px solid #eee; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.06);">
+                    <div id="payFilterAll" onclick="setPaymentsFilter('all')" style="cursor:pointer; background:#fff; border:1px solid #eee; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.06);">
                         <div id="totalCount" style="font-size:2em; font-weight:700; color:#333;">0</div>
                         <div style="font-size:0.85em; color:#333; margin-top:4px;">Total Students</div>
                     </div>
-                    <div style="background:#27ae60; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+                    <div id="payFilterPaid" onclick="setPaymentsFilter('paid')" style="cursor:pointer; background:#27ae60; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                         <div id="paidCount" style="font-size:2em; font-weight:700; color:#fff;">0</div>
                         <div style="font-size:0.85em; color:rgba(255,255,255,0.85); margin-top:4px;">Paid</div>
                     </div>
-                    <div style="background:#e67e22; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+                    <div id="payFilterOverdue" onclick="setPaymentsFilter('overdue')" style="cursor:pointer; background:#e67e22; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                         <div id="overdueCount" style="font-size:2em; font-weight:700; color:#fff;">0</div>
                         <div style="font-size:0.85em; color:rgba(255,255,255,0.85); margin-top:4px;">Overdue</div>
                     </div>
-                    <div style="background:#e74c3c; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+                    <div id="payFilterUnpaid" onclick="setPaymentsFilter('unpaid')" style="cursor:pointer; background:#e74c3c; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
                         <div id="unpaidCount" style="font-size:2em; font-weight:700; color:#fff;">0</div>
                         <div style="font-size:0.85em; color:rgba(255,255,255,0.85); margin-top:4px;">Pending</div>
                     </div>
                 </div>
 
-                <!-- Search bar -->
-                <div style="margin-bottom:16px;">
-                    <input id="paymentsSearch" placeholder="Search by student or parent name…" oninput="filterPaymentsList()" style="width:100%; max-width:400px; padding:9px 12px; border-radius:6px; border:1px solid #ddd; font-size:0.95em;">
+                <!-- Search + export for whatever the current filter shows -->
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px;">
+                    <input id="paymentsSearch" placeholder="Search by student or parent name…" oninput="filterPaymentsList()" style="flex:1; min-width:200px; max-width:400px; padding:9px 12px; border-radius:6px; border:1px solid #ddd; font-size:0.95em;">
+                    <button onclick="exportPaymentsExcel(paymentsFilter)" style="background:#1d4ed8;color:#fff;padding:9px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">📊 Export this list</button>
                 </div>
 
-                <!-- Export Excel toolbar -->
-                <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <span style="font-weight:700; color:#1d4ed8; font-size:0.95em;">📊 Export to Excel:</span>
-                    <button onclick="exportPaymentsExcel('all')" style="background:#1d4ed8;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">📋 All Students</button>
-                    <button onclick="exportPaymentsExcel('overdue')" style="background:#e67e22;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">🔴 Overdue</button>
-                    <button onclick="exportPaymentsExcel('unpaid')" style="background:#e74c3c;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">🟡 Pending</button>
-                    <button onclick="exportPaymentsExcel('paid')" style="background:#27ae60;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:0.88em;">🟢 Paid</button>
-                </div>
-
-                <!-- Overdue panel -->
-                <div style="margin-bottom:28px;">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-                        <span style="background:#e67e22; color:#fff; border-radius:6px; padding:3px 10px; font-weight:700; font-size:0.85em;">OVERDUE</span>
-                        <span style="color:#333; font-size:0.9em;">Cycle ended, payment not received</span>
-                    </div>
-                    <div id="overdueStudentsList"></div>
-                </div>
-
-                <!-- Pending panel -->
-                <div style="margin-bottom:28px;">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-                        <span style="background:#e74c3c; color:#fff; border-radius:6px; padding:3px 10px; font-weight:700; font-size:0.85em;">PENDING</span>
-                        <span style="color:#333; font-size:0.9em;">Current cycle unpaid</span>
-                    </div>
-                    <div id="unpaidStudentsList"></div>
-                </div>
-
-                <!-- Paid panel -->
-                <div>
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-                        <span style="background:#27ae60; color:#fff; border-radius:6px; padding:3px 10px; font-weight:700; font-size:0.85em;">PAID</span>
-                        <span style="color:#333; font-size:0.9em;">Settled for current cycle</span>
-                    </div>
-                    <div id="paidStudentsList"></div>
-                </div>
+                <div id="paymentsListHeading" style="font-weight:700; color:#333; margin-bottom:12px;"></div>
+                <div id="paymentsStudentsList"></div>
             </div>
 
             <!-- ATTENDANCE TAB -->
@@ -869,13 +909,13 @@
                     <p style="margin:0 0 12px; color:#555; font-size:0.92em;">Students scan the QR code (print it for the door, or share the link in WhatsApp) to mark attendance or view their report. Attendance only works during the window below; reports are available anytime.</p>
 
                     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="0"> Sun</label>
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="1"> Mon</label>
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="2"> Tue</label>
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="3"> Wed</label>
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="4"> Thu</label>
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="5"> Fri</label>
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.9em;"><input type="checkbox" class="checkinDay" value="6"> Sat</label>
+                        <label class="checkin-day-label"><input type="checkbox" class="checkinDay" value="0"> Sun</label>
+                        <label class="checkin-day-label"><input type="checkbox" class="checkinDay" value="1"> Mon</label>
+                        <label class="checkin-day-label"><input type="checkbox" class="checkinDay" value="2"> Tue</label>
+                        <label class="checkin-day-label"><input type="checkbox" class="checkinDay" value="3"> Wed</label>
+                        <label class="checkin-day-label"><input type="checkbox" class="checkinDay" value="4"> Thu</label>
+                        <label class="checkin-day-label"><input type="checkbox" class="checkinDay" value="5"> Fri</label>
+                        <label class="checkin-day-label"><input type="checkbox" class="checkinDay" value="6"> Sat</label>
                     </div>
 
                     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;">
@@ -927,16 +967,7 @@
                     </div>
                 </div>
 
-                <div style="margin-bottom:12px;">
-                    <input id="feesSearch" placeholder="Search student in upcoming fees…" oninput="filterFeesList()" style="width:100%; max-width:380px; padding:9px 12px; border-radius:6px; border:1px solid #ddd; font-size:0.95em;">
-                </div>
-                <h3>Upcoming Fees This Month</h3>
-                <div id="feesUpcomingList"></div>
-                <div class="empty-message" id="noFeesMsg" style="display: none;">
-                    No students registered yet.
-                </div>
-
-                <h3 style="margin-top: 40px;">Add Expenses</h3>
+                <h3 style="margin-top: 10px;">Add Expenses</h3>
                 <form onsubmit="addExpense(event)" style="max-width: 500px;">
                     <div class="form-group">
                         <label for="expenseDesc">Expense Description *</label>
@@ -1393,11 +1424,17 @@
         }
 
         // ── WhatsApp Helper ──────────────────────────────────────────────────────
+        // Also used by the Excel export to build clickable per-student links —
+        // it referenced this function while only openWhatsApp existed, which
+        // crashed every export before a single row was written.
+        function buildWhatsAppUrl(phone, message) {
+            const cleanPhone = String(phone).replace(/\D/g, '');
+            return `https://api.whatsapp.com/send?phone=39${cleanPhone}&text=${encodeURIComponent(message)}`;
+        }
+
         function openWhatsApp(phone, message) {
             if (!phone) { alert('Phone number missing'); return; }
-            const cleanPhone = String(phone).replace(/\D/g, '');
-            const url = `https://api.whatsapp.com/send?phone=39${cleanPhone}&text=${encodeURIComponent(message)}`;
-            window.open(url, '_blank');
+            window.open(buildWhatsAppUrl(phone, message), '_blank');
         }
         // ─────────────────────────────────────────────────────────────────────────
 
@@ -1496,26 +1533,43 @@
                 message += `📅 Paid on: ${lastPaymentDate}\n\n`;
             }
 
-            message += `\n${paymentStatus === 'PAID' ? '🟢 Current Membership: Active' : '🟡 Current Payment Cycle'}\n\n`;
-            message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
-
-            if (extraClasses > 0) {
-                message += `🎁 Bonus: you attended ${extraClasses} extra class${extraClasses > 1 ? 'es' : ''} this cycle beyond the ${AUTO_EXTENSION_CLASS_TARGET}-class minimum, enjoy!\n\n`;
-            } else if (autoExt.isExtended) {
-                const classesLeft = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - autoExt.attendedCount);
+            if (timeline.awaitingFirstClass) {
+                // Demo taken, plan not started yet: no cycle dates exist and no
+                // money is due, so neither the cycle block nor the payment
+                // reminder applies. Say what actually happens next instead.
+                message += `\n🎁 Free Demo Taken\n\n`;
+                message += `Your demo class was our gift — it doesn't count toward your plan.\n`;
                 message += paymentStatus === 'PAID'
-                    ? `⏳ No rush, you're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`
-                    : `⏳ You're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`;
-            }
-
-            if (paymentStatus === 'PAID') {
-                message += `🥳 You're all set! Enjoy your classes and keep shining on the dance floor! 💃🕺\n`;
+                    ? `Your membership starts on your next attended class, and your payment already covers that first cycle. 🥳 See you on the dance floor! 💃🕺\n`
+                    : `Your membership (and first payment) starts on your next attended class. See you on the dance floor! 💃🕺\n`;
             } else {
-                message += paymentStatus === 'OVERDUE'
-                    ? `😊 This is a friendly reminder, ${timeline.owedCycles.length} previous month${timeline.owedCycles.length > 1 ? 's are' : ' is'} still unpaid${currentCycleAlsoPending ? ', along with this cycle' : ''}.\n\n`
-                    : `😊 Your fee for this cycle is still pending, you can pay anytime at class.\n\n`;
-                message += `💶 Total Payment To Be Paid = €${Math.round(totalPendingAmount)}\n`;
-                message += `Thank you! ❤️🙏\n`;
+                message += `\n${paymentStatus === 'PAID' ? '🟢 Current Membership: Active' : '🟡 Current Payment Cycle'}\n\n`;
+                message += `🗓️ ${currentCycleStart} → ${currentCycleEnd}\n\n`;
+
+                if (extraClasses > 0) {
+                    message += `🎁 Bonus: you attended ${extraClasses} extra class${extraClasses > 1 ? 'es' : ''} this cycle beyond the ${AUTO_EXTENSION_CLASS_TARGET}-class minimum, enjoy!\n\n`;
+                } else if (autoExt.isExtended) {
+                    const classesLeft = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - autoExt.attendedCount);
+                    message += paymentStatus === 'PAID'
+                        ? `⏳ No rush, you're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`
+                        : `⏳ You're at ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes this cycle. It'll wrap up after ${classesLeft} more class${classesLeft === 1 ? '' : 'es'} or ${formatDisplayDate(autoExt.effectiveEndDate)} (dates auto-extend if you don't come).\n\n`;
+                }
+
+                if (paymentStatus === 'PAID') {
+                    // Advance payments live in unmatchedRecords; without this line a
+                    // student who paid ahead gets a message that never acknowledges it.
+                    const advanceCount = timeline.unmatchedRecords.length;
+                    if (advanceCount > 0) {
+                        message += `💚 Your next ${advanceCount > 1 ? `${advanceCount} cycles are` : 'cycle is'} already paid in advance — nothing more to pay. It starts automatically when this cycle wraps up.\n\n`;
+                    }
+                    message += `🥳 You're all set! Enjoy your classes and keep shining on the dance floor! 💃🕺\n`;
+                } else {
+                    message += paymentStatus === 'OVERDUE'
+                        ? `😊 This is a friendly reminder, ${timeline.owedCycles.length} previous month${timeline.owedCycles.length > 1 ? 's are' : ' is'} still unpaid${currentCycleAlsoPending ? ', along with this cycle' : ''}.\n\n`
+                        : `😊 Your fee for this cycle is still pending, you can pay anytime at class.\n\n`;
+                    message += `💶 Total Payment To Be Paid = €${Math.round(totalPendingAmount)}\n`;
+                    message += `Thank you! ❤️🙏\n`;
+                }
             }
 
             message += `\n${sep}\n\n`;
@@ -2438,10 +2492,14 @@
                         }
                     }
 
-                    // Auto-record the first class on the join date. If they didn't
-                    // pay at registration it's a FREE DEMO, the plan starts on
-                    // their next attended class.
-                    const recordAsDemo = !studentData.paidAtRegistration;
+                    // Auto-record the first class on the join date. "Direct join"
+                    // is THE demo switch, independent of payment: unticked means
+                    // the first class is a FREE DEMO and the plan starts on the
+                    // next attended class (even when they paid at registration —
+                    // the payment then covers the cycle that starts at their
+                    // first real class); ticked means the first class counts and
+                    // the plan starts on the join date.
+                    const recordAsDemo = !document.getElementById('directJoin').checked;
                     if (newStudentId && studentData.joinDate) {
                         try {
                             await insertAttendanceWithSchemaFallback([{
@@ -2455,7 +2513,9 @@
                         }
                     }
                     showSuccessMessage(recordAsDemo
-                        ? '✓ Student added, today\'s class recorded as FREE DEMO. Plan starts at their next class!'
+                        ? (studentData.paidAtRegistration
+                            ? '✓ Student added, payment recorded. Today\'s class is a FREE DEMO — the paid plan starts at their next class!'
+                            : '✓ Student added, today\'s class recorded as FREE DEMO. Plan starts at their next class!')
                         : '✓ Student added, first class attendance recorded!');
                 }
 
@@ -2476,6 +2536,7 @@
                 document.getElementById('monthlyFees').value = '';
                 document.getElementById('joinDate').valueAsDate = new Date();
                 document.getElementById('paidAtRegistration').checked = false;
+                document.getElementById('directJoin').checked = false;
                 document.getElementById('submitBtn').textContent = 'Register Student';
                 document.getElementById('cancelBtn').style.display = 'none';
 
@@ -2508,11 +2569,18 @@
             const paymentMonthStart = paymentMonthValue && paymentMonthValue.length >= 7
                 ? `${paymentMonthValue.slice(0, 7)}-01`
                 : `${new Date().toISOString().slice(0, 7)}-01`;
+            // Phone search compares digits only, so "349 828..." finds
+            // "+39 3498283873" regardless of spaces/prefix formatting. At
+            // least 3 digits required, or a 1-digit term would match everyone.
+            const searchDigits = searchTerm.replace(/\D/g, '');
             const filteredStudents = students.filter(student => {
+                const phoneDigits = String(student.phone || '').replace(/\D/g, '');
                 const matchSearch = !searchTerm ||
                     student.name.toLowerCase().includes(searchTerm) ||
                     (student.parentName || '').toLowerCase().includes(searchTerm) ||
-                    (student.batch || '').toLowerCase().includes(searchTerm);
+                    (student.batch || '').toLowerCase().includes(searchTerm) ||
+                    String(student.phone || '').toLowerCase().includes(searchTerm) ||
+                    (searchDigits.length >= 3 && phoneDigits.includes(searchDigits));
                 const matchBatch = !filterBatch || student.batch === filterBatch;
                 const isPaid = isStudentPaymentActive(student);
                 const matchStatus = !filterStatus ||
@@ -3104,48 +3172,85 @@
                 historyHtml += `<div style="margin-top:12px; padding:10px 14px; background:#eceff1; border:1px solid #cfd8dc; border-radius:8px; color:#546e7a; font-size:0.9em; font-weight:600;">⏸ Plan paused, the next cycle starts on the day they attend again${carryCount > 0 ? `, carrying over ${carryCount} attended class${carryCount > 1 ? 'es' : ''}` : ''}.</div>`;
             }
 
-            if (timeline.unmatchedRecords.length > 0) {
+            // Upcoming cycles: projection assuming the current cycle finishes
+            // normally. Advance payments (timeline.unmatchedRecords) map onto
+            // these slots in consumption order — exactly how the engine will
+            // attach them when each cycle actually starts — so instead of a
+            // bare "Paid in Advance: 2026-07" plus a PENDING row inviting a
+            // double payment, the covered cycle itself shows PAID IN ADVANCE
+            // with the paid date, amount and cycle dates.
+            const advanceRecords = timeline.unmatchedRecords;
+            if (!timeline.paused && timeline.current) {
+                const currentDisplayEnd = autoExt.isExtended ? timeline.current.effectiveEnd : timeline.current.naturalEnd;
+                let cursor = currentDisplayEnd ? addDaysToDate(currentDisplayEnd, 1) : '';
+                const upcoming = [];
+                const upcomingCount = Math.max(2, advanceRecords.length);
+                for (let index = 0; index < upcomingCount && cursor; index += 1) {
+                    const record = advanceRecords[index] || null;
+                    // A record saved with an explicit start date pins its cycle
+                    // there (the engine does the same when it reaches it);
+                    // month-only records take the projected slot.
+                    const recStart = record ? String(record.paid_start_date ?? record.paidStartDate ?? '').slice(0, 10) : '';
+                    const cycleDates = getPaymentCycleDates(recStart || cursor);
+                    if (!cycleDates.start || !cycleDates.end) break;
+                    upcoming.push({ cycle: cycleDates, record });
+                    cursor = addDaysToDate(cycleDates.end, 1);
+                }
+                if (upcoming.length > 0) {
+                    historyHtml += `<div style="margin-top:14px; font-weight:700;">Upcoming Cycles</div>`;
+                    historyHtml += upcoming.map(({ cycle, record }) => {
+                        if (record) {
+                            const recordId = record.id ?? null;
+                            const paidDateStr = String(record.paiddate ?? record.paidDate ?? record.paid_date ?? '').slice(0, 10);
+                            const paidAmount = Number(record.amount ?? student?.monthlyFees ?? 0);
+                            const paidLine = `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${paidDateStr ? formatDisplayDate(paidDateStr) : 'N/A'} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong>${record.month ? ` &nbsp;·&nbsp; for ${record.month}` : ''}</div>`;
+                            return `
+                                <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                                    <div>
+                                        <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
+                                        ${paidLine}
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                        <div class="fees-status fees-paid">PAID IN ADVANCE</div>
+                                        ${recordId !== null ? `<button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>` : ''}
+                                    </div>
+                                </div>`;
+                        }
+                        return `
+                            <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                                <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
+                                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                    <div class="fees-status fees-unpaid">PENDING</div>
+                                    <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">
+                                        Mark Paid
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } else if (advanceRecords.length > 0) {
+                // Paused plan (no current cycle to project from): still list the
+                // advance payments with their full details so they never vanish.
                 historyHtml += `<div style="margin-top:14px; font-weight:700;">Paid in Advance</div>`;
-                historyHtml += timeline.unmatchedRecords.map((record) => {
+                historyHtml += advanceRecords.map((record) => {
                     const recStart = String(record.paid_start_date ?? record.paidStartDate ?? '').slice(0, 10);
                     const recEnd = String(record.paid_end_date ?? record.paidEndDate ?? '').slice(0, 10) || (recStart ? getPaymentCycleDates(recStart).end : '');
                     const recordId = record.id ?? null;
+                    const paidDateStr = String(record.paiddate ?? record.paidDate ?? record.paid_date ?? '').slice(0, 10);
+                    const paidAmount = Number(record.amount ?? student?.monthlyFees ?? 0);
                     return `
                         <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                            <div style="font-weight:600;">${recStart ? formatCycleLabel(recStart, recEnd) : (record.month || 'N/A')}</div>
+                            <div>
+                                <div style="font-weight:600;">${recStart ? formatCycleLabel(recStart, recEnd) : (record.month || 'N/A')}</div>
+                                <div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${paidDateStr ? formatDisplayDate(paidDateStr) : 'N/A'} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong></div>
+                            </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div class="fees-status fees-paid">PAID</div>
                                 ${recordId !== null ? `<button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>` : ''}
                             </div>
                         </div>`;
                 }).join('');
-            }
-
-            // Upcoming cycles: projection assuming the current cycle finishes normally
-            if (!timeline.paused && timeline.current) {
-                const currentDisplayEnd = autoExt.isExtended ? timeline.current.effectiveEnd : timeline.current.naturalEnd;
-                let cursor = currentDisplayEnd ? addDaysToDate(currentDisplayEnd, 1) : '';
-                const upcoming = [];
-                for (let index = 0; index < 2 && cursor; index += 1) {
-                    const cycleDates = getPaymentCycleDates(cursor);
-                    if (!cycleDates.start || !cycleDates.end) break;
-                    upcoming.push(cycleDates);
-                    cursor = addDaysToDate(cycleDates.end, 1);
-                }
-                if (upcoming.length > 0) {
-                    historyHtml += `<div style="margin-top:14px; font-weight:700;">Upcoming Cycles</div>`;
-                    historyHtml += upcoming.map((cycle) => `
-                        <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                            <div style="font-weight:600;">${formatCycleLabel(cycle.start, cycle.end)}</div>
-                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                <div class="fees-status fees-unpaid">PENDING</div>
-                                <button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">
-                                    Mark Paid
-                                </button>
-                            </div>
-                        </div>
-                    `).join('');
-                }
             }
 
             historyContainer.innerHTML = historyHtml;
@@ -3188,6 +3293,7 @@
             document.getElementById('monthlyFees').value = student.monthlyFees;
             document.getElementById('joinDate').value = student.joinDate;
             document.getElementById('paidAtRegistration').checked = !!student.paidAtRegistration;
+            document.getElementById('directJoin').checked = false; // only meaningful for new registrations
             document.getElementById('submitBtn').textContent = 'Update Student';
             document.getElementById('cancelBtn').style.display = 'inline-block';
             
@@ -3213,6 +3319,7 @@
             document.getElementById('monthlyFees').value = '';
             document.getElementById('joinDate').valueAsDate = new Date();
             document.getElementById('paidAtRegistration').checked = false;
+            document.getElementById('directJoin').checked = false;
             document.getElementById('submitBtn').textContent = 'Register Student';
             document.getElementById('cancelBtn').style.display = 'none';
         }
@@ -4412,7 +4519,7 @@
                     { studentId: studentId, attendanceDate: todayStr, isPresent: true }
                 ]);
                 await supabaseClient.from('checkin_requests')
-                    .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+                    .update({ status: 'approved', resolved_at: new Date().toISOString() })
                     .eq('id', requestId);
 
                 showSuccessMessage(`✓ ${studentName} marked present`);
@@ -4423,9 +4530,12 @@
             }
         }
 
+        // 'dismissed', not 'resolved': approved and dismissed requests must be
+        // distinguishable afterwards, otherwise there's no way to audit who was
+        // actually let in ("someone checked in from home" starts here).
         async function dismissCheckinRequest(requestId) {
             await supabaseClient.from('checkin_requests')
-                .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+                .update({ status: 'dismissed', resolved_at: new Date().toISOString() })
                 .eq('id', requestId);
             loadCheckinRequests();
         }
@@ -4438,7 +4548,11 @@
                 btn.classList.remove('active');
             });
             document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
+            // Highlight the tab's own button, not event.target — switchTab is
+            // also called from student-name links and stat boxes, where the
+            // clicked element isn't a tab button.
+            const tabBtn = document.querySelector(`.tab-btn[onclick*="'${tabName}'"]`);
+            if (tabBtn) tabBtn.classList.add('active');
 
             if (tabName === 'attendance') {
                 displayAttendanceTab();
@@ -4469,10 +4583,8 @@
 
         function filterPaymentsList() {
             const term = (document.getElementById('paymentsSearch')?.value || '').toLowerCase();
-            ['overdueStudentsList', 'unpaidStudentsList', 'paidStudentsList'].forEach(id => {
-                document.querySelectorAll(`#${id} > div`).forEach(card => {
-                    card.style.display = !term || card.innerText.toLowerCase().includes(term) ? '' : 'none';
-                });
+            document.querySelectorAll('#paymentsStudentsList > div').forEach(card => {
+                card.style.display = !term || card.innerText.toLowerCase().includes(term) ? '' : 'none';
             });
         }
 
@@ -4577,60 +4689,34 @@
             const paymentMonthInput = document.getElementById('paymentMonth');
             if (paymentMonthInput && paymentMonthInput.value !== month) paymentMonthInput.value = month;
 
-            const paidList = document.getElementById('paidStudentsList');
-            const unpaidList = document.getElementById('unpaidStudentsList');
-            const overdueList = document.getElementById('overdueStudentsList');
-            if (!paidList || !unpaidList || !overdueList) return;
+            const listEl = document.getElementById('paymentsStudentsList');
+            if (!listEl) return;
 
-            paidList.innerHTML = '';
-            unpaidList.innerHTML = '';
-            overdueList.innerHTML = '';
-
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            let paidCount = 0, unpaidCount = 0, overdueCount = 0;
+            // One list, filtered by the tappable summary boxes; 'all' shows
+            // everyone ordered worst-first (overdue, then pending, then paid).
+            const groups = { overdue: [], unpaid: [], paid: [] };
 
             const cardStyleBase = 'background:#fff; border:1px solid #eee; border-radius:10px; padding:14px 18px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; box-shadow:0 2px 8px rgba(0,0,0,0.07);';
 
             students.forEach(student => {
                 const isPaid = isStudentPaymentActive(student);
                 const autoExt = getAutoExtension(student);
-                const nextCycleStart = getEffectiveNextCycleStart(student);
-                const joinDate = String(student.joinDate || student.join_date || '').slice(0, 10);
-
-                // Current due cycle = the first unpaid cycle from join date
-                const currentCycleDates = isPaid
-                    ? getPaymentCycleDates(nextCycleStart || joinDate)
-                    : getPaymentCycleDates(joinDate);
-
-                // For paid students use the latest paid record's cycle
+                const timeline = getMembershipTimeline(student);
                 const latestRecord = getLatestPaymentRecord(student.id);
-                const paidStart = String(latestRecord?.paid_start_date ?? latestRecord?.paidStartDate ?? '').slice(0, 10);
-                const paidEnd = String(latestRecord?.paid_end_date ?? latestRecord?.paidEndDate ?? '').slice(0, 10);
-                const paidDate = String(latestRecord?.paiddate ?? latestRecord?.paidDate ?? '').slice(0, 10);
-
-                const displayCycle = isPaid
-                    ? (() => {
-                        if (paidStart && paidEnd) return { start: paidStart, end: paidEnd };
-                        // Fall back to join-date-based cycle history (same logic as student detail page)
-                        const cycleHistory = getStudentCycleHistory(student);
-                        const lastCycle = cycleHistory[cycleHistory.length - 1];
-                        if (lastCycle?.startDate && lastCycle?.endDate) return { start: lastCycle.startDate, end: lastCycle.endDate };
-                        return getPaymentCycleDates(joinDate);
-                      })()
-                    : getPaymentCycleDates(getEffectiveNextCycleStart(student) || joinDate);
-
-                let cycleLabel = displayCycle.start && displayCycle.end
-                    ? formatCycleLabel(displayCycle.start, displayCycle.end)
-                    : 'N/A';
-                if (autoExt.isExtended) {
-                    cycleLabel += ` → extended to ${formatDisplayDate(autoExt.effectiveEndDate)}`;
-                }
-
-                // Determine overdue: unpaid and the current due cycle has already ended
-                const cycleDueEnd = displayCycle.end ? new Date(displayCycle.end + 'T23:59:59') : null;
-                const isOverdue = !isPaid && cycleDueEnd && today > cycleDueEnd;
                 const hasOverride = !!getNextPaymentOverride(student.id);
+
+                // Mirror the customer report exactly (same shared engine, same
+                // derived fields), so what the admin reads here is what the
+                // student sees on report.html — no second bookkeeping system.
+                const displayCycle = timeline.current || timeline.cycles[timeline.cycles.length - 1] || null;
+                const displayIndex = displayCycle ? timeline.cycles.indexOf(displayCycle) : -1;
+                const previousCycle = displayIndex > 0 ? timeline.cycles[displayIndex - 1] : null;
+                const currentCycleAlsoPending = displayCycle && !displayCycle.paid && !timeline.owedCycles.includes(displayCycle);
+                const owedCount = timeline.owedCycles.length + (currentCycleAlsoPending ? 1 : 0);
+                const totalPending = owedCount * (student.monthlyFees || 0);
+                // Overdue = a COMPLETE unpaid cycle exists (report.html's rule),
+                // not merely "the calendar month ended".
+                const isOverdue = !isPaid && timeline.owedCycles.length > 0;
 
                 const cardStyle = isPaid
                     ? cardStyleBase + (autoExt.isExtended ? 'border-left:5px solid #00796b;' : 'border-left:5px solid #27ae60;')
@@ -4638,58 +4724,138 @@
                         ? cardStyleBase + 'border-left:5px solid #e67e22;'
                         : cardStyleBase + 'border-left:5px solid #e74c3c;';
 
-                const actionBtn = isPaid
-                    ? `<button onclick="toggleFeesPaidByRecord(${latestRecord?.id ?? 'null'}, false)" style="background:#e74c3c;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Unpaid</button>`
-                    : `<button onclick="promptAndMarkPaid(${student.id}, '${displayCycle.start || ''}')` + `" style="background:#27ae60;color:#fff;padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Mark Paid</button>`;
+                // This tab is a read-only overview by design: with multiple
+                // months pending, a "Mark Paid" here was ambiguous (it silently
+                // paid only ONE cycle), so payments are recorded from the
+                // student detail view, where each cycle has its own button.
+                // Instead the card shows the last payment and the cycle it
+                // covered, mapped through the trust-based timeline.
+                let lastPayLine;
+                if (latestRecord) {
+                    const lpDate = String(latestRecord.paiddate ?? latestRecord.paidDate ?? latestRecord.paid_date ?? '').slice(0, 10);
+                    const lpAmount = Math.round(Number(latestRecord.amount ?? student.monthlyFees ?? 0));
+                    const rid = String(latestRecord.id ?? '');
+                    const matched = rid ? timeline.cycles.find(c => String(c.record?.id ?? '') === rid) : null;
+                    const isAdvance = !matched && timeline.unmatchedRecords.some(r => String(r.id ?? '') === rid);
+                    let forLabel = '';
+                    if (matched) {
+                        const showExt = matched.effectiveEnd !== matched.naturalEnd && (matched !== timeline.current || autoExt.isExtended);
+                        forLabel = formatCycleLabel(matched.start, showExt ? matched.effectiveEnd : matched.naturalEnd);
+                    } else if (isAdvance) {
+                        forLabel = 'next cycle (paid in advance)';
+                    } else if (latestRecord.month) {
+                        forLabel = String(latestRecord.month);
+                    }
+                    lastPayLine = `<div style="color:#1a1a1a; font-size:0.92em; margin-top:3px;">💳 Last paid: <strong>${lpDate ? formatDisplayDate(lpDate) : 'N/A'}</strong> · €${lpAmount}${forLabel ? ` · for ${forLabel}` : ''}</div>`;
+                } else {
+                    lastPayLine = `<div style="color:#777; font-size:0.92em; margin-top:3px;">💳 No payments recorded yet</div>`;
+                }
 
-                const extendBtn = `<button onclick="extendStudentPlan(${student.id})" title="Extend plan" style="background:#8e44ad;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;">Extend</button>`;
+                // One row per cycle, same content as report.html's cycle cards:
+                // dates (+extended tag), paid pill, progress dots, class count.
+                const cycleRow = (label, cycle, isCurrent) => {
+                    const wasExtended = cycle.effectiveEnd !== cycle.naturalEnd;
+                    const showExt = wasExtended && (!isCurrent || autoExt.isExtended);
+                    const end = showExt ? cycle.effectiveEnd : cycle.naturalEnd;
+                    let dots = '';
+                    for (let i = 0; i < AUTO_EXTENSION_CLASS_TARGET; i += 1) {
+                        dots += `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:${i < cycle.attended ? '#27ae60' : '#e0e0e0'};"></span>`;
+                    }
+                    const extra = cycle.attended - AUTO_EXTENSION_CLASS_TARGET;
+                    const pill = cycle.paid
+                        ? `<span style="background:#d4edda;color:#155724;border-radius:5px;padding:1px 8px;font-size:0.78em;font-weight:700;">PAID</span>`
+                        : `<span style="background:#fdecea;color:#c0392b;border-radius:5px;padding:1px 8px;font-size:0.78em;font-weight:700;">UNPAID</span>`;
+                    return `<div style="margin-top:4px; font-size:0.92em; color:#1a1a1a;">
+                        <strong>${label}:</strong> ${formatDisplayDate(cycle.start)} → ${formatDisplayDate(end)}${showExt ? ' <span style="color:#00796b;font-weight:700;font-size:0.85em;">⏳ extended</span>' : ''} ${pill}
+                        <span style="margin-left:6px; white-space:nowrap;">${dots}</span> <span style="color:#555;">${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes${cycle.carriedIn > 0 ? ` (incl. ${cycle.carriedIn} carried)` : ''}${extra > 0 ? ` · ${extra} extra 🎁` : ''}</span>
+                    </div>`;
+                };
+
+                let cyclesHtml = '';
+                if (timeline.awaitingFirstClass) {
+                    cyclesHtml = `<div style="margin-top:4px; font-size:0.92em; color:#e65100; font-weight:600;">🎁 Demo taken — plan starts on their next attended class${isPaid ? ' (first cycle already paid)' : ''}.</div>`;
+                } else if (displayCycle) {
+                    cyclesHtml = cycleRow('Current', displayCycle, displayCycle === timeline.current);
+                    if (previousCycle) cyclesHtml += cycleRow('Previous', previousCycle, false);
+                }
+
+                // Bottom status line: pending total / paid in advance / caught up.
+                const advanceCount = timeline.unmatchedRecords.length;
+                let statusLine = '';
+                if (owedCount > 0) {
+                    statusLine = `<div style="margin-top:4px; font-size:0.95em; font-weight:700; color:#c0392b;">💶 Pending: €${Math.round(totalPending)} (${owedCount} month${owedCount > 1 ? 's' : ''} × €${Math.round(student.monthlyFees || 0)})</div>`;
+                } else if (advanceCount > 0) {
+                    statusLine = `<div style="margin-top:4px; font-size:0.92em; font-weight:700; color:#00796b;">💚 Next ${advanceCount > 1 ? `${advanceCount} cycles` : 'cycle'} already paid in advance</div>`;
+                } else if (isPaid && displayCycle) {
+                    statusLine = `<div style="margin-top:4px; font-size:0.92em; color:#27ae60; font-weight:600;">✅ All caught up — next payment after ${formatDisplayDate(addDaysToDate(displayCycle.effectiveEnd, 1))}</div>`;
+                }
+                const pausedLine = autoExt.paused
+                    ? `<div style="margin-top:4px; font-size:0.92em; color:#546e7a; font-weight:600;">⏸ Paused — next cycle starts when they attend again (${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} carry over)</div>`
+                    : '';
 
                 const overrideTag = hasOverride ? `<span style="background:#f0e6fa;color:#8e44ad;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">EXTENDED</span>` : '';
-                const autoExtTag = autoExt.isExtended ? `<span style="background:#e0f2f1;color:#00796b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏳ AUTO-EXTENDED, ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} CLASSES</span>` : '';
-                const pausedTag = autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">⏸ PAUSED, ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} CARRY OVER</span>` : '';
-                const owedTag = autoExt.owedCount > 0 ? `<span style="background:#fdecea;color:#c0392b;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">💶 TO PAY, ${autoExt.owedCount} MONTH${autoExt.owedCount > 1 ? 'S' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span>` : '';
-                const demoTag = autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">🎁 DEMO TAKEN, PLAN STARTS AT NEXT CLASS</span>` : '';
                 const overdueTag = isOverdue ? `<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">OVERDUE</span>` : '';
                 const waBtn = student.phone ? `<button onclick="sendStudentWhatsAppReport(${student.id})" title="Send WhatsApp Report" style="background:#25D366;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;font-size:0.85em;">📱 WA</button>` : '';
 
                 const card = `
                     <div style="${cardStyle}">
                         <div style="flex:1; min-width:0;">
-                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:2px;">
                                 <span onclick="switchTab('students'); setTimeout(() => showStudentDetail(${student.id}), 100);" style="font-weight:700; font-size:1.12em; color:#3498db; cursor:pointer; text-decoration:underline;">${student.name}</span>
-                                ${overdueTag}${overrideTag}${autoExtTag}${pausedTag}${owedTag}${demoTag}
+                                ${overdueTag}${overrideTag}
+                                <span style="color:#666; font-size:0.88em;">👤 ${student.parentName || '-'}</span>
                             </div>
-                            <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">👤 ${student.parentName}</div>
-                            <div style="color:#1a1a1a; font-size:0.92em; margin-bottom:3px;">💰 <strong style="color:#27ae60;">€${Math.round(student.monthlyFees||0)}</strong> / month</div>
-                            <div style="color:#1a1a1a; font-size:0.92em;">📅 ${cycleLabel}</div>
+                            ${cyclesHtml}
+                            ${lastPayLine}
+                            ${statusLine}
+                            ${pausedLine}
                         </div>
                         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
-                            ${isOverdue ? extendBtn : ''}
-                            ${actionBtn}
                             ${waBtn}
                         </div>
                     </div>`;
 
-                if (isPaid) {
-                    paidList.innerHTML += card;
-                    paidCount++;
-                } else if (isOverdue) {
-                    overdueList.innerHTML += card;
-                    overdueCount++;
-                } else {
-                    unpaidList.innerHTML += card;
-                    unpaidCount++;
-                }
+                groups[isPaid ? 'paid' : (isOverdue ? 'overdue' : 'unpaid')].push(card);
             });
 
-            if (paidCount === 0) paidList.innerHTML = '<div class="empty-message" style="padding:14px;">No paid students yet.</div>';
-            if (unpaidCount === 0) unpaidList.innerHTML = '<div class="empty-message" style="padding:14px;">No pending students, all caught up!</div>';
-            if (overdueCount === 0) overdueList.innerHTML = '<div class="empty-message" style="padding:14px;">No overdue students.</div>';
-
-            document.getElementById('paidCount').textContent = paidCount;
-            document.getElementById('unpaidCount').textContent = unpaidCount;
-            document.getElementById('overdueCount').textContent = overdueCount;
+            document.getElementById('paidCount').textContent = groups.paid.length;
+            document.getElementById('unpaidCount').textContent = groups.unpaid.length;
+            document.getElementById('overdueCount').textContent = groups.overdue.length;
             document.getElementById('totalCount').textContent = students.length;
+
+            const emptyMessages = {
+                all: 'No students registered yet.',
+                paid: 'No paid students yet.',
+                unpaid: 'No pending students, all caught up!',
+                overdue: 'No overdue students. 🎉'
+            };
+            const headings = {
+                all: `Showing all students (overdue first)`,
+                paid: `🟢 Paid — settled for the current cycle`,
+                unpaid: `🟡 Pending — current cycle unpaid`,
+                overdue: `🔴 Overdue — a finished cycle was never paid`
+            };
+            const visible = paymentsFilter === 'all'
+                ? [...groups.overdue, ...groups.unpaid, ...groups.paid]
+                : groups[paymentsFilter] || [];
+            listEl.innerHTML = visible.length > 0
+                ? visible.join('')
+                : `<div class="empty-message" style="padding:14px;">${emptyMessages[paymentsFilter] || ''}</div>`;
+            document.getElementById('paymentsListHeading').textContent = headings[paymentsFilter] || '';
+
+            // Highlight the active summary box
+            [['payFilterAll', 'all'], ['payFilterPaid', 'paid'], ['payFilterOverdue', 'overdue'], ['payFilterUnpaid', 'unpaid']].forEach(([id, f]) => {
+                const box = document.getElementById(id);
+                if (box) box.style.outline = paymentsFilter === f ? '3px solid #667eea' : 'none';
+            });
+
+            filterPaymentsList(); // re-apply any active search term
+        }
+
+        let paymentsFilter = 'all';
+        function setPaymentsFilter(filter) {
+            paymentsFilter = ['all', 'paid', 'unpaid', 'overdue'].includes(filter) ? filter : 'all';
+            updatePaymentsDisplay();
         }
 
         // ── Excel Export ─────────────────────────────────────────────────────────
@@ -4704,9 +4870,9 @@
             const filtered = students.filter(s => {
                 const isPaid = isStudentPaymentActive(s);
                 if (type === 'paid') return isPaid;
-                const cycleDates = getTodayCycleDates(s);
-                const cycleDueEnd = cycleDates.end ? new Date(cycleDates.end + 'T23:59:59') : null;
-                const isOverdue = !isPaid && cycleDueEnd && today > cycleDueEnd;
+                // Same rule as the Payments tab list: overdue = a COMPLETE
+                // unpaid cycle exists in the trust-based timeline.
+                const isOverdue = !isPaid && getMembershipTimeline(s).owedCycles.length > 0;
                 if (type === 'overdue') return isOverdue;
                 if (type === 'unpaid') return !isPaid && !isOverdue;
                 return true; // 'all'
@@ -4809,22 +4975,16 @@
 
         function displayFeesTab() {
             const month = new Date().toISOString().slice(0, 7);
-            const upcomingFeesList = document.getElementById('feesUpcomingList');
             const expensesList = document.getElementById('expensesList');
 
-            if (upcomingFeesList) upcomingFeesList.innerHTML = '';
             if (expensesList) expensesList.innerHTML = '';
 
             const statsContainer = document.getElementById('feesStatsContainer');
-            const noFeesMsg = document.getElementById('noFeesMsg');
 
             if (students.length === 0) {
-                if (noFeesMsg) noFeesMsg.style.display = 'block';
                 if (statsContainer) statsContainer.innerHTML = '';
                 return;
             }
-
-            if (noFeesMsg) noFeesMsg.style.display = 'none';
 
             const paidFeeRecords = (feePayments || []).filter((record) => {
                 const rawMonth = String(record.month ?? record.feeMonth ?? record.fee_month ?? '').slice(0, 7);
@@ -4870,7 +5030,14 @@
                 }
             });
 
-            const dueAmount = dueThisMonth.reduce((sum, student) => sum + Number(student.monthlyFees || 0), 0);
+            // How many cycles this student actually owes: paid students due for
+            // renewal owe 1 (the next cycle); unpaid students owe every owed
+            // cycle plus the current one (same count as the "TO PAY, N MONTHS"
+            // tag), so someone 2 months behind shows €60, not €30.
+            const dueCyclesFor = (student) => isStudentPaymentActive(student)
+                ? 1
+                : Math.max(1, getAutoExtension(student).owedCount);
+            const dueAmount = dueThisMonth.reduce((sum, student) => sum + dueCyclesFor(student) * Number(student.monthlyFees || 0), 0);
 
             if (statsContainer) {
                 statsContainer.innerHTML = `
@@ -4878,9 +5045,9 @@
                         <div class="stat-number">€${Math.round(feesCollected)}</div>
                         <div class="stat-label">Fees Collected</div>
                     </div>
-                    <div class="stat-box" style="background:#e67e22;">
+                    <div class="stat-box" style="background:#e67e22; cursor:pointer;" onclick="switchTab('payments'); setPaymentsFilter('overdue');" title="See who owes — opens the Payments tab filtered on Overdue">
                         <div class="stat-number">€${Math.round(dueAmount)}</div>
-                        <div class="stat-label">Upcoming Fees This Month</div>
+                        <div class="stat-label">Upcoming Fees This Month → see who owes</div>
                     </div>
                     <div class="stat-box" style="background:#3498db;">
                         <div class="stat-number">€${Math.round(feesCollected)}</div>
@@ -4891,42 +5058,6 @@
                         <div class="stat-label">Total Expense</div>
                     </div>
                 `;
-            }
-
-            if (upcomingFeesList) {
-                if (dueThisMonth.length === 0) {
-                    upcomingFeesList.innerHTML = '<div class="empty-message" style="padding:14px;">No upcoming fees due this month.</div>';
-                } else {
-                    upcomingFeesList.innerHTML = dueThisMonth.map((student) => {
-                        const isPaidStudent = isStudentPaymentActive(student);
-                        const cycleStart = getEffectiveNextCycleStart(student) || String(student.joinDate || '').slice(0, 10);
-                        const cycleDates = getPaymentCycleDates(cycleStart);
-                        const latestRec = getLatestPaymentRecord(student.id);
-                        const paidEnd = isPaidStudent ? String(latestRec?.paid_end_date ?? latestRec?.paidEndDate ?? '').slice(0, 10) : null;
-                        const cycleLabel2 = isPaidStudent && paidEnd
-                            ? `Expires ${paidEnd}`
-                            : formatCycleLabel(cycleDates.start, cycleDates.end);
-                        const statusTag = isPaidStudent
-                            ? `<span style="background:#d4edda;color:#155724;border-radius:5px;padding:2px 8px;font-size:0.78em;font-weight:700;">PAID, RENEWAL DUE</span>`
-                            : `<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:2px 8px;font-size:0.78em;font-weight:700;">UNPAID</span>`;
-                        return `
-                            <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; padding:14px 16px; border:1px solid #eee; border-left:4px solid #e67e22; border-radius:10px; margin-bottom:10px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-                                <div style="min-width:0;">
-                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-                                        <span onclick="switchTab('students'); setTimeout(() => showStudentDetail(${student.id}), 100);" style="font-weight:700; font-size:1.05em; color:#3498db; cursor:pointer; text-decoration:underline;">${student.name}</span>
-                                        ${statusTag}
-                                    </div>
-                                    <div style="color:#1a1a1a; font-size:0.9em;">👤 ${student.parentName}</div>
-                                    <div style="color:#1a1a1a; font-size:0.9em; margin-top:2px;">📅 ${cycleLabel2}</div>
-                                </div>
-                                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-                                    <div style="font-size:1.2em; font-weight:800; color:#e67e22;">€${Math.round(student.monthlyFees || 0)}</div>
-                                    <button class="btn-small" onclick="promptAndMarkPaid(${student.id}, '${cycleDates.start || ''}')" style="background:#27ae60;color:#fff;">Mark Paid</button>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                }
             }
 
             if (expensesList) {
@@ -4951,13 +5082,6 @@
                 }
             }
             renderPaymentHistory();
-        }
-
-        function filterFeesList() {
-            const term = (document.getElementById('feesSearch')?.value || '').toLowerCase();
-            document.querySelectorAll('#feesUpcomingList > div').forEach(card => {
-                card.style.display = !term || card.innerText.toLowerCase().includes(term) ? '' : 'none';
-            });
         }
 
         function renderPaymentHistory() {
@@ -4993,14 +5117,47 @@
                 grouped[pd].push(r);
             });
 
+            // Record-id → the cycle it really covers, from the trust-based
+            // timeline. The old join-date+index guess mislabeled extended
+            // cycles and put advance payments on months they don't cover.
+            const cycleLabelByRecord = new Map();
+            students.forEach(s => {
+                const tl = getMembershipTimeline(s);
+                const ext = getAutoExtension(s);
+                tl.cycles.forEach(c => {
+                    const rid = String(c.record?.id ?? '');
+                    if (!rid) return;
+                    const showExtended = c.effectiveEnd !== c.naturalEnd && (c !== tl.current || ext.isExtended);
+                    cycleLabelByRecord.set(`${s.id}:${rid}`, formatCycleLabel(c.start, showExtended ? c.effectiveEnd : c.naturalEnd));
+                });
+                // Advance payments map onto the upcoming-cycle projection in
+                // consumption order, same as the student detail view.
+                if (!tl.paused && tl.current && tl.unmatchedRecords.length > 0) {
+                    const displayEnd = ext.isExtended ? tl.current.effectiveEnd : tl.current.naturalEnd;
+                    let cursor = displayEnd ? addDaysToDate(displayEnd, 1) : '';
+                    tl.unmatchedRecords.forEach(record => {
+                        const recStart = String(record.paid_start_date ?? record.paidStartDate ?? '').slice(0, 10);
+                        const cd = getPaymentCycleDates(recStart || cursor);
+                        if (!cd.start || !cd.end) return;
+                        const rid = String(record.id ?? '');
+                        if (rid) cycleLabelByRecord.set(`${s.id}:${rid}`, `${formatCycleLabel(cd.start, cd.end)} · paid in advance`);
+                        cursor = addDaysToDate(cd.end, 1);
+                    });
+                }
+            });
+
+            // What was actually handed over: the record's own amount, only
+            // falling back to the plan fee for old rows that never stored one.
+            const recordAmount = (r) => {
+                const sid = r.studentid ?? r.studentId ?? r.student_id;
+                const s = students.find(x => String(x.id) === String(sid));
+                return Number(r.amount ?? s?.monthlyFees ?? 0);
+            };
+
             let html = '';
             Object.keys(grouped).sort((a, b) => b.localeCompare(a)).forEach(date => {
                 const dayRecs = grouped[date];
-                const dayTotal = dayRecs.reduce((sum, r) => {
-                    const sid = r.studentid ?? r.studentId ?? r.student_id;
-                    const s = students.find(x => String(x.id) === String(sid));
-                    return sum + Number(s?.monthlyFees || 0);
-                }, 0);
+                const dayTotal = dayRecs.reduce((sum, r) => sum + recordAmount(r), 0);
 
                 html += `<div style="margin-bottom:20px;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #eee;">
@@ -5014,21 +5171,13 @@
                     const s = students.find(x => String(x.id) === String(sid));
                     const name = s?.name || `Student #${sid}`;
                     const parentName = s?.parentName || '';
-                    const fee  = String(Math.round(s?.monthlyFees || 0));
-                    // Derive cycle dates from cycle history so extensions are reflected
+                    const fee = String(Math.round(recordAmount(r)));
                     const paidDate = String(r.paiddate ?? r.paidDate ?? r.paid_date ?? date).slice(0, 10);
                     const recordId = String(r.id ?? r.record_id ?? r.recordId ?? '');
-                    const historyForRecord = s ? getStudentCycleHistory(s) : [];
-                    const matchedCycle = historyForRecord.find(c => {
-                        const cId = String(c.record?.id ?? c.record?.record_id ?? c.record?.recordId ?? '');
-                        return recordId && cId && recordId === cId;
-                    });
-                    const cycleDates = matchedCycle
-                        ? { start: matchedCycle.startDate, end: matchedCycle.endDate }
-                        : (s ? getPaymentCycleDates(String(s.joinDate || '').slice(0, 10)) : { start: null, end: null });
-                    const cycleLabel = cycleDates.start && cycleDates.end
-                        ? formatCycleLabel(cycleDates.start, cycleDates.end)
-                        : paidDate;
+                    const recStart = String(r.paid_start_date ?? r.paidStartDate ?? '').slice(0, 10);
+                    const cycleLabel = cycleLabelByRecord.get(`${sid}:${recordId}`)
+                        || (recStart ? formatCycleLabel(recStart, getPaymentCycleDates(recStart).end) : '')
+                        || (r.month ? `for ${r.month}` : paidDate);
                     const clickable = s ? `onclick="switchTab('students'); setTimeout(() => showStudentDetail(${s.id}), 100);" style="font-weight:600;color:#3498db;cursor:pointer;text-decoration:underline;"` : `style="font-weight:600;color:#222;"`;
                     html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#f8f9fa;border:1px solid #eee;border-left:4px solid #27ae60;border-radius:8px;margin-bottom:6px;">
                         <div>

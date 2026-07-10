@@ -671,9 +671,16 @@
                 ? tCount(owedCount, 'cycles_unpaid_one', 'cycles_unpaid_many')
                 : t('caught_up');
 
-            // When paid up, tell them when they're due again, by date or by class count.
+            // When paid up, tell them when they're due again, by date or by class
+            // count, UNLESS they've already paid ahead: payments recorded beyond
+            // the current cycle sit in timeline.unmatchedRecords ("paid in
+            // advance"), and telling those students "your next payment is due
+            // after {date}" reads like their advance payment was never received.
             const nextPaymentEl = document.getElementById('reportNextPayment');
-            if (paymentStatus === 'PAID' && displayCycle) {
+            const advanceCount = timeline.unmatchedRecords.length;
+            if (paymentStatus === 'PAID' && advanceCount > 0) {
+                nextPaymentEl.textContent = tCount(advanceCount, 'advance_paid_note_one', 'advance_paid_note_many');
+            } else if (paymentStatus === 'PAID' && displayCycle) {
                 const classesRemaining = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - displayCycle.attended);
                 const nextPayDate = formatDisplayDate(addDaysToDate(displayCycle.effectiveEnd, 1));
                 nextPaymentEl.textContent = t('next_payment_note', {

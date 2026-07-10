@@ -185,11 +185,12 @@
             <button class="link-btn" id="notifyFromClosedBtn" data-i18n="notify_from_closed">Can't check in? Notify your instructor</button>
         </div>
 
-        <!-- TOO FAR (device location confirms they're not near the studio) -->
+        <!-- LOCATION BLOCKED (too far, or location not shared / unavailable) -->
         <div id="tooFarState" class="hidden">
-            <h2 data-i18n="too_far_heading">You seem far from the studio</h2>
-            <p class="sub" data-i18n="too_far_body">Your phone's location says you're more than 500m from Bhangra Sway Cremona, so self check-in is blocked. Maybe your browser hasn't shared your location correctly, you can notify your instructor instead.</p>
+            <h2 id="locBlockHeading">You seem far from the studio</h2>
+            <p class="sub" id="locBlockBody"></p>
             <button class="primary" id="notifyFromTooFarBtn" data-i18n="request_attendance">Request Attendance</button>
+            <button class="link-btn" id="locRetryBtn"></button>
         </div>
 
         <!-- PHONE ENTRY (the "home" screen, no names are ever listed) -->
@@ -253,6 +254,7 @@
         // can re-render whatever screen is currently visible.
         let branchKey = 'checking_in_pending';
         let closedMsg = null;
+        let locBlockStatus = 'too-far'; // which variant the location screen shows
 
         function show(id) {
             ['loadingState', 'closedState', 'tooFarState', 'phoneState', 'pickState', 'confirmState', 'resultState'].forEach((s) => {
@@ -294,9 +296,11 @@
         }
 
         // ===== Location is requested automatically on every visit =====
-        // If it's denied, unsupported, or times out, we still fall back to the
-        // phone flow rather than blocking check-in entirely, so a bad GPS
-        // signal never locks a real student out.
+        // Self check-in requires a CONFIRMED location at the studio. A device
+        // that won't share its location (denied / unsupported / timed out) is
+        // routed to the request flow, where the instructor — who can see who's
+        // actually in the room — approves with one tap. The old soft-pass let
+        // anyone check in from home by simply denying the location prompt.
         function haversineMeters(lat1, lng1, lat2, lng2) {
             const R = 6371000;
             const toRad = (d) => (d * Math.PI) / 180;
@@ -368,12 +372,24 @@
             }
 
             const locationStatus = await confirmBranchSilently();
-            if (locationStatus === 'too-far') {
+            if (locationStatus !== 'confirmed') {
+                locBlockStatus = locationStatus;
+                renderLocBlock();
                 show('tooFarState');
                 return;
             }
 
             startIdentify('checkin', '');
+        }
+
+        // The location screen covers two cases with different wording: the
+        // phone POSITIVELY reported being >500m away, or it simply didn't
+        // share a usable location (denied / unsupported / timed out).
+        function renderLocBlock() {
+            const unknown = locBlockStatus === 'unknown';
+            document.getElementById('locBlockHeading').textContent = t(unknown ? 'loc_unknown_heading' : 'too_far_heading');
+            document.getElementById('locBlockBody').textContent = t(unknown ? 'loc_unknown_body' : 'too_far_body');
+            document.getElementById('locRetryBtn').textContent = t('retry_location');
         }
 
         function renderClosedMessage() {
@@ -574,8 +590,15 @@
                 startIdentify('notify', 'Check-in window closed on their device')
             );
             document.getElementById('notifyFromTooFarBtn').addEventListener('click', () =>
-                startIdentify('notify', 'Device location was far from the studio')
+                startIdentify('notify', locBlockStatus === 'unknown'
+                    ? 'Device did not share its location'
+                    : 'Device location was far from the studio')
             );
+            // "I've enabled location — try again": re-run the full check.
+            document.getElementById('locRetryBtn').addEventListener('click', () => {
+                show('loadingState');
+                init();
+            });
             document.getElementById('startOverBtn').addEventListener('click', () => {
                 // Re-run the full check (window + location) rather than jumping
                 // straight to the phone screen, otherwise someone routed to the
@@ -597,6 +620,7 @@
                 renderIdentifyTexts();
                 renderConfirmTexts();
                 renderClosedMessage();
+                renderLocBlock();
             };
 
             init();

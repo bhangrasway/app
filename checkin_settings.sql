@@ -33,7 +33,7 @@ create table if not exists public.checkin_requests (
     student_id bigint not null,
     student_name text not null,
     reason text,
-    status text not null default 'pending', -- 'pending' | 'resolved'
+    status text not null default 'pending', -- 'pending' | 'approved' | 'dismissed' ('resolved' in rows from before the split)
     requested_at timestamptz not null default now(),
     resolved_at timestamptz
 );
