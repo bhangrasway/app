@@ -621,39 +621,6 @@
         }
         .lightbox-close:hover { background: rgba(255,255,255,0.28); }
         .lightbox-close .icon { width: 20px; height: 20px; }
-        .ig-lightbox-frame {
-            width: 100%;
-            max-width: 400px;
-            height: min(680px, 90vh);
-            border-radius: 14px;
-            overflow: hidden;
-            background: #fff;
-        }
-        .ig-lightbox-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
-        .ig-lightbox-frame .ig-lightbox-fallback {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 14px;
-            padding: 30px;
-            text-align: center;
-            background: linear-gradient(135deg, #833ab4, #fd1d1d 55%, #fcb045);
-            color: #fff;
-        }
-        .ig-lightbox-frame .ig-lightbox-fallback .icon { width: 40px; height: 40px; }
-        .ig-lightbox-frame .ig-lightbox-fallback a {
-            display: inline-block;
-            padding: 10px 20px;
-            border-radius: 999px;
-            background: #fff;
-            color: #833ab4;
-            font-weight: 700;
-            text-decoration: none;
-            font-size: 0.9em;
-        }
         .gallery-thumbs {
             display: flex;
             gap: 8px;
@@ -1154,16 +1121,6 @@
         <img id="lightboxImg" src="" alt="Bhangra Sway Cremona photo">
     </div>
 
-    <!-- Reel popup: tapping an Instagram tile opens this instead of leaving
-         the site — the reel plays via Instagram's own embed, but the visitor
-         stays on bhangrasway.com the whole time (same idea as bhangraempire.com's
-         popup player). The iframe is only created when opened, so the 6 grid
-         tiles never carry Instagram's fragile live-embed behavior. -->
-    <div class="lightbox ig-lightbox hidden" id="igLightbox">
-        <button class="lightbox-close" type="button" aria-label="Close"><svg class="icon"><use href="#icon-close"/></svg></button>
-        <div class="ig-lightbox-frame" id="igLightboxFrame"></div>
-    </div>
-
     <script>
         document.getElementById('footerYear').textContent = new Date().getFullYear();
 
@@ -1232,39 +1189,6 @@
             return row;
         }
 
-        // Opens the reel popup instead of navigating away: builds the embed
-        // iframe fresh (only on click, never on page load) so a visitor
-        // stays on bhangrasway.com and watches inline, matching how
-        // bhangraempire.com's reel popup works.
-        //
-        // Always embeds via /p/CODE/embed/, regardless of whether the saved
-        // link uses /reel/, /p/, or /tv/. Verified 2026-07-11: a real,
-        // working post (6.4K likes) saved as /reel/DaZ4fXdMW8J/ showed
-        // Instagram's own "may be broken" card when embedded via
-        // /reel/.../embed/ — but Instagram's OWN "Visit Instagram" fallback
-        // link on that broken card redirected to /p/DaZ4fXdMW8J/, which
-        // loads the post fine. /p/ is the reliable universal embed path.
-        function openReelLightbox(url) {
-            const match = url.match(/instagram\.com\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
-            if (!match) return;
-            const [, , code] = match;
-            const frame = document.getElementById('igLightboxFrame');
-            const iframe = document.createElement('iframe');
-            iframe.src = `https://www.instagram.com/p/${code}/embed/`;
-            iframe.title = 'Instagram post from Bhangra Sway Cremona';
-            iframe.loading = 'eager';
-            iframe.setAttribute('scrolling', 'no');
-            iframe.allow = 'encrypted-media';
-            frame.replaceChildren(iframe);
-            document.getElementById('igLightbox').classList.remove('hidden');
-        }
-        function closeReelLightbox() {
-            document.getElementById('igLightbox').classList.add('hidden');
-            // Drop the iframe so a paused/playing reel doesn't keep running
-            // in the background after the popup closes.
-            document.getElementById('igLightboxFrame').replaceChildren();
-        }
-
         function renderInstagram() {
             const container = document.getElementById('instagramContainer');
             const posts = INSTAGRAM_POSTS
@@ -1273,11 +1197,18 @@
                 const grid = document.createElement('div');
                 grid.className = 'ig-grid';
                 posts.forEach(p => {
-                    const a = document.createElement('button');
-                    a.type = 'button';
+                    // Plain link to the reel, opened in a new tab: Instagram's
+                    // own embed widget proved too unreliable (showed "may be
+                    // broken" for genuinely real, working posts depending on
+                    // the visitor's browser/privacy settings, even with
+                    // "Website embeds" enabled on the account) — a real link
+                    // to the real post always works.
+                    const a = document.createElement('a');
                     a.className = 'ig-thumb' + (p.img ? '' : ' no-cover');
-                    a.setAttribute('aria-label', 'Watch this reel');
-                    a.addEventListener('click', () => openReelLightbox(p.url));
+                    a.href = p.url;
+                    a.target = '_blank';
+                    a.rel = 'noopener';
+                    a.setAttribute('aria-label', 'Watch this reel on Instagram');
                     if (p.img) {
                         const img = document.createElement('img');
                         img.src = p.img;
@@ -1308,18 +1239,6 @@
             container.appendChild(panelCta('instagram-cta', INSTAGRAM_PROFILE_URL, 'icon-instagram', 'events_follow_instagram', 'Follow on Instagram'));
             if (window.applyI18n) window.applyI18n();
         }
-
-        // Reel popup: close via the X button, clicking the dark backdrop, or
-        // Escape — same pattern as the photo lightbox, wired independently
-        // since it must work even when the gallery has no photos.
-        (() => {
-            const igLightbox = document.getElementById('igLightbox');
-            igLightbox.querySelector('.lightbox-close').addEventListener('click', closeReelLightbox);
-            igLightbox.addEventListener('click', (e) => { if (e.target === igLightbox) closeReelLightbox(); });
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && !igLightbox.classList.contains('hidden')) closeReelLightbox();
-            });
-        })();
 
         async function getLatestVideos() {
             const CACHE_KEY = 'ytFeedCache_v1';
