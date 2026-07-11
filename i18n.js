@@ -647,10 +647,19 @@ function tDay(i) {
 function applyI18n() {
     document.documentElement.lang = currentLang;
     document.querySelectorAll('[data-i18n]').forEach((el) => {
-        el.textContent = t(el.dataset.i18n);
+        // A key this file doesn't know (e.g. the page is newer than a
+        // browser-cached copy of this script) keeps the element's own
+        // default text instead of printing the raw key name.
+        const key = el.dataset.i18n;
+        if ((I18N[currentLang] && I18N[currentLang][key]) ?? I18N.en[key]) {
+            el.textContent = t(key);
+        }
     });
     document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
-        el.placeholder = t(el.dataset.i18nPlaceholder);
+        const key = el.dataset.i18nPlaceholder;
+        if ((I18N[currentLang] && I18N[currentLang][key]) ?? I18N.en[key]) {
+            el.placeholder = t(key);
+        }
     });
     // The closed pill is flag-only (plus a caret), no EN/IT/PU text.
     const toggle = document.querySelector('#langPicker .lang-dd-toggle');

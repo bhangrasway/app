@@ -1164,7 +1164,8 @@
                 <!-- INSTAGRAM REELS -->
                 <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
                     <h3 style="margin:0 0 4px;">🎬 Instagram Reels on Homepage</h3>
-                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">The 6 reels shown in the homepage's "Follow Us on Instagram" panel, in this order — they play right on the website as official Instagram embeds. Open a reel on Instagram, copy its link, and paste it here. Leave a slot blank to show fewer.</div>
+                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">The 6 reels shown in the homepage's "Follow Us on Instagram" panel, in this order. Open a reel in the Instagram app → <strong>Share → Copy link</strong>, paste it here, then add a <strong>cover photo</strong> (a screenshot of the reel works great) — tapping the cover on the homepage opens the reel on Instagram. Without a cover, a purple placeholder tile is shown. Leave a slot blank to show fewer.</div>
+                    <div id="igDataWarning" style="display:none; background:#fdf2e9; border:1px solid #f5cba7; border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:0.88em; color:#9c640c;">⚠️ These saved links look like placeholders/duplicates, not real reels — replace them below with links copied from your actual Instagram reels.</div>
                     <div id="igLinksList" style="display:grid; gap:10px; margin-bottom:14px;"></div>
                     <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                         <button id="saveIgLinksBtn" onclick="saveInstagramLinks()" style="padding:9px 22px; background:#e1306c; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.95em;">💾 Save Reels</button>
@@ -1243,7 +1244,7 @@
 
     <!-- Shared trust-based membership engine (same file report.html loads,
          so admin math and student-facing math can never drift apart) -->
-    <script src="membership.js"></script>
+    <script src="membership.js?v=2"></script>
     <script>
         // ===== TAX RECORDS =====
         const TAX_BUCKET = 'tax-pdfs';
@@ -1903,41 +1904,87 @@
         function renderInstagramLinks() {
             const list = document.getElementById('igLinksList');
             const status = document.getElementById('igLinksStatus');
+            const warning = document.getElementById('igDataWarning');
             if (siteInstagramCache === null) {
                 list.innerHTML = '<div style="color:#9c640c; font-size:0.9em;">⚠️ Table missing — re-run <strong>site_content.sql</strong> in the Supabase SQL Editor (safe to run again), then reload.</div>';
                 document.getElementById('saveIgLinksBtn').disabled = true;
+                warning.style.display = 'none';
                 return;
             }
             document.getElementById('saveIgLinksBtn').disabled = false;
             status.textContent = '';
-            list.innerHTML = Array.from({ length: IG_SLOTS }, (_, i) => `
-                <div style="display:flex; align-items:center; gap:10px;">
+            // Flag data that's almost certainly leftover test input: the same
+            // reel link saved into more than one slot.
+            const urls = siteInstagramCache.map(r => r.url).filter(Boolean);
+            const hasDuplicates = new Set(urls).size < urls.length;
+            warning.style.display = hasDuplicates ? 'block' : 'none';
+            list.innerHTML = Array.from({ length: IG_SLOTS }, (_, i) => {
+                const cover = siteInstagramCache[i]?.image_url || '';
+                return `
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                     <span style="font-weight:700; color:#888; width:20px; text-align:right;">${i + 1}.</span>
                     <input type="url" id="igLink${i}" value="${escSiteHtml(siteInstagramCache[i]?.url || '')}"
                         placeholder="https://www.instagram.com/reel/…"
-                        style="flex:1; padding:9px 12px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
-                </div>
-            `).join('');
+                        style="flex:1; min-width:220px; padding:9px 12px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                    <img id="igCoverPreview${i}" src="${escSiteHtml(cover)}" alt="" loading="lazy"
+                        style="width:34px; height:34px; object-fit:cover; border-radius:5px; border:1px solid #ddd; flex-shrink:0;${cover ? '' : ' display:none;'}">
+                    <label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; background:#fff; border:1.5px solid #ddd; border-radius:6px; cursor:pointer; font-size:0.82em; color:#555; white-space:nowrap;">
+                        🖼 <span id="igCoverLabel${i}">${cover ? 'Change cover…' : 'Cover photo…'}</span>
+                        <input type="file" id="igCover${i}" accept="image/*" style="display:none;"
+                            onchange="document.getElementById('igCoverLabel${i}').textContent = this.files[0]?.name || 'Cover photo…'">
+                    </label>
+                    <button type="button" onclick="testInstagramLink(${i})" title="Open this link to check the reel really exists"
+                        style="border:none; background:#ecf0f1; color:#333; border-radius:6px; cursor:pointer; padding:8px 10px; font-size:0.82em; font-weight:600; white-space:nowrap;">👁 Test</button>
+                </div>`;
+            }).join('');
+        }
+
+        // Opens the pasted link so the admin can confirm the reel actually
+        // exists BEFORE saving.
+        function testInstagramLink(i) {
+            const url = document.getElementById(`igLink${i}`).value.trim();
+            if (!url) { alert('Paste a link in this slot first.'); return; }
+            window.open(url, '_blank', 'noopener');
         }
 
         async function saveInstagramLinks() {
             const status = document.getElementById('igLinksStatus');
             const btn = document.getElementById('saveIgLinksBtn');
-            const rows = [];
+            const slots = [];
             for (let i = 0; i < IG_SLOTS; i++) {
                 const raw = document.getElementById(`igLink${i}`).value.trim();
+                const file = document.getElementById(`igCover${i}`).files[0] || null;
                 if (!raw) continue;
                 if (!IG_URL_RE.test(raw)) {
                     status.style.color = '#c0392b';
                     status.textContent = `Link ${i + 1} doesn't look like an Instagram post/reel link.`;
                     return;
                 }
-                // strip tracking params, keep just the post — and KEEP the
-                // /reel/ vs /p/ part: the homepage embeds the URL as-is.
-                rows.push({ url: raw.match(IG_URL_RE)[0].replace(/\/?$/, '/'), sort_order: rows.length + 1 });
+                // strip tracking params, keep just the post
+                slots.push({ url: raw.match(IG_URL_RE)[0].replace(/\/?$/, '/'), file });
             }
             btn.disabled = true;
             status.style.color = '#2c5aa0';
+            // Covers: a newly chosen file wins; otherwise keep the cover the
+            // same reel URL already had (matched by URL, not slot, so covers
+            // follow their reel when the list is reordered).
+            const coverByUrl = new Map((siteInstagramCache || []).map(r => [r.url, r.image_url || '']));
+            const rows = [];
+            try {
+                for (let i = 0; i < slots.length; i++) {
+                    let img = coverByUrl.get(slots[i].url) || null;
+                    if (slots[i].file) {
+                        status.textContent = `Uploading cover ${i + 1}…`;
+                        img = await uploadSitePhoto(slots[i].file, 'instagram');
+                    }
+                    rows.push({ url: slots[i].url, image_url: img, sort_order: i + 1 });
+                }
+            } catch (err) {
+                btn.disabled = false;
+                status.style.color = '#c0392b';
+                status.textContent = 'Cover upload failed: ' + err.message;
+                return;
+            }
             status.textContent = 'Saving…';
             // replace-all: wipe and reinsert in slot order
             const del = await supabaseClient.from('site_instagram').delete().gte('id', 0);

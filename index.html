@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#667eea">
-    <script src="i18n.js"></script>
+    <script src="i18n.js?v=2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -347,18 +347,66 @@
         .social-panel-heading .icon { width: 22px; height: 22px; flex: none; }
         .ig-heading .icon { color: #E4405F; }
         .yt-heading .icon { color: #ff0000; }
+        /* Cover-photo tiles that link out to Instagram, NOT live iframe
+           embeds: Instagram's official embed widget depends on browser
+           referrer/cookie state and shows its own "may be broken" fallback
+           unpredictably — even for real, working posts — whenever it can't
+           validate the embedding context (blocked third-party storage, no
+           referrer, logged out, etc). A static cover we control never fails
+           that way. 3 columns keeps each tile roughly YouTube-card-sized. */
         .ig-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 14px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
         }
-        .ig-embed {
+        .ig-thumb {
+            position: relative;
+            display: block;
+            width: 100%;
             border-radius: 12px;
             overflow: hidden;
             border: 1px solid #eee;
             background: #fafafa;
+            padding: 0;
+            font: inherit;
+            cursor: pointer;
+            /* Portrait, not square: matches how Instagram itself crops
+               Reels in a profile grid, and brings the panel's total height
+               closer to the YouTube grid alongside it. */
+            aspect-ratio: 4 / 5;
         }
-        .ig-embed iframe { display: block; width: 100%; height: 430px; border: 0; }
+        .ig-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.2s;
+        }
+        .ig-thumb:hover img { transform: scale(1.04); }
+        .ig-thumb .play-badge {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.45);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            padding-left: 3px; /* optically center the ▶ */
+            pointer-events: none;
+        }
+        .ig-thumb.no-cover {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #833ab4, #fd1d1d 55%, #fcb045);
+        }
+        .ig-thumb.no-cover .icon { width: 30px; height: 30px; color: #fff; }
         .yt-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -573,6 +621,39 @@
         }
         .lightbox-close:hover { background: rgba(255,255,255,0.28); }
         .lightbox-close .icon { width: 20px; height: 20px; }
+        .ig-lightbox-frame {
+            width: 100%;
+            max-width: 400px;
+            height: min(680px, 90vh);
+            border-radius: 14px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .ig-lightbox-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+        .ig-lightbox-frame .ig-lightbox-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 30px;
+            text-align: center;
+            background: linear-gradient(135deg, #833ab4, #fd1d1d 55%, #fcb045);
+            color: #fff;
+        }
+        .ig-lightbox-frame .ig-lightbox-fallback .icon { width: 40px; height: 40px; }
+        .ig-lightbox-frame .ig-lightbox-fallback a {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 999px;
+            background: #fff;
+            color: #833ab4;
+            font-weight: 700;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
         .gallery-thumbs {
             display: flex;
             gap: 8px;
@@ -915,9 +996,13 @@
             </div>
             <p class="classes-note"><svg class="icon"><use href="#icon-alert"/></svg><span data-i18n="classes_note">Timings may vary occasionally, please message or call ahead before coming.</span></p>
             <div class="map-wrap">
-                <iframe src="https://www.google.com/maps?q=45.1395108,10.0288616&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Bhangra Sway Cremona location"></iframe>
+                <!-- Embed by business NAME, not coordinates: the name query
+                     resolves to the Google Business listing, so the map shows
+                     the "Bhangra Sway" card with ratings in the top-left
+                     (a bare lat/lng embed only drops an anonymous pin). -->
+                <iframe src="https://www.google.com/maps?q=Bhangra%20Sway%20Cremona&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Bhangra Sway Cremona location"></iframe>
                 <br>
-                <a class="directions-btn" href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="directions_btn">Get Directions</span></a>
+                <a class="directions-btn" href="https://share.google/fJihaQ5iSSVHgROO9" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="directions_btn">Get Directions</span></a>
             </div>
         </div>
     </section>
@@ -1012,8 +1097,8 @@
             <h2 class="section-heading" data-i18n="reviews_heading">What Our Members Say</h2>
             <div class="reviews-slider" id="reviewsSlider"><div class="reviews-track" id="reviewsGrid"></div></div>
             <div class="reviews-ctas">
-                <a class="reviews-read-btn" href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener" data-i18n="reviews_read_all">Read All Reviews on Google</a>
-                <p class="reviews-invite"><span data-i18n="reviews_invite">Tried our classes? Share your experience on Google.</span> <a href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener" data-i18n="reviews_write">Write a Review</a></p>
+                <a class="reviews-read-btn" href="https://share.google/fJihaQ5iSSVHgROO9" target="_blank" rel="noopener" data-i18n="reviews_read_all">Read All Reviews on Google</a>
+                <p class="reviews-invite"><span data-i18n="reviews_invite">Tried our classes? Share your experience on Google.</span> <a href="https://share.google/fJihaQ5iSSVHgROO9" target="_blank" rel="noopener" data-i18n="reviews_write">Write a Review</a></p>
             </div>
         </div>
     </section>
@@ -1050,7 +1135,7 @@
             <div class="footer-col">
                 <h4 data-i18n="footer_contact_heading">Contact</h4>
                 <ul class="footer-contact-list">
-                    <li><a href="https://share.google/6TsGyr4jJDYfbe3ht" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="footer_address_label">Cremona, Italy</span></a></li>
+                    <li><a href="https://share.google/fJihaQ5iSSVHgROO9" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="footer_address_label">Cremona, Italy</span></a></li>
                     <li><a href="tel:+393445667033"><svg class="icon"><use href="#icon-phone"/></svg>+39 344 566 7033</a></li>
                     <li><a href="mailto:bhangrasway@gmail.com"><svg class="icon"><use href="#icon-mail"/></svg>bhangrasway@gmail.com</a></li>
                 </ul>
@@ -1067,6 +1152,16 @@
     <div class="lightbox hidden" id="lightbox">
         <button class="lightbox-close" type="button" aria-label="Close"><svg class="icon"><use href="#icon-close"/></svg></button>
         <img id="lightboxImg" src="" alt="Bhangra Sway Cremona photo">
+    </div>
+
+    <!-- Reel popup: tapping an Instagram tile opens this instead of leaving
+         the site — the reel plays via Instagram's own embed, but the visitor
+         stays on bhangrasway.com the whole time (same idea as bhangraempire.com's
+         popup player). The iframe is only created when opened, so the 6 grid
+         tiles never carry Instagram's fragile live-embed behavior. -->
+    <div class="lightbox ig-lightbox hidden" id="igLightbox">
+        <button class="lightbox-close" type="button" aria-label="Close"><svg class="icon"><use href="#icon-close"/></svg></button>
+        <div class="ig-lightbox-frame" id="igLightboxFrame"></div>
     </div>
 
     <script>
@@ -1095,29 +1190,26 @@
 
         // ------------------------------------------------------------------
         // Social feeds.
-        // Instagram: reel/post links, rendered as official inline embed
-        // iframes (same technique as bhangraempire.com) so the videos play
-        // right on this page. IMPORTANT: the /reel/ vs /p/ part of the URL is
-        // kept as-is — rewriting reels to /p/CODE/embed/ made some of them
-        // show "unavailable" instead of the video. Note the embeds only
-        // render over http(s); opening index.html straight from the file
-        // system (file://) shows empty boxes.
+        // Instagram: each entry is a reel/post link plus an optional cover
+        // photo (img), uploaded from the admin "Website" tab. Tiles show the
+        // cover (or a gradient placeholder if none was uploaded yet) and
+        // link straight to the reel on Instagram — we deliberately do NOT
+        // use Instagram's official embed iframes here: they depend on the
+        // visitor's browser referrer/cookie state and render their own "this
+        // post may be broken" fallback unpredictably, even for real, working
+        // posts, whenever third-party storage is blocked or there's no
+        // referrer (e.g. opening this file locally). A cover image we
+        // control can never show that.
         // YouTube: the latest uploads are fetched automatically from the
         // channel's public RSS feed (no API key). To pin specific videos
         // instead, add their IDs to YOUTUBE_VIDEO_IDS (the part after "v="
         // in a youtube.com/watch?v=... URL, or after youtu.be/).
         // ------------------------------------------------------------------
         const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/bhangrasway/';
-        // FALLBACK only: loadSiteContent() replaces this list with the reels
-        // managed from the admin "Website" tab (site_instagram table).
-        let INSTAGRAM_POSTS = [
-            'https://www.instagram.com/reel/DaZ4fXdMW8J/',
-            'https://www.instagram.com/reel/DX3y2NEM2q4/',
-            'https://www.instagram.com/reel/DWXDTvPDLb9/',
-            'https://www.instagram.com/reel/DULjUSXjIwX/',
-            'https://www.instagram.com/reel/DTvJRBPjF9u/',
-            'https://www.instagram.com/reel/DZ1vQOfsM4-/'
-        ];
+        // Kept EMPTY on purpose: reels come from the admin "Website" tab
+        // (site_instagram table) via loadSiteContent(). Empty shows the
+        // follow-us card until real reels + covers are added there.
+        let INSTAGRAM_POSTS = [];
         const YOUTUBE_VIDEO_IDS = [];
         const YOUTUBE_CHANNEL_ID = 'UCUAxmNKQKlnOKzDp8bx0xvw';
         const YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/@BhangraSway';
@@ -1140,25 +1232,60 @@
             return row;
         }
 
+        // Opens the reel popup instead of navigating away: builds the embed
+        // iframe fresh (only on click, never on page load) so a visitor
+        // stays on bhangrasway.com and watches inline, matching how
+        // bhangraempire.com's reel popup works.
+        function openReelLightbox(url) {
+            const match = url.match(/instagram\.com\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+            if (!match) return;
+            const [, kind, code] = match;
+            const frame = document.getElementById('igLightboxFrame');
+            const iframe = document.createElement('iframe');
+            iframe.src = `https://www.instagram.com/${kind}/${code}/embed/`;
+            iframe.title = 'Instagram post from Bhangra Sway Cremona';
+            iframe.loading = 'eager';
+            iframe.setAttribute('scrolling', 'no');
+            iframe.allow = 'encrypted-media';
+            frame.replaceChildren(iframe);
+            document.getElementById('igLightbox').classList.remove('hidden');
+        }
+        function closeReelLightbox() {
+            document.getElementById('igLightbox').classList.add('hidden');
+            // Drop the iframe so a paused/playing reel doesn't keep running
+            // in the background after the popup closes.
+            document.getElementById('igLightboxFrame').replaceChildren();
+        }
+
         function renderInstagram() {
             const container = document.getElementById('instagramContainer');
             const posts = INSTAGRAM_POSTS
-                .map(u => (String(u).match(/instagram\.com\/(p|reel|tv)\/([A-Za-z0-9_-]+)/) || null))
-                .filter(Boolean);
+                .filter(p => /instagram\.com\/(p|reel|tv)\/[A-Za-z0-9_-]+/.test(p.url));
             if (posts.length) {
                 const grid = document.createElement('div');
                 grid.className = 'ig-grid';
-                posts.forEach(([, kind, code]) => {
-                    const wrap = document.createElement('div');
-                    wrap.className = 'ig-embed';
-                    const iframe = document.createElement('iframe');
-                    iframe.src = `https://www.instagram.com/${kind}/${code}/embed/`;
-                    iframe.title = 'Instagram post from Bhangra Sway Cremona';
-                    iframe.loading = 'lazy';
-                    iframe.setAttribute('scrolling', 'no');
-                    iframe.allow = 'encrypted-media';
-                    wrap.appendChild(iframe);
-                    grid.appendChild(wrap);
+                posts.forEach(p => {
+                    const a = document.createElement('button');
+                    a.type = 'button';
+                    a.className = 'ig-thumb' + (p.img ? '' : ' no-cover');
+                    a.setAttribute('aria-label', 'Watch this reel');
+                    a.addEventListener('click', () => openReelLightbox(p.url));
+                    if (p.img) {
+                        const img = document.createElement('img');
+                        img.src = p.img;
+                        img.alt = 'Instagram reel from Bhangra Sway Cremona';
+                        img.loading = 'lazy';
+                        a.appendChild(img);
+                        // Play badge only over real covers: on the gradient
+                        // placeholder it collides with the Instagram logo.
+                        const badge = document.createElement('div');
+                        badge.className = 'play-badge';
+                        badge.textContent = '▶';
+                        a.appendChild(badge);
+                    } else {
+                        a.innerHTML = '<svg class="icon"><use href="#icon-instagram"/></svg>';
+                    }
+                    grid.appendChild(a);
                 });
                 container.replaceChildren(grid);
             } else {
@@ -1173,6 +1300,18 @@
             container.appendChild(panelCta('instagram-cta', INSTAGRAM_PROFILE_URL, 'icon-instagram', 'events_follow_instagram', 'Follow on Instagram'));
             if (window.applyI18n) window.applyI18n();
         }
+
+        // Reel popup: close via the X button, clicking the dark backdrop, or
+        // Escape — same pattern as the photo lightbox, wired independently
+        // since it must work even when the gallery has no photos.
+        (() => {
+            const igLightbox = document.getElementById('igLightbox');
+            igLightbox.querySelector('.lightbox-close').addEventListener('click', closeReelLightbox);
+            igLightbox.addEventListener('click', (e) => { if (e.target === igLightbox) closeReelLightbox(); });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !igLightbox.classList.contains('hidden')) closeReelLightbox();
+            });
+        })();
 
         async function getLatestVideos() {
             const CACHE_KEY = 'ytFeedCache_v1';
@@ -1587,10 +1726,8 @@
             // Separate fetch: site_instagram was added after the tables above,
             // so its absence must not take down the gallery/events load.
             try {
-                const rows = await get('site_instagram?select=url&order=sort_order.asc,id.asc');
-                const posts = rows.map(r => r.url);
-                // Skip the re-render (which reloads all embed iframes) when
-                // the admin list matches the built-in fallback.
+                const rows = await get('site_instagram?select=url,image_url&order=sort_order.asc,id.asc');
+                const posts = rows.map(r => ({ url: r.url, img: r.image_url || '' }));
                 if (posts.length && JSON.stringify(posts) !== JSON.stringify(INSTAGRAM_POSTS)) {
                     INSTAGRAM_POSTS = posts;
                     renderInstagram();

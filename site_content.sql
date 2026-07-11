@@ -98,14 +98,24 @@ select * from (values
 ) as seed(kind, event_date, tba, title, venue, image_url)
 where not exists (select 1 from public.site_events);
 
--- Seed: the 6 reels currently hardcoded in index.html's Instagram panel.
-insert into public.site_instagram (url, sort_order)
-select * from (values
-    ('https://www.instagram.com/reel/DaZ4fXdMW8J/', 1),
-    ('https://www.instagram.com/reel/DX3y2NEM2q4/', 2),
-    ('https://www.instagram.com/reel/DWXDTvPDLb9/', 3),
-    ('https://www.instagram.com/reel/DULjUSXjIwX/', 4),
-    ('https://www.instagram.com/reel/DTvJRBPjF9u/', 5),
-    ('https://www.instagram.com/reel/DZ1vQOfsM4-/', 6)
-) as seed(url, sort_order)
-where not exists (select 1 from public.site_instagram);
+-- No reel seed on purpose: the old six links were placeholders pointing at
+-- posts that don't exist (Instagram showed "link may be broken" for all of
+-- them). Real reels are added from the admin Website tab. This cleanup
+-- removes those placeholders if a previous run seeded them:
+delete from public.site_instagram
+where url in (
+    'https://www.instagram.com/reel/DaZ4fXdMW8J/',
+    'https://www.instagram.com/p/DaZ4fXdMW8J/',
+    'https://www.instagram.com/reel/DX3y2NEM2q4/',
+    'https://www.instagram.com/reel/DWXDTvPDLb9/',
+    'https://www.instagram.com/reel/DULjUSXjIwX/',
+    'https://www.instagram.com/reel/DTvJRBPjF9u/',
+    'https://www.instagram.com/reel/DZ1vQOfsM4-/'
+);
+
+-- Also clear any duplicate-URL rows left over from testing the admin form
+-- with the same link pasted into multiple slots (keeps the first, drops the
+-- rest — same reel repeated 6x is not real content either way).
+delete from public.site_instagram a
+using public.site_instagram b
+where a.url = b.url and a.id > b.id;
