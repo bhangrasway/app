@@ -1236,13 +1236,21 @@
         // iframe fresh (only on click, never on page load) so a visitor
         // stays on bhangrasway.com and watches inline, matching how
         // bhangraempire.com's reel popup works.
+        //
+        // Always embeds via /p/CODE/embed/, regardless of whether the saved
+        // link uses /reel/, /p/, or /tv/. Verified 2026-07-11: a real,
+        // working post (6.4K likes) saved as /reel/DaZ4fXdMW8J/ showed
+        // Instagram's own "may be broken" card when embedded via
+        // /reel/.../embed/ — but Instagram's OWN "Visit Instagram" fallback
+        // link on that broken card redirected to /p/DaZ4fXdMW8J/, which
+        // loads the post fine. /p/ is the reliable universal embed path.
         function openReelLightbox(url) {
             const match = url.match(/instagram\.com\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
             if (!match) return;
-            const [, kind, code] = match;
+            const [, , code] = match;
             const frame = document.getElementById('igLightboxFrame');
             const iframe = document.createElement('iframe');
-            iframe.src = `https://www.instagram.com/${kind}/${code}/embed/`;
+            iframe.src = `https://www.instagram.com/p/${code}/embed/`;
             iframe.title = 'Instagram post from Bhangra Sway Cremona';
             iframe.loading = 'eager';
             iframe.setAttribute('scrolling', 'no');
