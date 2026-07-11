@@ -1960,19 +1960,24 @@
                     status.textContent = `Link ${i + 1} doesn't look like an Instagram post/reel link.`;
                     return;
                 }
-                // strip tracking params, keep just the post
-                slots.push({ url: raw.match(IG_URL_RE)[0].replace(/\/?$/, '/'), file });
+                // strip tracking params, keep just the post. Keep THIS SLOT's
+                // existing cover by position (siteInstagramCache[i] is what's
+                // currently displayed in slot i) — matching by URL text was
+                // fragile: two slots sharing a URL, or the tiniest formatting
+                // difference (query params, trailing slash) against what's
+                // stored, silently dropped a perfectly good cover on save.
+                slots.push({
+                    url: raw.match(IG_URL_RE)[0].replace(/\/?$/, '/'),
+                    file,
+                    existingCover: siteInstagramCache[i]?.image_url || null
+                });
             }
             btn.disabled = true;
             status.style.color = '#2c5aa0';
-            // Covers: a newly chosen file wins; otherwise keep the cover the
-            // same reel URL already had (matched by URL, not slot, so covers
-            // follow their reel when the list is reordered).
-            const coverByUrl = new Map((siteInstagramCache || []).map(r => [r.url, r.image_url || '']));
             const rows = [];
             try {
                 for (let i = 0; i < slots.length; i++) {
-                    let img = coverByUrl.get(slots[i].url) || null;
+                    let img = slots[i].existingCover;
                     if (slots[i].file) {
                         status.textContent = `Uploading cover ${i + 1}…`;
                         img = await uploadSitePhoto(slots[i].file, 'instagram');
