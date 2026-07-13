@@ -183,7 +183,7 @@ const I18N = {
         footer_tagline: 'Punjabi Bhangra classes in Cremona, Italy. Everyone is welcome.',
         footer_quick_links: 'Quick Links',
         footer_contact_heading: 'Contact',
-        footer_address_label: 'Cremona, Italy',
+        footer_address_label: 'Via Magazzini Generali, 26100 Cremona CR',
         footer_rights: 'All rights reserved.',
         footer_members: 'Members Login'
     },
@@ -352,7 +352,7 @@ const I18N = {
         footer_tagline: 'Corsi di Bhangra punjabi a Cremona. Tutti sono benvenuti.',
         footer_quick_links: 'Link Rapidi',
         footer_contact_heading: 'Contatti',
-        footer_address_label: 'Cremona, Italia',
+        footer_address_label: 'Via Magazzini Generali, 26100 Cremona CR',
         footer_rights: 'Tutti i diritti riservati.',
         footer_members: 'Area Soci'
     },
@@ -522,7 +522,7 @@ const I18N = {
         footer_tagline: 'Cremona, Italy vich Punjabi Bhangra diyan classes. Har koi ji aayan nu.',
         footer_quick_links: 'Quick Links',
         footer_contact_heading: 'Contact',
-        footer_address_label: 'Cremona, Italy',
+        footer_address_label: 'Via Magazzini Generali, 26100 Cremona CR',
         footer_rights: 'Sare hakk surakhiat han.',
         footer_members: 'Members Login'
     }
