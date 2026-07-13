@@ -220,8 +220,8 @@
             border-radius: 999px;
             margin-bottom: 12px;
         }
-        .class-card h3 { margin: 0 0 8px; font-size: 1.2em; }
-        .class-card .time { color: #27ae60; font-weight: 700; }
+        .class-card .time { color: #27ae60; font-weight: 700; margin-top: 4px; }
+        .class-card .desc { color: #555; font-size: 0.92em; line-height: 1.55; margin: 10px 0 0; }
         .classes-note {
             display: flex;
             align-items: center;
@@ -789,9 +789,8 @@
         .footer-brand img { height: 38px; width: auto; border-radius: 8px; }
         .footer-brand span { font-weight: 800; font-size: 1.1em; }
         .footer-tagline { color: #b7c0cf; line-height: 1.6; margin: 14px 0 10px; font-size: 0.95em; max-width: 300px; }
-        .footer-mail { color: #eaeef5; font-weight: 600; font-size: 0.93em; }
-        .footer-mail:hover { text-decoration: underline; }
-        .footer-socials { display: flex; gap: 10px; margin-top: 16px; }
+        .footer-follow-label { display: block; color: #eaeef5; font-weight: 600; font-size: 0.93em; }
+        .footer-socials { display: flex; gap: 10px; margin-top: 10px; }
         .footer-socials a {
             display: inline-flex;
             width: 40px;
@@ -997,19 +996,19 @@
             <h2 class="section-heading" data-i18n="classes_heading">Our Classes</h2>
             <div class="classes-grid">
                 <div class="class-card">
-                    <span class="badge" data-i18n="class_advance_name">Advance</span>
-                    <h3 data-i18n="class_advance_name">Advance</h3>
-                    <p class="time" data-i18n="class_advance_time">Saturday, 1:30 PM – 3:30 PM</p>
+                    <span class="badge" data-i18n="class_beginner_name">Beginner</span>
+                    <p class="time" data-i18n="class_beginner_time">Sunday, 2:00 PM – 4:00 PM</p>
+                    <p class="desc" data-i18n="class_beginner_desc">Best for absolute zero level — whether you're a teenager or an adult, no experience needed.</p>
                 </div>
                 <div class="class-card">
                     <span class="badge" data-i18n="class_intermediate_name">Intermediate</span>
-                    <h3 data-i18n="class_intermediate_name">Intermediate</h3>
                     <p class="time" data-i18n="class_intermediate_time">Saturday, 3:30 PM – 5:30 PM</p>
+                    <p class="desc" data-i18n="class_intermediate_desc">Best for dancers who've learned elsewhere, or who've completed our Beginner class.</p>
                 </div>
                 <div class="class-card">
-                    <span class="badge" data-i18n="class_beginner_name">Beginner</span>
-                    <h3 data-i18n="class_beginner_name">Beginner</h3>
-                    <p class="time" data-i18n="class_beginner_time">Sunday, 2:00 PM – 4:00 PM</p>
+                    <span class="badge" data-i18n="class_advance_name">Advance</span>
+                    <p class="time" data-i18n="class_advance_time">Saturday, 1:30 PM – 3:30 PM</p>
+                    <p class="desc" data-i18n="class_advance_desc">For our Intermediate graduates who are already skilled and want to go deeper.</p>
                 </div>
             </div>
             <p class="classes-note"><svg class="icon"><use href="#icon-alert"/></svg><span data-i18n="classes_note">Timings may vary occasionally, please message or call ahead before coming.</span></p>
@@ -1128,8 +1127,8 @@
                     <img src="logo.png" alt="Bhangra Sway Cremona logo">
                     <span>Bhangra Sway Cremona</span>
                 </div>
-                <p class="footer-tagline" data-i18n="footer_tagline">Punjabi Bhangra classes in Cremona, Italy. Everyone is welcome.</p>
-                <a class="footer-mail" href="mailto:bhangrasway@gmail.com">bhangrasway@gmail.com</a>
+                <p class="footer-tagline" data-i18n="footer_tagline">One of the best Bhangra studios in Italy, led by an experienced coach from Punjab who makes learning Bhangra easy.</p>
+                <span class="footer-follow-label" data-i18n="videos_follow">Follow us:</span>
                 <div class="footer-socials">
                     <a href="https://wa.me/393445667033" target="_blank" rel="noopener" aria-label="WhatsApp"><svg class="icon"><use href="#icon-whatsapp"/></svg></a>
                     <a href="https://www.instagram.com/bhangrasway/" target="_blank" rel="noopener" aria-label="Instagram"><svg class="icon"><use href="#icon-instagram"/></svg></a>
