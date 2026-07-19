@@ -100,6 +100,17 @@ function membershipRecordStartDate(record) {
     return String(record?.paid_start_date ?? record?.paidStartDate ?? record?.paidstartdate ?? '').slice(0, 10);
 }
 
+// An admin can force-close an incomplete cycle early (e.g. a student on long
+// vacation, or a deliberate fresh restart) instead of waiting for the normal
+// extension/2-month cap to resolve it; remaining classes are forfeited, not
+// carried. Deliberately a separate field from paid_start_date/paid_end_date:
+// paid_end_date is written as a naive "start + 1 month" value on every past
+// payment (even already-extended ones), so it can't safely double as this
+// override without silently rewriting history for existing records.
+function membershipRecordClosedEarly(record) {
+    return String(record?.closedearly ?? record?.closedEarly ?? '').slice(0, 10);
+}
+
 function membershipStudentJoinDate(student) {
     return String(student?.joinDate || student?.join_date || student?.joindate || '').slice(0, 10);
 }
@@ -256,28 +267,38 @@ function buildMembershipTimeline(student, opts) {
         const naturalEnd = getPaymentCycleDates(start).end;
         if (!naturalEnd) break;
 
-        let attended = carry + opts.countAttendanceInRange(start, naturalEnd);
-        let effectiveEnd = naturalEnd;
-        if (attended < AUTO_EXTENSION_CLASS_TARGET) {
-            const maxEnd = addMonthsToDate(naturalEnd, AUTO_EXTENSION_MAX_MONTHS);
-            // The cycle ends exactly on whichever real attended class reaches
-            // the target, never rounded up to a week boundary.
-            const extraDates = opts.attendedDatesInRange(naturalEnd, maxEnd);
-            let completedOn = '';
-            for (const date of extraDates) {
-                attended += 1;
-                if (attended >= AUTO_EXTENSION_CLASS_TARGET) { completedOn = date; break; }
-            }
-            if (completedOn) {
-                effectiveEnd = completedOn;
-            } else if (todayStr < maxEnd) {
-                // Still open, classes run weekends, so the rolling deadline
-                // is the coming Sunday, not the theoretical 2-month max.
-                const reference = todayStr > naturalEnd ? todayStr : naturalEnd;
-                const nextSunday = nextSundayOnOrAfter(addDaysToDate(reference, 1));
-                effectiveEnd = nextSunday > maxEnd ? maxEnd : nextSunday;
-            } else {
-                effectiveEnd = maxEnd; // window fully elapsed without reaching target
+        const closedEarlyDate = record ? membershipRecordClosedEarly(record) : '';
+        let attended;
+        let effectiveEnd;
+        if (closedEarlyDate) {
+            // Force-closed: skip the extension calculation entirely, the
+            // admin has already decided this cycle is done as of this date.
+            effectiveEnd = closedEarlyDate;
+            attended = carry + opts.countAttendanceInRange(start, closedEarlyDate);
+        } else {
+            attended = carry + opts.countAttendanceInRange(start, naturalEnd);
+            effectiveEnd = naturalEnd;
+            if (attended < AUTO_EXTENSION_CLASS_TARGET) {
+                const maxEnd = addMonthsToDate(naturalEnd, AUTO_EXTENSION_MAX_MONTHS);
+                // The cycle ends exactly on whichever real attended class reaches
+                // the target, never rounded up to a week boundary.
+                const extraDates = opts.attendedDatesInRange(naturalEnd, maxEnd);
+                let completedOn = '';
+                for (const date of extraDates) {
+                    attended += 1;
+                    if (attended >= AUTO_EXTENSION_CLASS_TARGET) { completedOn = date; break; }
+                }
+                if (completedOn) {
+                    effectiveEnd = completedOn;
+                } else if (todayStr < maxEnd) {
+                    // Still open, classes run weekends, so the rolling deadline
+                    // is the coming Sunday, not the theoretical 2-month max.
+                    const reference = todayStr > naturalEnd ? todayStr : naturalEnd;
+                    const nextSunday = nextSundayOnOrAfter(addDaysToDate(reference, 1));
+                    effectiveEnd = nextSunday > maxEnd ? maxEnd : nextSunday;
+                } else {
+                    effectiveEnd = maxEnd; // window fully elapsed without reaching target
+                }
             }
         }
 
@@ -395,4 +416,25 @@ function computePaymentActive(student, opts) {
     }
 
     return false;
+}
+
+// Shared by every cycle-row renderer (admin dashboard + report.html) so the
+// "which end date to show, and what tag" decision can't drift between them
+// or across the admin's several list views, the way it did when this was
+// duplicated inline in five places. A cycle's effectiveEnd can differ from
+// its naturalEnd two ways: genuinely LATER (auto-extended, attendance still
+// chasing the 4-class guarantee) or deliberately EARLIER (an admin force-
+// closed it early via "Close cycle early", forfeiting remaining classes).
+// Only the extension case hides itself for the current cycle until it has
+// actually started (autoExt.isExtended) — a force-close is a deliberate
+// admin action already taken, so it always shows immediately.
+function cycleDisplayInfo(cycle, isCurrent, isExtendedNow) {
+    const isExtension = cycle.effectiveEnd > cycle.naturalEnd;
+    const isClosedEarly = cycle.effectiveEnd < cycle.naturalEnd;
+    const showExtension = isExtension && (!isCurrent || isExtendedNow);
+    const showDifferentEnd = isClosedEarly || showExtension;
+    return {
+        end: showDifferentEnd ? cycle.effectiveEnd : cycle.naturalEnd,
+        tag: isClosedEarly ? 'closed_early' : (showExtension ? 'extended' : '')
+    };
 }

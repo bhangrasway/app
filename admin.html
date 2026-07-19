@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -646,6 +647,7 @@
                 <button class="tab-btn" onclick="switchTab('fees')">Income & Expense</button>
                 <button class="tab-btn" onclick="switchTab('reports')">Reports</button>
                 <button class="tab-btn" onclick="switchTab('website')">Website</button>
+                <button class="tab-btn" onclick="switchTab('performances')">Performances</button>
             </div>
 
             <div class="success-message" id="successMsg"></div>
@@ -663,7 +665,7 @@
                     <!-- Row 1: Nome · Cognome · Age -->
                     <div style="background:linear-gradient(135deg,#f0f4ff,#e8eeff); border-left:4px solid #667eea; border-radius:8px; padding:12px 16px; margin-bottom:10px;">
                         <div style="font-size:0.75em; font-weight:700; color:#667eea; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:8px;">👤 Identità Studente</div>
-                        <div style="display:grid; grid-template-columns:2fr 2fr 1fr; gap:12px;">
+                        <div style="display:grid; grid-template-columns:2fr 2fr 1fr 1fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>✏️ Nome *</label>
                                 <input type="text" id="studentNome" required placeholder="Nome">
@@ -676,6 +678,14 @@
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🎂 Età</label>
                                 <input type="number" id="studentAge" placeholder="Age">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>⚥ Gender</label>
+                                <select id="studentGender">
+                                    <option value="">--</option>
+                                    <option value="M">Boy</option>
+                                    <option value="F">Girl</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -1173,21 +1183,160 @@
                     </div>
                 </div>
             </div>
+
+            <!-- PERFORMANCES TAB -->
+            <div id="performances" class="tab-content">
+                <h2>🎭 Performances</h2>
+                <div id="performancesSetupHint" style="display:none; background:#fdf2e9; border:1px solid #f5cba7; border-radius:8px; padding:12px 16px; margin-bottom:24px; font-size:0.9em; color:#9c640c;">
+                    ⚠️ Couldn't load performance data. One-time setup: open the Supabase <strong>SQL Editor</strong> and run the file <strong>performances.sql</strong> from the project, then reload this page.
+                </div>
+
+                <!-- PERFORMANCE CALLS -->
+                <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                    <h3 style="margin:0 0 4px;">📣 Performance Calls</h3>
+                    <div style="color:#555; font-size:0.88em; margin-bottom:16px;">Open a call so dancers can join from the "🎭 Join a Performance" link on the member home page. Click a call below to manage it.</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:14px 16px; margin-bottom:16px;">
+                        <div>
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">TITLE *</label>
+                            <input type="text" id="newPerformanceTitle" placeholder="e.g. Vaisakhi Mela 2026" style="padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.78em; color:#555; display:block; margin-bottom:4px; font-weight:600;">DATE</label>
+                            <input type="date" id="newPerformanceDate" style="padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                        </div>
+                        <button onclick="createPerformance()" style="padding:9px 22px; background:#27ae60; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.95em;">+ Open Call</button>
+                    </div>
+                    <div id="performancesList"></div>
+                </div>
+
+                <!-- ACTIVE PERFORMANCE WORKSPACE -->
+                <div id="performanceWorkspace" style="display:none;">
+                    <div id="performanceWorkspaceTitle" style="font-size:1.1em; font-weight:800; margin:6px 0 18px; color:#1a1a2e;"></div>
+
+                    <!-- ROSTER -->
+                    <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                        <h3 style="margin:0 0 4px;">👥 Roster</h3>
+                        <div style="color:#555; font-size:0.88em; margin-bottom:12px;">Tier, team, and dress color for everyone who joined this call.</div>
+                        <div id="rosterCounts" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; font-size:0.85em; font-weight:700;"></div>
+                        <div id="dressColorCounts" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; font-size:0.85em; font-weight:700;"></div>
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+                            <button onclick="autoSplitTeams()" style="padding:8px 16px; background:#3498db; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.88em;">🔀 Auto-Split Teams</button>
+                            <button onclick="clearAllTeams()" style="padding:8px 16px; background:#95a5a6; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.88em;">1 Team (clear split)</button>
+                            <button onclick="autoAssignDressColors()" style="padding:8px 16px; background:#e67e22; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.88em;">🎨 Auto-Assign Dress Colors</button>
+                        </div>
+                        <div id="rosterList" style="display:flex; flex-direction:column; gap:6px;"></div>
+                    </div>
+
+                    <!-- REHEARSAL ATTENDANCE -->
+                    <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                        <h3 style="margin:0 0 4px;">📋 Rehearsal Attendance</h3>
+                        <div style="color:#555; font-size:0.88em; margin-bottom:12px;">Mark who showed up to practice. Dancers with low class or rehearsal attendance get a ⚠️ flag in the Roster above — you decide whether to move them to Beginner or Spare.</div>
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+                            <input type="date" id="rehearsalDate" style="padding:8px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.9em;">
+                            <button onclick="loadRehearsalAttendance()" style="padding:8px 14px; background:#3498db; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.88em;">Load</button>
+                        </div>
+                        <div id="rehearsalAttendanceList" style="display:flex; flex-direction:column; gap:4px;"></div>
+                    </div>
+
+                    <!-- SONG & TIMING -->
+                    <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                        <h3 style="margin:0 0 4px;">🎵 Song &amp; Timing</h3>
+                        <div style="color:#555; font-size:0.88em; margin-bottom:12px;">Upload the song, drag the range below to mark a section (e.g. 1:00–1:30), then bind it to a movement.</div>
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+                            <label style="display:inline-flex; align-items:center; gap:8px; padding:9px 16px; background:#27ae60; color:white; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.9em;">
+                                ⬆ Upload Song
+                                <input type="file" id="songUploadInput" accept="audio/*" style="display:none;" onchange="uploadPerformanceSong(this.files[0])">
+                            </label>
+                            <span id="songUploadStatus" style="font-size:0.85em; color:#555;"></span>
+                            <button onclick="playFromMovement()" style="padding:8px 16px; background:#8e44ad; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.88em;">▶ Play from Active Movement</button>
+                            <button onclick="pauseSong()" style="padding:8px 16px; background:#95a5a6; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.88em;">⏸ Pause</button>
+                            <span id="songTimeReadout" style="font-size:0.85em; color:#333; font-weight:700;"></span>
+                        </div>
+                        <audio id="performanceAudio" style="display:none;"></audio>
+                        <div id="songTimelineWrap" style="display:none;">
+                            <div id="songTimeline" style="position:relative; height:44px; background:#eef1f5; border-radius:8px; margin-bottom:10px; cursor:pointer;">
+                                <div id="songTimelinePlayed" style="position:absolute; top:0; bottom:0; left:0; width:0%; background:#d6e4ff; border-radius:8px 0 0 8px; pointer-events:none;"></div>
+                                <div id="songRangeSelection" style="position:absolute; top:0; bottom:0; left:0%; width:0%; background:rgba(142,68,173,0.35); border-left:3px solid #8e44ad; border-right:3px solid #8e44ad; pointer-events:none;"></div>
+                                <div id="songPlayhead" style="position:absolute; top:0; bottom:0; width:2px; background:#e74c3c; left:0%; pointer-events:none;"></div>
+                                <div id="songRangeHandleStart" style="position:absolute; top:0; bottom:0; width:12px; margin-left:-6px; left:0%; cursor:ew-resize; background:#8e44ad; border-radius:4px;" onmousedown="startTimelineDrag(event,'start')"></div>
+                                <div id="songRangeHandleEnd" style="position:absolute; top:0; bottom:0; width:12px; margin-left:-6px; left:10%; cursor:ew-resize; background:#8e44ad; border-radius:4px;" onmousedown="startTimelineDrag(event,'end')"></div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                                <span id="songRangeLabel" style="font-size:0.85em; font-weight:700; color:#8e44ad;">Range: 0:00 – 0:00</span>
+                                <button onclick="setMovementRange()" style="padding:7px 16px; background:#8e44ad; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.85em;">🎯 Set as Movement Range</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CHOREOGRAPHY CANVAS -->
+                    <div style="background:#fff; border:1px solid #eee; border-radius:12px; padding:20px 24px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                        <h3 style="margin:0 0 4px;">💃 Choreography Canvas</h3>
+                        <div style="color:#555; font-size:0.88em; margin-bottom:12px;">Drag dancers into position, or apply a formation preset. Chips are colored by dress color; the border shows team.</div>
+                        <div id="movementTabs" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;"></div>
+                        <button onclick="addMovement()" style="padding:6px 14px; background:#27ae60; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.85em; margin-bottom:16px;">➕ Add Movement</button>
+
+                        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px; background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:10px 14px;">
+                            <select id="formationPreset" style="padding:7px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.85em;"></select>
+                            <select id="formationFilter" style="padding:7px 10px; border-radius:6px; border:1.5px solid #ddd; font-size:0.85em;">
+                                <option value="all">All</option>
+                                <option value="boys">Boys only</option>
+                                <option value="girls">Girls only</option>
+                                <option value="A">Team A</option>
+                                <option value="B">Team B</option>
+                            </select>
+                            <button onclick="applyFormationFromControls()" style="padding:7px 16px; background:#3498db; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.85em;">Apply Formation</button>
+                            <button onclick="downloadMovementImage()" style="padding:7px 16px; background:#16a085; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.85em;">⬇ Download PNG</button>
+                        </div>
+
+                        <div id="stageCanvas" style="position:relative; width:100%; max-width:820px; height:440px; margin:0 auto 18px; border-radius:10px; background:linear-gradient(180deg,#1a1a2e,#2c2c54); overflow:hidden;">
+                            <div style="position:absolute; top:8px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.35); font-size:0.75em; letter-spacing:0.1em; font-weight:700;">BACK</div>
+                            <div style="position:absolute; bottom:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.55); font-size:0.78em; letter-spacing:0.15em; font-weight:800;">FRONT — AUDIENCE</div>
+                            <div id="frontBandGuide" style="position:absolute; left:0; right:0; bottom:0; height:25%; border-top:1px dashed rgba(255,255,255,0.25); pointer-events:none;"></div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                            <div>
+                                <div style="font-weight:700; font-size:0.85em; color:#444; margin-bottom:6px;">Front-Row Tally</div>
+                                <div id="frontTallyList" style="font-size:0.85em; display:flex; flex-direction:column; gap:3px;"></div>
+                            </div>
+                            <div>
+                                <div style="font-weight:700; font-size:0.85em; color:#444; margin-bottom:6px;">Attendance Flags</div>
+                                <div id="attendanceFlagsList" style="font-size:0.85em; display:flex; flex-direction:column; gap:3px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- PAYMENT DATE MODAL -->
     <div id="paymentDateModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:2100; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this) closePaymentDateModal()">
       <div style="background:#fff; border-radius:16px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,0.35); padding:30px;">
-        <div style="font-size:1.15em; font-weight:800; margin-bottom:6px;">📅 Record Payment</div>
-        <div style="font-size:0.9em; color:#666; margin-bottom:18px;">When was this payment received?</div>
+        <div id="paymentModalTitle" style="font-size:1.15em; font-weight:800; margin-bottom:6px;">📅 Record Payment</div>
+        <div id="paymentModalSubtitle" style="font-size:0.9em; color:#666; margin-bottom:18px;">When was this payment received?</div>
         <label style="font-size:0.8em; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Payment Date</label>
         <input type="date" id="paymentDateInput" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #ddd; font-size:1em; margin-bottom:16px;">
         <label style="font-size:0.8em; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Amount Paid (€)</label>
-        <input type="number" id="paymentAmountInput" min="0" step="0.01" placeholder="0.00" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #ddd; font-size:1em; margin-bottom:22px;">
+        <input type="number" id="paymentAmountInput" min="0" step="0.01" placeholder="0.00" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #ddd; font-size:1em; margin-bottom:10px;">
+        <label style="display:flex; align-items:center; gap:7px; font-size:0.9em; color:#444; font-weight:600; margin-bottom:10px; cursor:pointer;">
+          <input type="checkbox" id="paymentGratisCheckbox" onchange="onPaymentGratisToggle()" style="width:16px; height:16px; margin:0; accent-color:#16a085;">
+          🤝 Settled (no charge)
+        </label>
+        <label style="display:flex; align-items:center; gap:7px; font-size:0.9em; color:#444; font-weight:600; margin-bottom:10px; cursor:pointer;">
+          <input type="checkbox" id="paymentClosedEarlyCheckbox" onchange="onPaymentClosedEarlyToggle()" style="width:16px; height:16px; margin:0; accent-color:#c0392b;">
+          🔒 Close this cycle early (forfeits any remaining classes)
+        </label>
+        <div id="paymentClosedEarlyDateWrap" style="display:none; margin-bottom:16px;">
+          <label style="font-size:0.8em; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Close Cycle On</label>
+          <input type="date" id="paymentClosedEarlyDateInput" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #ddd; font-size:1em;">
+          <div style="font-size:0.78em; color:#888; margin-top:4px;">The last day counted for this cycle — separate from the Payment Date above.</div>
+        </div>
+        <label style="font-size:0.8em; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Cycle Start Date</label>
+        <input type="date" id="paymentCycleStartInput" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid #ddd; font-size:1em; margin-bottom:22px;">
         <div style="display:flex; gap:10px; justify-content:flex-end;">
           <button onclick="closePaymentDateModal()" style="padding:9px 20px; background:#f0f0f0; border:none; border-radius:7px; cursor:pointer; font-weight:600; font-size:0.95em;">Cancel</button>
-          <button onclick="confirmMarkPaid()" style="padding:9px 22px; background:#27ae60; color:white; border:none; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.95em;">✓ Confirm Paid</button>
+          <button id="paymentConfirmBtn" onclick="confirmMarkPaid()" style="padding:9px 22px; background:#27ae60; color:white; border:none; border-radius:7px; cursor:pointer; font-weight:700; font-size:0.95em;">✓ Confirm Paid</button>
         </div>
       </div>
     </div>
@@ -2224,6 +2373,737 @@
             await loadWebsiteTab();
         }
 
+        // ===== PERFORMANCES (sign-up board + choreography canvas) =====
+        const PERFORMANCE_SONGS_BUCKET = 'performance-songs';
+        const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#1a237e' };
+        const DRESS_COLOR_ORDER = ['red', 'green', 'purple', 'orange', 'sky_blue', 'royal_blue'];
+        const ROSTER_TIER_LABELS = { advanced: 'Advanced', intermediate: 'Intermediate', beginner: 'Beginner', spare: 'Spare' };
+
+        let performancesCache = [];
+        let currentPerformanceId = null;
+        let performanceSignupsCache = [];       // rows from performance_signups, joined with student gender/age/batch
+        let performanceMovementsCache = [];     // rows from performance_movements, ordered
+        let currentMovementId = null;
+        let performancePositionsCache = {};     // { [movementId]: { [studentId]: {x,y} } }
+        let performanceAttendanceCache = {};    // { [dateStr]: { [studentId]: boolean } }
+        let draggingStudentId = null;
+        let timelineDragHandle = null;          // 'start' | 'end' | null
+        let songDuration = 0;
+        let rangeStartSec = 0;
+        let rangeEndSec = 0;
+        let activePlaybackEndSeconds = null;
+
+        function formatMMSS(totalSeconds) {
+            const s = Math.max(0, Math.round(totalSeconds || 0));
+            const m = Math.floor(s / 60);
+            const r = s % 60;
+            return `${m}:${String(r).padStart(2, '0')}`;
+        }
+
+        async function loadPerformancesTab() {
+            const hint = document.getElementById('performancesSetupHint');
+            const { data, error } = await supabaseClient.from('performances').select('*').order('created_at', { ascending: false });
+            if (error) {
+                hint.style.display = 'block';
+                console.error('Performances tab load failed:', error);
+                return;
+            }
+            hint.style.display = 'none';
+            performancesCache = data || [];
+            renderPerformancesList();
+            if (currentPerformanceId && performancesCache.some(p => p.id === currentPerformanceId)) {
+                await selectPerformance(currentPerformanceId);
+            }
+        }
+
+        function renderPerformancesList() {
+            const list = document.getElementById('performancesList');
+            if (!performancesCache.length) {
+                list.innerHTML = '<div style="color:#888; font-size:0.9em;">No performance calls yet.</div>';
+                return;
+            }
+            list.innerHTML = performancesCache.map(p => `
+                <div onclick="selectPerformance(${p.id})" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; margin-bottom:6px; border-radius:8px; cursor:pointer; background:${currentPerformanceId === p.id ? '#eef4ff' : '#f8f9fa'}; border:1.5px solid ${currentPerformanceId === p.id ? '#667eea' : '#eee'};">
+                    <div style="min-width:0;">
+                        <span style="font-weight:700;">${escSiteHtml(p.title)}</span>
+                        <span style="color:#777; font-size:0.85em; margin-left:8px;">${p.event_date || 'no date'}</span>
+                        <span style="margin-left:10px; padding:2px 9px; border-radius:20px; font-size:0.78em; font-weight:700; background:${p.status === 'open' ? '#27ae6022' : '#95a5a622'}; color:${p.status === 'open' ? '#27ae60' : '#95a5a6'};">${p.status === 'open' ? 'OPEN' : 'CLOSED'}</span>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-shrink:0;" onclick="event.stopPropagation()">
+                        ${p.status === 'open'
+                            ? `<button onclick="setPerformanceStatus(${p.id},'closed')" class="btn-small" style="background:#e67e22;">Close</button>`
+                            : `<button onclick="setPerformanceStatus(${p.id},'open')" class="btn-small" style="background:#27ae60;">Reopen</button>`}
+                        <button onclick="deletePerformance(${p.id})" class="btn-small btn-delete">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function createPerformance() {
+            const title = document.getElementById('newPerformanceTitle').value.trim();
+            const date = document.getElementById('newPerformanceDate').value || null;
+            if (!title) { alert('Enter a title for the performance call.'); return; }
+            const { data, error } = await supabaseClient.from('performances')
+                .insert([{ title, event_date: date, status: 'open' }]).select('id');
+            if (error) { alert('Could not create performance: ' + error.message); return; }
+            document.getElementById('newPerformanceTitle').value = '';
+            document.getElementById('newPerformanceDate').value = '';
+            showSuccessMessage('✓ Performance call opened!');
+            await loadPerformancesTab();
+            if (data?.[0]?.id) await selectPerformance(data[0].id);
+        }
+
+        async function setPerformanceStatus(id, status) {
+            const { error } = await supabaseClient.from('performances').update({ status }).eq('id', id);
+            if (error) { alert('Update failed: ' + error.message); return; }
+            await loadPerformancesTab();
+        }
+
+        async function deletePerformance(id) {
+            if (!confirm('Delete this performance call and everything in it (roster, movements, positions)?')) return;
+            const { error } = await supabaseClient.from('performances').delete().eq('id', id);
+            if (error) { alert('Delete failed: ' + error.message); return; }
+            if (currentPerformanceId === id) {
+                currentPerformanceId = null;
+                document.getElementById('performanceWorkspace').style.display = 'none';
+            }
+            await loadPerformancesTab();
+        }
+
+        async function selectPerformance(id) {
+            currentPerformanceId = id;
+            const p = performancesCache.find(x => x.id === id);
+            if (!p) return;
+            renderPerformancesList();
+            document.getElementById('performanceWorkspace').style.display = 'block';
+            document.getElementById('performanceWorkspaceTitle').textContent = `Managing: ${p.title}${p.event_date ? ' · ' + p.event_date : ''}`;
+
+            const audio = document.getElementById('performanceAudio');
+            if (p.song_url) {
+                audio.src = p.song_url;
+                document.getElementById('songTimelineWrap').style.display = 'block';
+                document.getElementById('songUploadStatus').textContent = '✓ Song loaded';
+            } else {
+                audio.removeAttribute('src');
+                document.getElementById('songTimelineWrap').style.display = 'none';
+                document.getElementById('songUploadStatus').textContent = 'No song uploaded yet';
+            }
+
+            await loadRoster();
+            await loadMovements();
+        }
+
+        // ---- Roster ----
+        async function loadRoster() {
+            const { data, error } = await supabaseClient.from('performance_signups')
+                .select('*').eq('performance_id', currentPerformanceId).order('student_name');
+            if (error) { console.error('Roster load failed:', error); return; }
+            performanceSignupsCache = (data || []).map(row => {
+                const student = students.find(s => s.id === row.student_id) || {};
+                return { ...row, gender: student.gender || null, age: student.age || null, batch: student.batch || '' };
+            });
+            renderRoster();
+        }
+
+        function getClassAttendanceRate(studentId) {
+            const dates = Object.keys(attendance).sort().slice(-20);
+            if (!dates.length) return null;
+            let total = 0, present = 0;
+            dates.forEach(d => {
+                if (attendance[d] && Object.prototype.hasOwnProperty.call(attendance[d], studentId)) {
+                    total += 1;
+                    if (attendance[d][studentId]) present += 1;
+                }
+            });
+            return total ? present / total : null;
+        }
+
+        function getRehearsalAttendanceRate(studentId) {
+            const dates = Object.keys(performanceAttendanceCache);
+            if (!dates.length) return null;
+            let total = 0, present = 0;
+            dates.forEach(d => {
+                if (Object.prototype.hasOwnProperty.call(performanceAttendanceCache[d], studentId)) {
+                    total += 1;
+                    if (performanceAttendanceCache[d][studentId]) present += 1;
+                }
+            });
+            return total ? present / total : null;
+        }
+
+        function computeAttendanceFlags() {
+            const flags = {};
+            performanceSignupsCache.forEach(s => {
+                const classRate = getClassAttendanceRate(s.student_id);
+                const rehearsalRate = getRehearsalAttendanceRate(s.student_id);
+                const rates = [classRate, rehearsalRate].filter(r => r !== null);
+                if (rates.length && Math.min(...rates) < 0.7) flags[s.student_id] = true;
+            });
+            return flags;
+        }
+
+        function renderRoster() {
+            const counts = { advanced: 0, intermediate: 0, beginner: 0, spare: 0 };
+            const colorCounts = {};
+            performanceSignupsCache.forEach(s => {
+                counts[s.roster_status] = (counts[s.roster_status] || 0) + 1;
+                if (s.dress_color) colorCounts[s.dress_color] = (colorCounts[s.dress_color] || 0) + 1;
+            });
+            document.getElementById('rosterCounts').innerHTML = `
+                <span style="color:#e67e22;">${counts.advanced} Advanced</span>
+                <span style="color:#8e44ad;">${counts.intermediate} Intermediate</span>
+                <span style="color:#3498db;">${counts.beginner} Beginner</span>
+                <span style="color:#c0392b;">🪑 ${counts.spare} Spares</span>
+            `;
+            document.getElementById('dressColorCounts').innerHTML = DRESS_COLOR_ORDER.map(c =>
+                `<span style="color:${DRESS_COLOR_HEX[c]};">● ${colorCounts[c] || 0}</span>`
+            ).join(' ');
+
+            const flags = computeAttendanceFlags();
+            const list = document.getElementById('rosterList');
+            if (!performanceSignupsCache.length) {
+                list.innerHTML = '<div style="color:#888; font-size:0.9em;">Nobody has joined this call yet.</div>';
+            } else {
+                list.innerHTML = performanceSignupsCache.map(s => {
+                    const color = s.dress_color ? DRESS_COLOR_HEX[s.dress_color] : '#1a1a2e';
+                    const genderIcon = s.gender ? (s.gender === 'M' ? '♂️' : '♀️') : '';
+                    const flagIcon = flags[s.student_id] ? '⚠️' : '';
+                    return `
+                    <div style="display:grid; grid-template-columns:1.4fr 0.6fr 1fr 1fr 1fr 1.2fr auto; gap:8px; align-items:center; padding:7px 10px; background:#f8f9fa; border-radius:7px; font-size:0.88em;">
+                        <span style="font-weight:700; color:${color};">${flagIcon} ${escSiteHtml(s.student_name)} ${genderIcon}</span>
+                        <span style="color:#777;">${s.age || ''}</span>
+                        <span style="color:#777;">${s.batch || ''}</span>
+                        <select onchange="updateRosterField(${s.id}, 'roster_status', this.value)" style="padding:4px 6px; border-radius:5px; border:1px solid #ddd;">
+                            ${Object.entries(ROSTER_TIER_LABELS).map(([v, l]) => `<option value="${v}" ${s.roster_status === v ? 'selected' : ''}>${l}</option>`).join('')}
+                        </select>
+                        <select onchange="updateRosterField(${s.id}, 'team', this.value || null)" ${s.roster_status === 'spare' ? 'disabled' : ''} style="padding:4px 6px; border-radius:5px; border:1px solid #ddd;">
+                            <option value="">—</option>
+                            <option value="A" ${s.team === 'A' ? 'selected' : ''}>Team A</option>
+                            <option value="B" ${s.team === 'B' ? 'selected' : ''}>Team B</option>
+                        </select>
+                        <select onchange="updateRosterField(${s.id}, 'dress_color', this.value || null)" style="padding:4px 6px; border-radius:5px; border:1px solid #ddd;">
+                            <option value="">No color</option>
+                            ${DRESS_COLOR_ORDER.map(c => `<option value="${c}" ${s.dress_color === c ? 'selected' : ''}>${c.replace('_', ' ')}</option>`).join('')}
+                        </select>
+                        <span>
+                            ${s.roster_status === 'spare'
+                                ? `<button onclick="updateRosterField(${s.id}, 'roster_status', 'beginner')" class="btn-small" style="background:#3498db;">→ Un-spare</button>`
+                                : `<button onclick="updateRosterField(${s.id}, 'roster_status', 'spare')" class="btn-small" style="background:#95a5a6;">🪑 Spare</button>`}
+                        </span>
+                    </div>`;
+                }).join('');
+            }
+
+            const attFlagsList = document.getElementById('attendanceFlagsList');
+            if (attFlagsList) {
+                const flagged = performanceSignupsCache.filter(s => flags[s.student_id]);
+                attFlagsList.innerHTML = flagged.length
+                    ? flagged.map(s => `<div>⚠️ ${escSiteHtml(s.student_name)} — low attendance, currently tagged <strong>${ROSTER_TIER_LABELS[s.roster_status]}</strong></div>`).join('')
+                    : '<div style="color:#888;">No attendance concerns.</div>';
+            }
+        }
+
+        async function updateRosterField(signupId, field, value) {
+            const row = performanceSignupsCache.find(s => s.id === signupId);
+            if (!row) return;
+            const payload = { [field]: value };
+            if (field === 'roster_status' && value === 'spare') payload.team = null;
+            row[field] = value;
+            if (payload.team === null) row.team = null;
+            const { error } = await supabaseClient.from('performance_signups').update(payload).eq('id', signupId);
+            if (error) { alert('Update failed: ' + error.message); return; }
+            renderRoster();
+            renderStageCanvas();
+        }
+
+        async function autoSplitTeams() {
+            const tierOrder = { advanced: 0, intermediate: 1, beginner: 2 };
+            const eligible = performanceSignupsCache.filter(s => s.roster_status !== 'spare');
+            const sorted = [...eligible].sort((a, b) => {
+                const t = (tierOrder[a.roster_status] ?? 3) - (tierOrder[b.roster_status] ?? 3);
+                if (t !== 0) return t;
+                return (a.gender || '').localeCompare(b.gender || '');
+            });
+            const updates = sorted.map((s, i) => ({ id: s.id, team: i % 2 === 0 ? 'A' : 'B' }));
+            for (const u of updates) {
+                await supabaseClient.from('performance_signups').update({ team: u.team }).eq('id', u.id);
+            }
+            showSuccessMessage('✓ Teams auto-split!');
+            await loadRoster();
+        }
+
+        async function clearAllTeams() {
+            const eligible = performanceSignupsCache.filter(s => s.roster_status !== 'spare');
+            for (const s of eligible) {
+                await supabaseClient.from('performance_signups').update({ team: null }).eq('id', s.id);
+            }
+            showSuccessMessage('✓ Teams cleared — treat everyone as one team.');
+            await loadRoster();
+        }
+
+        async function autoAssignDressColors() {
+            const eligible = performanceSignupsCache.filter(s => s.roster_status !== 'spare');
+            for (let i = 0; i < eligible.length; i++) {
+                const color = DRESS_COLOR_ORDER[Math.floor(i / 2) % DRESS_COLOR_ORDER.length];
+                await supabaseClient.from('performance_signups').update({ dress_color: color }).eq('id', eligible[i].id);
+            }
+            showSuccessMessage('✓ Dress colors assigned in pairs — override any dancer individually below.');
+            await loadRoster();
+            renderStageCanvas();
+        }
+
+        // ---- Rehearsal attendance ----
+        async function loadRehearsalAttendance() {
+            const dateInput = document.getElementById('rehearsalDate');
+            if (!dateInput.value) dateInput.valueAsDate = new Date();
+            const date = dateInput.value;
+            const { data, error } = await supabaseClient.from('performance_attendance')
+                .select('*').eq('performance_id', currentPerformanceId).eq('session_date', date);
+            if (error) { console.error('Rehearsal attendance load failed:', error); return; }
+            performanceAttendanceCache[date] = {};
+            (data || []).forEach(r => { performanceAttendanceCache[date][r.student_id] = r.present; });
+
+            const list = document.getElementById('rehearsalAttendanceList');
+            list.innerHTML = performanceSignupsCache.map(s => {
+                const present = !!performanceAttendanceCache[date][s.student_id];
+                return `
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:5px 10px; background:#f8f9fa; border-radius:6px;">
+                    <span>${escSiteHtml(s.student_name)}</span>
+                    <button onclick="toggleRehearsalPresent(${s.student_id}, ${!present})" class="btn-small" style="background:${present ? '#27ae60' : '#e74c3c'};">${present ? '✓ Present' : '✗ Absent'}</button>
+                </div>`;
+            }).join('');
+        }
+
+        async function toggleRehearsalPresent(studentId, present) {
+            const date = document.getElementById('rehearsalDate').value;
+            if (!date) return;
+            performanceAttendanceCache[date] = performanceAttendanceCache[date] || {};
+            performanceAttendanceCache[date][studentId] = present;
+            const { error } = await supabaseClient.from('performance_attendance')
+                .upsert([{ performance_id: currentPerformanceId, student_id: studentId, session_date: date, present }], { onConflict: 'performance_id,student_id,session_date' });
+            if (error) { alert('Could not save attendance: ' + error.message); return; }
+            loadRehearsalAttendance();
+            renderRoster();
+        }
+
+        // ---- Song & timing ----
+        async function uploadPerformanceSong(file) {
+            if (!file || !currentPerformanceId) return;
+            document.getElementById('songUploadStatus').textContent = 'Uploading…';
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const path = `performance_${currentPerformanceId}/${Date.now()}-${safeName}`;
+            const { error: upErr } = await supabaseClient.storage.from(PERFORMANCE_SONGS_BUCKET)
+                .upload(path, file, { contentType: file.type || 'audio/mpeg', upsert: false });
+            if (upErr) { alert('Upload failed: ' + upErr.message); document.getElementById('songUploadStatus').textContent = ''; return; }
+            const url = supabaseClient.storage.from(PERFORMANCE_SONGS_BUCKET).getPublicUrl(path).data.publicUrl;
+            const { error } = await supabaseClient.from('performances').update({ song_url: url }).eq('id', currentPerformanceId);
+            if (error) { alert('Could not save song: ' + error.message); return; }
+            const p = performancesCache.find(x => x.id === currentPerformanceId);
+            if (p) p.song_url = url;
+            document.getElementById('performanceAudio').src = url;
+            document.getElementById('songTimelineWrap').style.display = 'block';
+            document.getElementById('songUploadStatus').textContent = '✓ Song loaded';
+            showSuccessMessage('✓ Song uploaded!');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const audio = document.getElementById('performanceAudio');
+            if (!audio) return;
+            audio.addEventListener('loadedmetadata', () => { songDuration = audio.duration || 0; });
+            audio.addEventListener('timeupdate', onAudioTimeUpdate);
+        });
+
+        function onAudioTimeUpdate() {
+            const audio = document.getElementById('performanceAudio');
+            if (!songDuration && audio.duration) songDuration = audio.duration;
+            if (songDuration) {
+                document.getElementById('songPlayhead').style.left = `${(audio.currentTime / songDuration) * 100}%`;
+                document.getElementById('songTimelinePlayed').style.width = `${(audio.currentTime / songDuration) * 100}%`;
+            }
+            document.getElementById('songTimeReadout').textContent = `${formatMMSS(audio.currentTime)} / ${formatMMSS(songDuration)}`;
+
+            if (activePlaybackEndSeconds !== null && audio.currentTime >= activePlaybackEndSeconds) {
+                audio.pause();
+                activePlaybackEndSeconds = null;
+            }
+
+            const match = performanceMovementsCache.find(m =>
+                m.start_seconds !== null && m.end_seconds !== null &&
+                audio.currentTime >= m.start_seconds && audio.currentTime < m.end_seconds
+            );
+            if (match && match.id !== currentMovementId) {
+                switchMovement(match.id, true);
+            }
+        }
+
+        function startTimelineDrag(event, handle) {
+            event.stopPropagation();
+            event.preventDefault();
+            timelineDragHandle = handle;
+            document.addEventListener('mousemove', onTimelineMouseMove);
+            document.addEventListener('mouseup', onTimelineMouseUp);
+        }
+
+        function onTimelineMouseMove(event) {
+            if (!timelineDragHandle || !songDuration) return;
+            const rect = document.getElementById('songTimeline').getBoundingClientRect();
+            let pct = ((event.clientX - rect.left) / rect.width) * 100;
+            pct = Math.max(0, Math.min(100, pct));
+            const seconds = (pct / 100) * songDuration;
+            if (timelineDragHandle === 'start') rangeStartSec = Math.min(seconds, rangeEndSec);
+            else rangeEndSec = Math.max(seconds, rangeStartSec);
+            renderTimelineRange();
+        }
+
+        function onTimelineMouseUp() {
+            timelineDragHandle = null;
+            document.removeEventListener('mousemove', onTimelineMouseMove);
+            document.removeEventListener('mouseup', onTimelineMouseUp);
+        }
+
+        function renderTimelineRange() {
+            if (!songDuration) return;
+            const startPct = (rangeStartSec / songDuration) * 100;
+            const endPct = (rangeEndSec / songDuration) * 100;
+            document.getElementById('songRangeHandleStart').style.left = `${startPct}%`;
+            document.getElementById('songRangeHandleEnd').style.left = `${endPct}%`;
+            document.getElementById('songRangeSelection').style.left = `${startPct}%`;
+            document.getElementById('songRangeSelection').style.width = `${Math.max(0, endPct - startPct)}%`;
+            document.getElementById('songRangeLabel').textContent = `Range: ${formatMMSS(rangeStartSec)} – ${formatMMSS(rangeEndSec)}`;
+        }
+
+        async function setMovementRange() {
+            if (!currentMovementId) { alert('Add or select a movement first.'); return; }
+            const { error } = await supabaseClient.from('performance_movements')
+                .update({ start_seconds: rangeStartSec, end_seconds: rangeEndSec }).eq('id', currentMovementId);
+            if (error) { alert('Could not save range: ' + error.message); return; }
+            const m = performanceMovementsCache.find(x => x.id === currentMovementId);
+            if (m) { m.start_seconds = rangeStartSec; m.end_seconds = rangeEndSec; }
+            renderMovementTabs();
+            showSuccessMessage('✓ Movement range set!');
+        }
+
+        function playFromMovement() {
+            const audio = document.getElementById('performanceAudio');
+            if (!audio.src) { alert('Upload a song first.'); return; }
+            const m = performanceMovementsCache.find(x => x.id === currentMovementId);
+            audio.currentTime = m?.start_seconds || 0;
+            activePlaybackEndSeconds = (m && m.end_seconds !== null) ? m.end_seconds : null;
+            audio.play();
+        }
+
+        function pauseSong() {
+            document.getElementById('performanceAudio').pause();
+        }
+
+        // ---- Movements & choreography canvas ----
+        async function loadMovements() {
+            const { data: movements, error } = await supabaseClient.from('performance_movements')
+                .select('*').eq('performance_id', currentPerformanceId).order('movement_order');
+            if (error) { console.error('Movements load failed:', error); return; }
+            performanceMovementsCache = movements || [];
+
+            performancePositionsCache = {};
+            if (performanceMovementsCache.length) {
+                const ids = performanceMovementsCache.map(m => m.id);
+                const { data: positions } = await supabaseClient.from('performance_positions').select('*').in('movement_id', ids);
+                (positions || []).forEach(pos => {
+                    performancePositionsCache[pos.movement_id] = performancePositionsCache[pos.movement_id] || {};
+                    performancePositionsCache[pos.movement_id][pos.student_id] = { x: pos.x, y: pos.y };
+                });
+            }
+
+            currentMovementId = performanceMovementsCache[0]?.id || null;
+            renderMovementTabs();
+            renderStageCanvas();
+            renderFrontTally();
+            populateFormationPresetDropdown();
+
+            if (currentMovementId) {
+                const m = performanceMovementsCache.find(x => x.id === currentMovementId);
+                rangeStartSec = m?.start_seconds || 0;
+                rangeEndSec = m?.end_seconds || 0;
+                renderTimelineRange();
+            }
+        }
+
+        async function addMovement() {
+            if (!currentPerformanceId) return;
+            const nextOrder = performanceMovementsCache.length
+                ? Math.max(...performanceMovementsCache.map(m => m.movement_order)) + 1 : 1;
+            const { data, error } = await supabaseClient.from('performance_movements')
+                .insert([{ performance_id: currentPerformanceId, movement_order: nextOrder }]).select('id');
+            if (error) { alert('Could not add movement: ' + error.message); return; }
+            const newId = data[0].id;
+
+            const prevMovement = performanceMovementsCache[performanceMovementsCache.length - 1];
+            const eligible = performanceSignupsCache.filter(s => s.roster_status !== 'spare');
+            const prevPositions = prevMovement ? (performancePositionsCache[prevMovement.id] || {}) : {};
+            const rows = eligible.map((s, i) => {
+                const prev = prevPositions[s.student_id];
+                return {
+                    movement_id: newId,
+                    student_id: s.student_id,
+                    x: prev ? prev.x : 10 + (80 * i) / Math.max(1, eligible.length - 1),
+                    y: prev ? prev.y : 80
+                };
+            });
+            if (rows.length) await supabaseClient.from('performance_positions').insert(rows);
+
+            await loadMovements();
+            currentMovementId = newId;
+            renderMovementTabs();
+            renderStageCanvas();
+        }
+
+        async function deleteMovement(movementId) {
+            if (performanceMovementsCache.length <= 1) { alert('A performance needs at least one movement.'); return; }
+            if (!confirm('Delete this movement?')) return;
+            await supabaseClient.from('performance_movements').delete().eq('id', movementId);
+            await loadMovements();
+        }
+
+        function switchMovement(movementId, fromPlayback) {
+            currentMovementId = movementId;
+            const m = performanceMovementsCache.find(x => x.id === movementId);
+            if (m && !fromPlayback) {
+                rangeStartSec = m.start_seconds || 0;
+                rangeEndSec = m.end_seconds || 0;
+                renderTimelineRange();
+            }
+            renderMovementTabs();
+            renderStageCanvas();
+        }
+
+        function renderMovementTabs() {
+            const wrap = document.getElementById('movementTabs');
+            wrap.innerHTML = performanceMovementsCache.map(m => {
+                const range = (m.start_seconds !== null && m.end_seconds !== null)
+                    ? ` (${formatMMSS(m.start_seconds)}–${formatMMSS(m.end_seconds)})` : '';
+                const active = m.id === currentMovementId;
+                return `
+                <div style="display:inline-flex; align-items:center; gap:4px; padding:6px 10px; border-radius:6px; cursor:pointer; background:${active ? '#667eea' : '#f0f0f0'}; color:${active ? '#fff' : '#333'}; font-weight:700; font-size:0.82em;" onclick="switchMovement(${m.id})">
+                    ${m.label || 'Movement ' + m.movement_order}${range}
+                    <span onclick="event.stopPropagation(); deleteMovement(${m.id})" style="opacity:0.7; margin-left:4px;">🗑</span>
+                </div>`;
+            }).join('');
+        }
+
+        function renderStageCanvas() {
+            const canvas = document.getElementById('stageCanvas');
+            canvas.querySelectorAll('.dancer-chip').forEach(el => el.remove());
+            if (!currentMovementId) return;
+            const eligible = performanceSignupsCache.filter(s => s.roster_status !== 'spare');
+            const positions = performancePositionsCache[currentMovementId] || {};
+
+            eligible.forEach(s => {
+                const pos = positions[s.student_id] || { x: 50, y: 50 };
+                const bg = s.dress_color ? DRESS_COLOR_HEX[s.dress_color] : '#7f8c8d';
+                const borderColor = s.team === 'A' ? '#3498db' : s.team === 'B' ? '#e91e8c' : 'rgba(255,255,255,0.4)';
+                const chip = document.createElement('div');
+                chip.className = 'dancer-chip';
+                chip.title = s.student_name;
+                chip.textContent = s.student_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                chip.style.cssText = `position:absolute; width:38px; height:38px; margin:-19px 0 0 -19px; border-radius:50%; background:${bg}; border:3px solid ${borderColor}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:0.75em; font-weight:800; cursor:grab; user-select:none; box-shadow:0 2px 6px rgba(0,0,0,0.4); left:${pos.x}%; top:${pos.y}%;`;
+
+                chip.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    draggingStudentId = s.student_id;
+                    chip.setPointerCapture(e.pointerId);
+                    chip.style.cursor = 'grabbing';
+                });
+                chip.addEventListener('pointermove', (e) => {
+                    if (draggingStudentId !== s.student_id) return;
+                    const rect = canvas.getBoundingClientRect();
+                    let x = ((e.clientX - rect.left) / rect.width) * 100;
+                    let y = ((e.clientY - rect.top) / rect.height) * 100;
+                    x = Math.max(2, Math.min(98, x));
+                    y = Math.max(6, Math.min(96, y));
+                    chip.style.left = x + '%';
+                    chip.style.top = y + '%';
+                    performancePositionsCache[currentMovementId] = performancePositionsCache[currentMovementId] || {};
+                    performancePositionsCache[currentMovementId][s.student_id] = { x, y };
+                });
+                chip.addEventListener('pointerup', async (e) => {
+                    if (draggingStudentId !== s.student_id) return;
+                    draggingStudentId = null;
+                    chip.style.cursor = 'grab';
+                    const p = performancePositionsCache[currentMovementId][s.student_id];
+                    await supabaseClient.from('performance_positions')
+                        .upsert([{ movement_id: currentMovementId, student_id: s.student_id, x: p.x, y: p.y }], { onConflict: 'movement_id,student_id' });
+                    renderFrontTally();
+                });
+                canvas.appendChild(chip);
+            });
+        }
+
+        function renderFrontTally() {
+            const el = document.getElementById('frontTallyList');
+            if (!el) return;
+            const performance = performancesCache.find(p => p.id === currentPerformanceId);
+            const frontBandPct = performance?.front_band_pct ?? 25;
+            const eligible = performanceSignupsCache.filter(s => s.roster_status !== 'spare');
+            const totalMovements = performanceMovementsCache.length;
+            const tally = eligible.map(s => {
+                let count = 0;
+                performanceMovementsCache.forEach(m => {
+                    const pos = (performancePositionsCache[m.id] || {})[s.student_id];
+                    if (pos && pos.y >= (100 - frontBandPct)) count += 1;
+                });
+                return { name: s.student_name, count };
+            }).sort((a, b) => b.count - a.count);
+            el.innerHTML = totalMovements
+                ? tally.map(t => `<div>${escSiteHtml(t.name)} — front in ${t.count}/${totalMovements}</div>`).join('')
+                : '<div style="color:#888;">Add a movement to start tracking.</div>';
+        }
+
+        function downloadMovementImage() {
+            if (typeof html2canvas === 'undefined') { alert('Image export library failed to load.'); return; }
+            const m = performanceMovementsCache.find(x => x.id === currentMovementId);
+            html2canvas(document.getElementById('stageCanvas')).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `${m ? (m.label || 'movement-' + m.movement_order) : 'movement'}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        // ---- Formation presets ----
+        function evenSpread(n, from, to) {
+            if (n <= 1) return [(from + to) / 2];
+            const out = [];
+            for (let i = 0; i < n; i++) out.push(from + ((to - from) * i) / (n - 1));
+            return out;
+        }
+
+        const FORMATION_PRESETS = {
+            singleLine: (subset) => evenSpread(subset.length, 10, 90).map(x => ({ x, y: 82 })),
+            doubleLine: (subset) => subset.map((s, i) => {
+                const row = i % 2;
+                const rowMembers = subset.filter((_, j) => j % 2 === row).length;
+                const idxInRow = Math.floor(i / 2);
+                return { x: evenSpread(rowMembers, 15, 85)[idxInRow], y: row === 0 ? 60 : 85 };
+            }),
+            singleToDouble: (subset) => FORMATION_PRESETS.doubleLine(subset),
+            tripleLine: (subset) => subset.map((s, i) => {
+                const row = i % 3;
+                const rowMembers = subset.filter((_, j) => j % 3 === row).length;
+                const idxInRow = Math.floor(i / 3);
+                const ys = [50, 70, 88];
+                return { x: evenSpread(rowMembers, 12, 88)[idxInRow], y: ys[row] };
+            }),
+            vShape: (subset) => {
+                const half = Math.ceil(subset.length / 2);
+                return subset.map((s, i) => {
+                    if (i < half) { const t = half > 1 ? i / (half - 1) : 0; return { x: 50 - t * 42, y: 30 + t * 58 }; }
+                    const j = i - half, rightCount = subset.length - half;
+                    const t = rightCount > 1 ? j / (rightCount - 1) : 0;
+                    return { x: 50 + t * 42, y: 30 + t * 58 };
+                });
+            },
+            invertedV: (subset) => FORMATION_PRESETS.vShape(subset).map(p => ({ x: p.x, y: 88 - (p.y - 30) })),
+            circle: (subset) => subset.map((s, i) => {
+                const angle = (2 * Math.PI * i) / subset.length - Math.PI / 2;
+                return { x: 50 + 34 * Math.cos(angle), y: 58 + 30 * Math.sin(angle) };
+            }),
+            semiCircle: (subset) => subset.map((s, i) => {
+                const angle = Math.PI * (subset.length > 1 ? i / (subset.length - 1) : 0.5);
+                return { x: 50 - 40 * Math.cos(angle), y: 88 - 45 * Math.sin(angle) };
+            }),
+            diagonal: (subset) => evenSpread(subset.length, 0, 1).map(t => ({ x: 12 + t * 76, y: 25 + t * 63 })),
+            crissCross: (subset) => subset.map((s, i) => {
+                const t = subset.length > 1 ? i / (subset.length - 1) : 0.5;
+                return i % 2 === 0 ? { x: 12 + t * 76, y: 25 + t * 63 } : { x: 88 - t * 76, y: 25 + t * 63 };
+            }),
+            grid: (subset) => {
+                const cols = Math.ceil(Math.sqrt(subset.length));
+                return subset.map((s, i) => {
+                    const row = Math.floor(i / cols), col = i % cols;
+                    const rows = Math.ceil(subset.length / cols);
+                    return { x: evenSpread(cols, 15, 85)[col], y: evenSpread(rows, 40, 88)[row] };
+                });
+            },
+            zigzag: (subset) => evenSpread(subset.length, 10, 90).map((x, i) => ({ x, y: i % 2 === 0 ? 65 : 85 })),
+            star: (subset) => subset.map((s, i) => {
+                const angle = (2 * Math.PI * i) / subset.length - Math.PI / 2;
+                const r = i % 2 === 0 ? 34 : 18;
+                return { x: 50 + r * Math.cos(angle), y: 58 + r * 0.85 * Math.sin(angle) };
+            }),
+            wave: (subset) => evenSpread(subset.length, 10, 90).map((x, i) => ({ x, y: 60 + 22 * Math.sin((i / Math.max(1, subset.length - 1)) * Math.PI * 2) })),
+            twoClusters: (subset) => {
+                const half = Math.ceil(subset.length / 2);
+                return subset.map((s, i) => i < half
+                    ? { x: 25 + (i % 3) * 8, y: 55 + Math.floor(i / 3) * 14 }
+                    : { x: 65 + ((i - half) % 3) * 8, y: 55 + Math.floor((i - half) / 3) * 14 });
+            },
+            centerWings: (subset) => {
+                const wing = Math.floor(subset.length * 0.3);
+                return subset.map((s, i) => {
+                    if (i < wing) return { x: 12 + (i / Math.max(1, wing - 1)) * 15, y: 55 };
+                    if (i >= subset.length - wing) { const j = i - (subset.length - wing); return { x: 73 + (j / Math.max(1, wing - 1)) * 15, y: 55 }; }
+                    const centerCount = subset.length - 2 * wing, j = i - wing;
+                    return { x: evenSpread(centerCount, 35, 65)[j], y: 82 };
+                });
+            },
+            altGenderLine: (subset) => {
+                const boys = subset.filter(s => s.gender === 'M'), girls = subset.filter(s => s.gender === 'F'), rest = subset.filter(s => !s.gender);
+                const ordered = [];
+                let bi = 0, gi = 0;
+                while (bi < boys.length || gi < girls.length) {
+                    if (bi < boys.length) ordered.push(boys[bi++]);
+                    if (gi < girls.length) ordered.push(girls[gi++]);
+                }
+                ordered.push(...rest);
+                const xs = evenSpread(ordered.length, 10, 90);
+                const positionByStudent = {};
+                ordered.forEach((s, i) => { positionByStudent[s.student_id] = { x: xs[i], y: 82 }; });
+                return subset.map(s => positionByStudent[s.student_id] || { x: 50, y: 82 });
+            },
+            frontBackGenderSplit: (subset) => {
+                const boys = subset.filter(s => s.gender === 'M'), girls = subset.filter(s => s.gender === 'F'), rest = subset.filter(s => !s.gender);
+                const positionByStudent = {};
+                evenSpread(girls.length, 15, 85).forEach((x, i) => { positionByStudent[girls[i].student_id] = { x, y: 85 }; });
+                evenSpread(boys.length, 15, 85).forEach((x, i) => { positionByStudent[boys[i].student_id] = { x, y: 55 }; });
+                evenSpread(rest.length, 15, 85).forEach((x, i) => { positionByStudent[rest[i].student_id] = { x, y: 70 }; });
+                return subset.map(s => positionByStudent[s.student_id] || { x: 50, y: 70 });
+            }
+        };
+
+        const FORMATION_PRESET_LABELS = {
+            singleLine: 'Single Line', doubleLine: 'Double Line', singleToDouble: 'Single Line → Double Line',
+            tripleLine: 'Triple Line', vShape: 'V-Shape', invertedV: 'Inverted V', circle: 'Circle',
+            semiCircle: 'Semi-Circle', diagonal: 'Diagonal', crissCross: 'Criss-Cross Diagonals', grid: 'Grid / Block',
+            zigzag: 'Zig-Zag', star: 'Star / Pinwheel', wave: 'Wave', twoClusters: 'Two Side Clusters',
+            centerWings: 'Center + Wings', altGenderLine: 'Boys/Girls Alternating Line', frontBackGenderSplit: 'Front/Back Gender Split'
+        };
+
+        function populateFormationPresetDropdown() {
+            const select = document.getElementById('formationPreset');
+            if (select.options.length) return;
+            select.innerHTML = Object.entries(FORMATION_PRESET_LABELS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+        }
+
+        async function applyFormationFromControls() {
+            if (!currentMovementId) { alert('Add a movement first.'); return; }
+            const presetKey = document.getElementById('formationPreset').value;
+            const filterKey = document.getElementById('formationFilter').value;
+            let subset = performanceSignupsCache.filter(s => s.roster_status !== 'spare');
+            if (filterKey === 'boys') subset = subset.filter(s => s.gender === 'M');
+            else if (filterKey === 'girls') subset = subset.filter(s => s.gender === 'F');
+            else if (filterKey === 'A' || filterKey === 'B') subset = subset.filter(s => s.team === filterKey);
+            if (!subset.length) { alert('No dancers match that filter.'); return; }
+
+            const positions = FORMATION_PRESETS[presetKey](subset);
+            performancePositionsCache[currentMovementId] = performancePositionsCache[currentMovementId] || {};
+            const rows = subset.map((s, i) => {
+                performancePositionsCache[currentMovementId][s.student_id] = positions[i];
+                return { movement_id: currentMovementId, student_id: s.student_id, x: positions[i].x, y: positions[i].y };
+            });
+            renderStageCanvas();
+            renderFrontTally();
+            await supabaseClient.from('performance_positions').upsert(rows, { onConflict: 'movement_id,student_id' });
+        }
+
         // ===== SUPABASE CONFIGURATION =====
         const SUPABASE_URL = 'https://geeqcyfnkgamcjclulay.supabase.co'; // Replace with your Supabase URL
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo'; // Replace with your Supabase anon key
@@ -2297,6 +3177,7 @@
                 parentName: student.parentName,
                 phone: student.phone,
                 age: student.age,
+                gender: student.gender || null,
                 address: student.address,
                 codiceFiscale: student.codiceFiscale || student.codice_fiscale || '',
                 batch: student.batch,
@@ -2311,6 +3192,7 @@
                     parentname: base.parentName,
                     phone: base.phone,
                     age: base.age,
+                    gender: base.gender,
                     address: base.address,
                     codicefiscale: base.codiceFiscale,
                     batch: base.batch,
@@ -2326,6 +3208,7 @@
                     parent_name: base.parentName,
                     phone: base.phone,
                     age: base.age,
+                    gender: base.gender,
                     address: base.address,
                     codice_fiscale: base.codiceFiscale,
                     batch: base.batch,
@@ -2424,6 +3307,7 @@
                 paiddate: record.paiddate ?? record.paidDate ?? record.paid_date ?? new Date().toISOString(),
                 paid_start_date: record.paid_start_date ?? record.paidStartDate ?? '',
                 paid_end_date: record.paid_end_date ?? record.paidEndDate ?? '',
+                closedearly: record.closedearly ?? record.closedEarly ?? record.closed_early ?? null,
                 amount: record.amount ?? null
             };
 
@@ -2435,6 +3319,7 @@
                     paiddate: base.paiddate,
                     paidstartdate: base.paid_start_date,
                     paidenddate: base.paid_end_date,
+                    closedearly: base.closedearly,
                     amount: base.amount
                 };
             }
@@ -2447,6 +3332,7 @@
                     paid_date: base.paiddate,
                     paid_start_date: base.paid_start_date,
                     paid_end_date: base.paid_end_date,
+                    closed_early: base.closedearly,
                     amount: base.amount
                 };
             }
@@ -2886,6 +3772,7 @@
                 parentName: document.getElementById('parentName').value,
                 phone: document.getElementById('studentPhone').value,
                 age: parseInt(document.getElementById('studentAge').value) || null,
+                gender: document.getElementById('studentGender').value || null,
                 address: document.getElementById('studentAddress').value,
                 codiceFiscale: document.getElementById('codiceFiscale').value,
                 batch: document.getElementById('studentBatch').value,
@@ -2993,6 +3880,7 @@
                 document.getElementById('parentName').value = '';
                 document.getElementById('studentPhone').value = '';
                 document.getElementById('studentAge').value = '';
+                document.getElementById('studentGender').value = '';
                 document.getElementById('addrIndirizzo').value = '';
                 document.getElementById('addrHouse').value = '';
                 document.getElementById('addrCap').value = '';
@@ -3111,6 +3999,7 @@
                         <div style="color:#1a1a1a; font-size:0.95em; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${student.parentName || ','} &nbsp;·&nbsp; 📞 ${student.phone || ','}</div>
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
                             <span style="background:${batchColor}22; color:${batchColor}; border:1px solid ${batchColor}44; border-radius:20px; padding:3px 10px; font-size:0.88em; font-weight:700;">${student.batch}</span>
+                            ${student.gender ? `<span title="${student.gender === 'M' ? 'Boy' : 'Girl'}" style="font-size:0.95em;">${student.gender === 'M' ? '♂️' : '♀️'}</span>` : ''}
                             <span style="color:#1a1a1a; font-size:0.92em;">€${Math.round(student.monthlyFees)}</span>
                             ${ageLabel}
                             ${cfLabel}
@@ -3435,7 +4324,7 @@
                 start: cycle.start,
                 end: cycle.naturalEnd,
                 effectiveEnd: cycle.effectiveEnd,
-                extended: cycle.effectiveEnd !== cycle.naturalEnd,
+                extended: cycle.effectiveEnd > cycle.naturalEnd,
                 paused: timeline.paused
             };
         }
@@ -3511,6 +4400,7 @@
         function renderStudentDetailHTML(student) {
             const currentMonth = getSelectedPaymentMonth();
             const currentMonthPaid = isStudentPaymentActive(student);
+            const currentCycleIsGratis = currentMonthPaid && Number(getMembershipTimeline(student).current?.record?.amount ?? -1) === 0;
             const autoExt = getAutoExtension(student);
             const prevCycleUnpaid = hasPreviousCycleUnpaid(student);
             const prevMonth = getPreviousCycleMonth(student);
@@ -3536,7 +4426,9 @@
                 <div style="margin-bottom:10px; display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
                     <div><strong>Monthly Fee:</strong> €${Math.round(student.monthlyFees || 0)}</div>
                     <div><strong>Join Date:</strong> ${student.joinDate ? formatDisplayDate(student.joinDate) : ''}</div>
-                    <div><strong>Current Status:</strong> <span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span></div>
+                    <div><strong>Current Status:</strong> ${currentCycleIsGratis
+                        ? `<span style="background:#e0f2f1; color:#16a085; border-radius:5px; padding:3px 9px; font-size:0.85em; font-weight:700;">🤝 SETTLED</span>`
+                        : `<span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span>`}</div>
                     ${autoExt.isExtended ? `<div><span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏳ Auto-extended, ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} classes · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span></div>` : ''}
                     ${autoExt.paused ? `<div><span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏸ Plan paused, ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over when he returns</span></div>` : ''}
                     ${autoExt.awaitingFirstClass ? `<div><span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">🎁 Demo taken, plan starts on their next attended class</span></div>` : ''}
@@ -3561,11 +4453,10 @@
 
             const renderCycleRow = (cycle) => {
                 const isCurrent = cycle === timeline.current;
-                const wasExtended = cycle.effectiveEnd !== cycle.naturalEnd;
-                // For the current cycle, only show the extension once it has actually started
-                const showExtended = wasExtended && (!isCurrent || autoExt.isExtended);
-                const label = formatCycleLabel(cycle.start, showExtended ? cycle.effectiveEnd : cycle.naturalEnd)
-                    + (showExtended ? ` <span style="color:#00796b; font-size:0.82em; font-weight:700;">⏳ extended</span>` : '');
+                const displayInfo = cycleDisplayInfo(cycle, isCurrent, autoExt.isExtended);
+                const label = formatCycleLabel(cycle.start, displayInfo.end)
+                    + (displayInfo.tag === 'extended' ? ` <span style="color:#00796b; font-size:0.82em; font-weight:700;">⏳ extended</span>`
+                        : displayInfo.tag === 'closed_early' ? ` <span style="color:#c0392b; font-size:0.82em; font-weight:700;">🔒 closed early</span>` : '');
                 const carryNote = cycle.carriedIn > 0 ? ` (incl. ${cycle.carriedIn} carried over)` : '';
                 // 5-weekend months mean attended can exceed the 4-class minimum ,
                 // there's a floor, not a cap, so keep the fraction but call out
@@ -3583,9 +4474,14 @@
                     const recordId = cycle.record?.id ?? null;
                     const paidDateStr = String(cycle.record?.paiddate ?? cycle.record?.paidDate ?? cycle.record?.paid_date ?? '').slice(0, 10);
                     const paidAmount = Number(cycle.record?.amount ?? student?.monthlyFees ?? 0);
-                    statusChip = `<div class="fees-status fees-paid">PAID</div>`;
-                    if (paidDateStr) paidLine = `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${formatDisplayDate(paidDateStr)} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong></div>`;
-                    if (recordId !== null) actionBtn = `<button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>`;
+                    const isGratis = paidAmount === 0;
+                    statusChip = isGratis
+                        ? `<div style="background:#e0f2f1; color:#16a085; border-radius:5px; padding:3px 9px; font-size:0.82em; font-weight:700;">🤝 SETTLED</div>`
+                        : `<div class="fees-status fees-paid">PAID</div>`;
+                    if (paidDateStr) paidLine = isGratis
+                        ? `<div style="font-size:0.82em; color:#555; margin-top:2px;">Settled on: ${formatDisplayDate(paidDateStr)}</div>`
+                        : `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${formatDisplayDate(paidDateStr)} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong></div>`;
+                    if (recordId !== null) actionBtn = `<button class="btn-small" onclick="promptAndEditPayment(${recordId})" style="background:#f39c12;">✏️ Edit</button> <button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>`;
                 } else if (cycle.complete) {
                     statusChip = `<div class="fees-status fees-unpaid">TO PAY</div>`;
                     actionBtn = `<button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">Mark Paid</button>`;
@@ -3593,8 +4489,10 @@
                     statusChip = `<div class="fees-status fees-unpaid">PENDING</div>`;
                     actionBtn = `<button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">Mark Paid</button>`;
                 } else {
-                    // Incomplete unpaid past cycle, its classes carried into the next cycle
+                    // Incomplete unpaid past cycle, its classes carried into the next cycle.
+                    // Still settleable (paid or gratis) via the same modal as any other cycle.
                     statusChip = `<div style="background:#eceff1; color:#546e7a; border-radius:5px; padding:3px 9px; font-size:0.82em; font-weight:700;">CLASSES CARRIED OVER</div>`;
+                    actionBtn = `<button class="btn-small" onclick="promptAndMarkPaid(${studentId}, '${cycle.start}')" style="background:#27ae60;">Mark Paid</button>`;
                 }
 
                 return `
@@ -3671,7 +4569,10 @@
                             const recordId = record.id ?? null;
                             const paidDateStr = String(record.paiddate ?? record.paidDate ?? record.paid_date ?? '').slice(0, 10);
                             const paidAmount = Number(record.amount ?? student?.monthlyFees ?? 0);
-                            const paidLine = `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${paidDateStr ? formatDisplayDate(paidDateStr) : 'N/A'} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong>${record.month ? ` &nbsp;·&nbsp; for ${record.month}` : ''}</div>`;
+                            const isGratis = paidAmount === 0;
+                            const paidLine = isGratis
+                                ? `<div style="font-size:0.82em; color:#555; margin-top:2px;">Settled on: ${paidDateStr ? formatDisplayDate(paidDateStr) : 'N/A'}${record.month ? ` &nbsp;·&nbsp; for ${record.month}` : ''}</div>`
+                                : `<div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${paidDateStr ? formatDisplayDate(paidDateStr) : 'N/A'} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong>${record.month ? ` &nbsp;·&nbsp; for ${record.month}` : ''}</div>`;
                             return `
                                 <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                                     <div>
@@ -3679,8 +4580,10 @@
                                         ${paidLine}
                                     </div>
                                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                        <div class="fees-status fees-paid">PAID IN ADVANCE</div>
-                                        ${recordId !== null ? `<button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>` : ''}
+                                        ${isGratis
+                                            ? `<div style="background:#e0f2f1; color:#16a085; border-radius:5px; padding:3px 9px; font-size:0.82em; font-weight:700;">🤝 SETTLED</div>`
+                                            : `<div class="fees-status fees-paid">PAID IN ADVANCE</div>`}
+                                        ${recordId !== null ? `<button class="btn-small" onclick="promptAndEditPayment(${recordId})" style="background:#f39c12;">✏️ Edit</button> <button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>` : ''}
                                     </div>
                                 </div>`;
                         }
@@ -3707,15 +4610,18 @@
                     const recordId = record.id ?? null;
                     const paidDateStr = String(record.paiddate ?? record.paidDate ?? record.paid_date ?? '').slice(0, 10);
                     const paidAmount = Number(record.amount ?? student?.monthlyFees ?? 0);
+                    const isGratis = paidAmount === 0;
                     return `
                         <div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                             <div>
                                 <div style="font-weight:600;">${recStart ? formatCycleLabel(recStart, recEnd) : (record.month || 'N/A')}</div>
-                                <div style="font-size:0.82em; color:#555; margin-top:2px;">Paid on: ${paidDateStr ? formatDisplayDate(paidDateStr) : 'N/A'} &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong></div>
+                                <div style="font-size:0.82em; color:#555; margin-top:2px;">${isGratis ? 'Settled on' : 'Paid on'}: ${paidDateStr ? formatDisplayDate(paidDateStr) : 'N/A'}${isGratis ? '' : ` &nbsp;·&nbsp; <strong style="color:#27ae60;">€${Math.round(paidAmount)}</strong>`}</div>
                             </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                                <div class="fees-status fees-paid">PAID</div>
-                                ${recordId !== null ? `<button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>` : ''}
+                                ${isGratis
+                                    ? `<div style="background:#e0f2f1; color:#16a085; border-radius:5px; padding:3px 9px; font-size:0.82em; font-weight:700;">🤝 SETTLED</div>`
+                                    : `<div class="fees-status fees-paid">PAID</div>`}
+                                ${recordId !== null ? `<button class="btn-small" onclick="promptAndEditPayment(${recordId})" style="background:#f39c12;">✏️ Edit</button> <button class="btn-small" onclick="toggleFeesPaidByRecord(${recordId}, false)" style="background:#e74c3c;">Mark Unpaid</button>` : ''}
                             </div>
                         </div>`;
                 }).join('');
@@ -3748,6 +4654,7 @@
             document.getElementById('parentName').value = student.parentName;
             document.getElementById('studentPhone').value = student.phone || '';
             document.getElementById('studentAge').value = student.age || '';
+            document.getElementById('studentGender').value = student.gender || '';
             // Pre-fill address sub-fields (stored as pipe-separated)
             const addrParts = (student.address || '').split('|').map(p => p.trim());
             document.getElementById('addrIndirizzo').value = addrParts[0] || '';
@@ -3776,6 +4683,7 @@
             document.getElementById('parentName').value = '';
             document.getElementById('studentPhone').value = '';
             document.getElementById('studentAge').value = '';
+            document.getElementById('studentGender').value = '';
             document.getElementById('addrIndirizzo').value = '';
             document.getElementById('addrHouse').value = '';
             document.getElementById('addrCap').value = '';
@@ -4209,13 +5117,71 @@
         let _pendingPayment = null;
 
         function promptAndMarkPaid(studentId, cycleStart) {
-            _pendingPayment = { studentId, cycleStart };
+            _pendingPayment = { mode: 'create', studentId, cycleStart };
+            document.getElementById('paymentModalTitle').textContent = '📅 Record Payment';
+            document.getElementById('paymentModalSubtitle').textContent = 'When was this payment received?';
+            document.getElementById('paymentConfirmBtn').textContent = '✓ Confirm Paid';
             const today = formatLocalDate(new Date());
             document.getElementById('paymentDateInput').value = today;
             // Pre-fill amount from student's monthly fee
             const student = students.find(s => String(s.id) === String(studentId));
             document.getElementById('paymentAmountInput').value = student?.monthlyFees ?? 0;
+            document.getElementById('paymentAmountInput').disabled = false;
+            document.getElementById('paymentGratisCheckbox').checked = false;
+            document.getElementById('paymentClosedEarlyCheckbox').checked = false;
+            document.getElementById('paymentClosedEarlyDateInput').value = today;
+            document.getElementById('paymentClosedEarlyDateWrap').style.display = 'none';
+            // Pre-fill cycle start from the engine's computed value; editable for
+            // cases where the plan should actually start on the payment date instead.
+            document.getElementById('paymentCycleStartInput').value = String(cycleStart || '').slice(0, 10);
             document.getElementById('paymentDateModal').style.display = 'flex';
+        }
+
+        // Edits an EXISTING payment record in place (by its own id) instead of
+        // deleting and re-creating — delete+recreate is what caused the
+        // reanchor and delete-by-month bugs earlier, since it changes which
+        // row exists and can shift what the engine treats as the anchor.
+        // Updating fields on the same row never touches anchor selection.
+        function promptAndEditPayment(recordId) {
+            const record = (feePayments || []).find(r => Number(r.id) === Number(recordId));
+            if (!record) { alert('Could not find this payment record.'); return; }
+            const studentId = record.studentid ?? record.studentId ?? record.student_id;
+            _pendingPayment = { mode: 'edit', recordId: Number(recordId), studentId };
+            document.getElementById('paymentModalTitle').textContent = '✏️ Edit Payment';
+            document.getElementById('paymentModalSubtitle').textContent = 'Change any details of this already-recorded payment.';
+            document.getElementById('paymentConfirmBtn').textContent = '✓ Save Changes';
+
+            const paidDateStr = String(record.paiddate ?? record.paidDate ?? record.paid_date ?? '').slice(0, 10);
+            document.getElementById('paymentDateInput').value = paidDateStr || formatLocalDate(new Date());
+
+            const amount = Number(record.amount ?? 0);
+            const isGratis = amount === 0;
+            document.getElementById('paymentAmountInput').value = amount;
+            document.getElementById('paymentAmountInput').disabled = isGratis;
+            document.getElementById('paymentGratisCheckbox').checked = isGratis;
+
+            const closedEarly = String(record.closedearly ?? record.closedEarly ?? '').slice(0, 10);
+            document.getElementById('paymentClosedEarlyCheckbox').checked = !!closedEarly;
+            document.getElementById('paymentClosedEarlyDateInput').value = closedEarly || formatLocalDate(new Date());
+            document.getElementById('paymentClosedEarlyDateWrap').style.display = closedEarly ? 'block' : 'none';
+
+            const startStr = String(record.paidstartdate ?? record.paid_start_date ?? record.paidStartDate ?? '').slice(0, 10);
+            document.getElementById('paymentCycleStartInput').value = startStr;
+
+            document.getElementById('paymentDateModal').style.display = 'flex';
+        }
+
+        function onPaymentGratisToggle() {
+            const student = students.find(s => String(s.id) === String(_pendingPayment?.studentId));
+            const amountInput = document.getElementById('paymentAmountInput');
+            const isGratis = document.getElementById('paymentGratisCheckbox').checked;
+            amountInput.value = isGratis ? 0 : (student?.monthlyFees ?? 0);
+            amountInput.disabled = isGratis;
+        }
+
+        function onPaymentClosedEarlyToggle() {
+            const isClosedEarly = document.getElementById('paymentClosedEarlyCheckbox').checked;
+            document.getElementById('paymentClosedEarlyDateWrap').style.display = isClosedEarly ? 'block' : 'none';
         }
 
         function closePaymentDateModal() {
@@ -4225,15 +5191,58 @@
 
         async function confirmMarkPaid() {
             if (!_pendingPayment) return;
-            const { studentId, cycleStart } = _pendingPayment;
             const selectedDate = document.getElementById('paymentDateInput').value;
-            const amount = parseFloat(document.getElementById('paymentAmountInput').value);
+            const isGratis = document.getElementById('paymentGratisCheckbox').checked;
+            const isClosedEarly = document.getElementById('paymentClosedEarlyCheckbox').checked;
+            const closedEarlyDate = document.getElementById('paymentClosedEarlyDateInput').value;
+            const amount = isGratis ? 0 : parseFloat(document.getElementById('paymentAmountInput').value);
+            const editedCycleStart = document.getElementById('paymentCycleStartInput').value;
             if (!selectedDate) { alert('Please select a payment date.'); return; }
+            if (isClosedEarly && !closedEarlyDate) { alert('Please select a date to close the cycle on.'); return; }
+
+            if (_pendingPayment.mode === 'edit') {
+                const { recordId, studentId } = _pendingPayment;
+                closePaymentDateModal();
+                await updateFeesPaidRecord(recordId, studentId, {
+                    paiddate: selectedDate,
+                    amount: isNaN(amount) ? 0 : amount,
+                    paidstartdate: /^\d{4}-\d{2}-\d{2}$/.test(editedCycleStart) ? editedCycleStart : null,
+                    closedearly: isClosedEarly ? closedEarlyDate : null
+                });
+                return;
+            }
+
+            const { studentId, cycleStart } = _pendingPayment;
+            const effectiveCycleStart = /^\d{4}-\d{2}-\d{2}$/.test(editedCycleStart) ? editedCycleStart : cycleStart;
             closePaymentDateModal();
-            await toggleFeesPaid(studentId, cycleStart, true, selectedDate, isNaN(amount) ? null : amount);
+            await toggleFeesPaid(studentId, effectiveCycleStart, true, selectedDate, isNaN(amount) ? null : amount, isClosedEarly ? closedEarlyDate : null);
         }
 
-        async function toggleFeesPaid(studentId, month, shouldBePaid = true, paidDate = null, amount = null) {
+        // Updates an existing fees_paid row's fields directly by its own id —
+        // never deletes/recreates, so it can't disturb anchor selection or
+        // collide with any other cycle's record (unlike toggleFeesPaid, which
+        // has to delete-then-insert because it doesn't yet know the row exists).
+        async function updateFeesPaidRecord(recordId, studentId, { paiddate, amount, paidstartdate, closedearly }) {
+            try {
+                const patch = { paiddate, amount };
+                if (paidstartdate) {
+                    patch.paidstartdate = paidstartdate;
+                    patch.paidenddate = getPaymentCycleDates(paidstartdate).end;
+                }
+                patch.closedearly = closedearly || null;
+                const { error } = await supabaseClient.from('fees_paid').update(patch).eq('id', recordId);
+                if (error) throw error;
+                await loadAllData();
+                refreshStudentDetailView(studentId);
+                updatePaymentsDisplay();
+                showSuccessMessage('✓ Payment updated.');
+            } catch (error) {
+                console.error('Error updating payment record:', error);
+                alert('Error updating payment record: ' + error.message);
+            }
+        }
+
+        async function toggleFeesPaid(studentId, month, shouldBePaid = true, paidDate = null, amount = null, closedEarlyDate = null) {
             try {
                 // Accept full date "YYYY-MM-DD" (preferred) or month "YYYY-MM" (fallback)
                 const _isFullDate = /^\d{4}-\d{2}-\d{2}$/.test(String(month || ''));
@@ -4261,16 +5270,23 @@
                     return;
                 }
 
-                // Mark paid: best-effort delete of any existing record for THIS specific month (avoid duplicates)
-                // Non-blocking, if delete fails (column name / RLS), the insert still proceeds
-                await supabaseClient.from('fees_paid').delete()
-                    .eq('studentid', studentId).eq('month', safeMonth).then(() => {}).catch(() => {});
-                await supabaseClient.from('fees_paid').delete()
-                    .eq('student_id', studentId).eq('month', safeMonth).then(() => {}).catch(() => {});
-
                 // Derive cycle dates from the actual cycle start (student-aligned, not always month-01)
                 const cycleStart = _isFullDate ? String(month) : `${safeMonth}-01`;
                 const cycleDates = getPaymentCycleDates(cycleStart);
+
+                // Mark paid: best-effort delete of any existing record for THIS specific
+                // cycle (avoid duplicates on re-clicking Mark Paid for the same cycle).
+                // Matched on month AND the pinned start date, not month alone: a cycle
+                // that starts mid-month (e.g. 2026-07-18) shares month='2026-07' with
+                // any other payment recorded that same calendar month, and deleting by
+                // month alone silently destroyed that unrelated payment. A record with
+                // no pinned start date (legacy/dateless) is left alone rather than
+                // guessed at, since we can't safely tell which cycle it belongs to.
+                // Non-blocking, if delete fails (column name / RLS), the insert still proceeds
+                await supabaseClient.from('fees_paid').delete()
+                    .eq('studentid', studentId).eq('month', safeMonth).eq('paidstartdate', cycleDates.start).then(() => {}).catch(() => {});
+                await supabaseClient.from('fees_paid').delete()
+                    .eq('student_id', studentId).eq('month', safeMonth).eq('paid_start_date', cycleDates.start).then(() => {}).catch(() => {});
 
                 await insertFeesPaidWithSchemaFallback([{
                     studentid: studentId,
@@ -4279,6 +5295,7 @@
                     paiddate: paidDate ? paidDate : new Date().toISOString().slice(0, 10),
                     paid_start_date: cycleDates.start,
                     paid_end_date: cycleDates.end,
+                    closedearly: closedEarlyDate || null,
                     amount: amount !== null ? amount : Number(student?.monthlyFees ?? 0)
                 }]);
 
@@ -5035,6 +6052,8 @@
                 renderTaxRecords();
             } else if (tabName === 'website') {
                 loadWebsiteTab();
+            } else if (tabName === 'performances') {
+                loadPerformancesTab();
             }
         }
 
@@ -5204,19 +6223,22 @@
                 if (latestRecord) {
                     const lpDate = String(latestRecord.paiddate ?? latestRecord.paidDate ?? latestRecord.paid_date ?? '').slice(0, 10);
                     const lpAmount = Math.round(Number(latestRecord.amount ?? student.monthlyFees ?? 0));
+                    const lpIsGratis = Number(latestRecord.amount ?? -1) === 0;
                     const rid = String(latestRecord.id ?? '');
                     const matched = rid ? timeline.cycles.find(c => String(c.record?.id ?? '') === rid) : null;
                     const isAdvance = !matched && timeline.unmatchedRecords.some(r => String(r.id ?? '') === rid);
                     let forLabel = '';
                     if (matched) {
-                        const showExt = matched.effectiveEnd !== matched.naturalEnd && (matched !== timeline.current || autoExt.isExtended);
-                        forLabel = formatCycleLabel(matched.start, showExt ? matched.effectiveEnd : matched.naturalEnd);
+                        const matchedInfo = cycleDisplayInfo(matched, matched === timeline.current, autoExt.isExtended);
+                        forLabel = formatCycleLabel(matched.start, matchedInfo.end);
                     } else if (isAdvance) {
                         forLabel = 'next cycle (paid in advance)';
                     } else if (latestRecord.month) {
                         forLabel = String(latestRecord.month);
                     }
-                    lastPayLine = `<div style="color:#1a1a1a; font-size:0.92em; margin-top:3px;">💳 Last paid: <strong>${lpDate ? formatDisplayDate(lpDate) : 'N/A'}</strong> · €${lpAmount}${forLabel ? ` · for ${forLabel}` : ''}</div>`;
+                    lastPayLine = lpIsGratis
+                        ? `<div style="color:#1a1a1a; font-size:0.92em; margin-top:3px;">🤝 Settled: <strong>${lpDate ? formatDisplayDate(lpDate) : 'N/A'}</strong>${forLabel ? ` · for ${forLabel}` : ''}</div>`
+                        : `<div style="color:#1a1a1a; font-size:0.92em; margin-top:3px;">💳 Last paid: <strong>${lpDate ? formatDisplayDate(lpDate) : 'N/A'}</strong> · €${lpAmount}${forLabel ? ` · for ${forLabel}` : ''}</div>`;
                 } else {
                     lastPayLine = `<div style="color:#777; font-size:0.92em; margin-top:3px;">💳 No payments recorded yet</div>`;
                 }
@@ -5224,19 +6246,21 @@
                 // One row per cycle, same content as report.html's cycle cards:
                 // dates (+extended tag), paid pill, progress dots, class count.
                 const cycleRow = (label, cycle, isCurrent) => {
-                    const wasExtended = cycle.effectiveEnd !== cycle.naturalEnd;
-                    const showExt = wasExtended && (!isCurrent || autoExt.isExtended);
-                    const end = showExt ? cycle.effectiveEnd : cycle.naturalEnd;
+                    const displayInfo = cycleDisplayInfo(cycle, isCurrent, autoExt.isExtended);
+                    const end = displayInfo.end;
                     let dots = '';
                     for (let i = 0; i < AUTO_EXTENSION_CLASS_TARGET; i += 1) {
                         dots += `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:${i < cycle.attended ? '#27ae60' : '#e0e0e0'};"></span>`;
                     }
                     const extra = cycle.attended - AUTO_EXTENSION_CLASS_TARGET;
-                    const pill = cycle.paid
-                        ? `<span style="background:#d4edda;color:#155724;border-radius:5px;padding:1px 8px;font-size:0.78em;font-weight:700;">PAID</span>`
-                        : `<span style="background:#fdecea;color:#c0392b;border-radius:5px;padding:1px 8px;font-size:0.78em;font-weight:700;">UNPAID</span>`;
+                    const isGratis = cycle.paid && Number(cycle.record?.amount ?? -1) === 0;
+                    const pill = isGratis
+                        ? `<span style="background:#e0f2f1;color:#16a085;border-radius:5px;padding:1px 8px;font-size:0.78em;font-weight:700;">🤝 SETTLED</span>`
+                        : cycle.paid
+                            ? `<span style="background:#d4edda;color:#155724;border-radius:5px;padding:1px 8px;font-size:0.78em;font-weight:700;">PAID</span>`
+                            : `<span style="background:#fdecea;color:#c0392b;border-radius:5px;padding:1px 8px;font-size:0.78em;font-weight:700;">UNPAID</span>`;
                     return `<div style="margin-top:4px; font-size:0.92em; color:#1a1a1a;">
-                        <strong>${label}:</strong> ${formatDisplayDate(cycle.start)} → ${formatDisplayDate(end)}${showExt ? ' <span style="color:#00796b;font-weight:700;font-size:0.85em;">⏳ extended</span>' : ''} ${pill}
+                        <strong>${label}:</strong> ${formatDisplayDate(cycle.start)} → ${formatDisplayDate(end)}${displayInfo.tag === 'extended' ? ' <span style="color:#00796b;font-weight:700;font-size:0.85em;">⏳ extended</span>' : displayInfo.tag === 'closed_early' ? ' <span style="color:#c0392b;font-weight:700;font-size:0.85em;">🔒 closed early</span>' : ''} ${pill}
                         <span style="margin-left:6px; white-space:nowrap;">${dots}</span> <span style="color:#555;">${cycle.attended}/${AUTO_EXTENSION_CLASS_TARGET} classes${cycle.carriedIn > 0 ? ` (incl. ${cycle.carriedIn} carried)` : ''}${extra > 0 ? ` · ${extra} extra 🎁` : ''}</span>
                     </div>`;
                 };
@@ -5602,8 +6626,8 @@
                 tl.cycles.forEach(c => {
                     const rid = String(c.record?.id ?? '');
                     if (!rid) return;
-                    const showExtended = c.effectiveEnd !== c.naturalEnd && (c !== tl.current || ext.isExtended);
-                    cycleLabelByRecord.set(`${s.id}:${rid}`, formatCycleLabel(c.start, showExtended ? c.effectiveEnd : c.naturalEnd));
+                    const cInfo = cycleDisplayInfo(c, c === tl.current, ext.isExtended);
+                    cycleLabelByRecord.set(`${s.id}:${rid}`, formatCycleLabel(c.start, cInfo.end));
                 });
                 // Advance payments map onto the upcoming-cycle projection in
                 // consumption order, same as the student detail view.

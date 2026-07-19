@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join a Performance - Bhangra Sway Cremona</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 24px 14px;
+        }
+        .top-bar {
+            width: 100%;
+            max-width: 440px;
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 12px;
+        }
+        .top-home-btn {
+            color: #fff;
+            font-size: 0.85em;
+            font-weight: 600;
+            opacity: 0.9;
+            text-decoration: none;
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.45);
+            padding: 6px 12px;
+            border-radius: 999px;
+        }
+        .card {
+            width: 100%;
+            max-width: 440px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+            padding: 28px 22px;
+        }
+        .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+        .logo-row img { height: 56px; width: auto; border-radius: 10px; box-shadow: 0 6px 14px rgba(0,0,0,0.2); }
+        .logo-row h1 { font-size: 1.15em; margin: 0; color: #2c3e50; }
+        h2 { font-size: 1.3em; margin: 0 0 6px; color: #2c3e50; }
+        p.sub { color: #555; margin: 0 0 18px; line-height: 1.5; }
+        .hidden { display: none; }
+        input[type="tel"] {
+            width: 100%;
+            padding: 14px 14px;
+            font-size: 18px;
+            letter-spacing: 1px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        input[type="tel"]:focus { border-color: #667eea; outline: none; }
+        button.primary {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.05em;
+            font-weight: 700;
+            color: #fff;
+            background: #27ae60;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        button.primary:disabled { background: #a9d9bf; cursor: not-allowed; }
+        button.secondary {
+            width: 100%;
+            padding: 14px;
+            margin-top: 10px;
+            font-size: 1em;
+            font-weight: 700;
+            color: #667eea;
+            background: #eef2ff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        button.link-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 0.95em;
+            color: #667eea;
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .error-text { color: #e74c3c; font-size: 0.9em; margin: -4px 0 12px; min-height: 1.2em; }
+        .student-list { max-height: 300px; overflow-y: auto; }
+        .student-row {
+            width: 100%;
+            text-align: left;
+            padding: 14px 16px;
+            border: 1px solid #e2e2e2;
+            border-radius: 10px;
+            background: #fafafa;
+            margin-bottom: 8px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .student-row:active, .student-row.selected { background: #eef2ff; border-color: #667eea; }
+        .student-row .name { font-weight: 600; color: #2c3e50; }
+        .spinner {
+            width: 34px; height: 34px; margin: 30px auto;
+            border: 4px solid #eee; border-top-color: #667eea; border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .call-box {
+            background: #f8f9fa;
+            border: 1px solid #eee;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 18px;
+        }
+        .call-box .call-title { font-weight: 800; font-size: 1.05em; color: #2c3e50; }
+        .call-box .call-date { color: #777; font-size: 0.9em; margin-top: 2px; }
+        .joined-count {
+            text-align: center;
+            font-size: 1.4em;
+            font-weight: 800;
+            color: #27ae60;
+            margin: 14px 0 4px;
+        }
+        .swatch {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            margin: 6px auto 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .position-text {
+            text-align: center;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <a class="top-home-btn" href="home.html">🏠 Home</a>
+    </div>
+    <div class="card">
+        <div class="logo-row">
+            <img src="logo.png" alt="Bhangra Sway Logo">
+            <h1>Bhangra Sway Cremona</h1>
+        </div>
+
+        <!-- LOADING -->
+        <div id="loadingState">
+            <div class="spinner"></div>
+        </div>
+
+        <!-- ERROR -->
+        <div id="errorState" class="hidden">
+            <h2>Something went wrong</h2>
+            <p class="sub" id="errorMessage"></p>
+        </div>
+
+        <!-- PHONE ENTRY -->
+        <div id="phoneState" class="hidden">
+            <h2>🎭 Join a Performance</h2>
+            <p class="sub" id="phoneIntro">Enter the mobile number we have on file for you.</p>
+            <input type="tel" id="phoneInput" inputmode="tel" placeholder="e.g. 333 123 4567" autocomplete="off">
+            <p class="error-text" id="phoneError"></p>
+            <button class="primary" id="phoneContinueBtn">Continue</button>
+        </div>
+
+        <!-- PICK (several members share this phone) -->
+        <div id="pickState" class="hidden">
+            <h2>Who are you?</h2>
+            <p class="sub">More than one member is registered under this number, pick yourself.</p>
+            <div class="student-list" id="memberList"></div>
+            <button class="link-btn" id="pickBackBtn">← Use a different number</button>
+        </div>
+
+        <!-- ACTION MENU: join the open call and/or see your spot -->
+        <div id="actionState" class="hidden">
+            <h2>Hi, <span id="actionMemberName"></span> 👋</h2>
+            <div id="openCallBox" class="call-box hidden">
+                <div class="call-title" id="openCallTitle"></div>
+                <div class="call-date" id="openCallDate"></div>
+            </div>
+            <button class="primary" id="joinBtn">🎭 I'm In!</button>
+            <button class="secondary" id="spotBtn">📍 See My Spot</button>
+            <button class="link-btn" id="actionBackBtn">← Use a different number</button>
+        </div>
+
+        <!-- JOIN RESULT -->
+        <div id="joinResultState" class="hidden">
+            <h2 id="joinResultTitle"></h2>
+            <p class="sub" id="joinResultSub"></p>
+            <div class="joined-count" id="joinedCount"></div>
+            <p class="sub" style="text-align:center;">dancers have joined so far</p>
+            <button class="link-btn" id="joinBackBtn">← Back</button>
+        </div>
+
+        <!-- MY SPOT RESULT -->
+        <div id="spotResultState" class="hidden">
+            <h2>📍 Your Spot</h2>
+            <p class="sub" id="spotMovementLabel"></p>
+            <div id="spotSwatch" class="swatch"></div>
+            <div class="position-text" id="spotPositionText"></div>
+            <p class="sub" id="spotEmptyNote" style="text-align:center;"></p>
+            <button class="link-btn" id="spotBackBtn">← Back</button>
+        </div>
+    </div>
+
+    <script>
+        // ===== SUPABASE CONFIGURATION (same project as the admin dashboard) =====
+        const SUPABASE_URL = 'https://geeqcyfnkgamcjclulay.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#1a237e' };
+
+        let enteredPhone = '';
+        let selectedMember = null;
+        let openPerformance = null;
+
+        function show(id) {
+            ['loadingState', 'errorState', 'phoneState', 'pickState', 'actionState', 'joinResultState', 'spotResultState'].forEach((s) => {
+                document.getElementById(s).classList.toggle('hidden', s !== id);
+            });
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // Surname shown as an initial only, same privacy convention as report.html/checkin.html.
+        function maskName(full) {
+            const parts = String(full || '').trim().split(/\s+/);
+            if (parts.length <= 1) return parts[0] || '';
+            return parts[0] + ' ' + parts.slice(1).map((p) => p[0].toUpperCase() + '.').join(' ');
+        }
+
+        async function init() {
+            const { data, error } = await supabaseClient
+                .from('performances')
+                .select('id, title, event_date, status')
+                .eq('status', 'open')
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (error) {
+                document.getElementById('errorMessage').textContent = 'Could not load performance data (' + error.message + ').';
+                show('errorState');
+                return;
+            }
+
+            openPerformance = (data && data[0]) || null;
+            document.getElementById('phoneIntro').textContent = openPerformance
+                ? `A performance call is open: "${openPerformance.title}". Enter your phone number to join or check your spot.`
+                : 'No performance call is open right now. Enter your phone number to check your spot for a performance you already joined.';
+            show('phoneState');
+        }
+
+        async function handlePhoneContinue() {
+            const phoneError = document.getElementById('phoneError');
+            phoneError.textContent = '';
+
+            const raw = document.getElementById('phoneInput').value;
+            const digits = raw.replace(/\D/g, '');
+            if (digits.length < 9) {
+                phoneError.textContent = 'Enter a valid phone number.';
+                return;
+            }
+
+            const btn = document.getElementById('phoneContinueBtn');
+            btn.disabled = true;
+            btn.textContent = 'Searching…';
+
+            const { data: result, error } = await supabaseClient.rpc('find_members_by_phone', { p_phone: raw });
+
+            btn.disabled = false;
+            btn.textContent = 'Continue';
+
+            if (error) {
+                phoneError.textContent = 'Something went wrong (' + error.message + ').';
+                return;
+            }
+
+            if (result?.status !== 'ok' || !Array.isArray(result.members) || result.members.length === 0) {
+                phoneError.textContent = 'No member found with that phone number.';
+                return;
+            }
+
+            enteredPhone = raw;
+            if (result.members.length === 1) {
+                selectMember(result.members[0]);
+            } else {
+                renderMemberList(result.members);
+                show('pickState');
+            }
+        }
+
+        function renderMemberList(members) {
+            const list = document.getElementById('memberList');
+            list.innerHTML = '';
+            members.forEach((m) => {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'student-row';
+                row.innerHTML = `<div class="name">${escapeHtml(maskName(m.name))}</div>`;
+                row.addEventListener('click', () => selectMember(m));
+                list.appendChild(row);
+            });
+        }
+
+        function backToPhoneEntry() {
+            document.getElementById('phoneInput').value = '';
+            document.getElementById('phoneError').textContent = '';
+            show('phoneState');
+            document.getElementById('phoneInput').focus();
+        }
+
+        function selectMember(member) {
+            selectedMember = member;
+            document.getElementById('actionMemberName').textContent = maskName(member.name);
+            const box = document.getElementById('openCallBox');
+            if (openPerformance) {
+                box.classList.remove('hidden');
+                document.getElementById('openCallTitle').textContent = openPerformance.title;
+                document.getElementById('openCallDate').textContent = openPerformance.event_date || '';
+                document.getElementById('joinBtn').classList.remove('hidden');
+            } else {
+                box.classList.add('hidden');
+                document.getElementById('joinBtn').classList.add('hidden');
+            }
+            show('actionState');
+        }
+
+        async function handleJoin() {
+            if (!openPerformance || !selectedMember) return;
+            const btn = document.getElementById('joinBtn');
+            btn.disabled = true;
+            btn.textContent = 'Joining…';
+
+            const { data: status, error } = await supabaseClient.rpc('join_performance_by_phone', {
+                p_performance_id: openPerformance.id,
+                p_student_id: selectedMember.id,
+                p_phone: enteredPhone
+            });
+
+            btn.disabled = false;
+            btn.textContent = "🎭 I'm In!";
+
+            if (error || status === 'bad_phone' || status === 'not_found') {
+                document.getElementById('errorMessage').textContent = 'Could not join right now, please ask your instructor.';
+                show('errorState');
+                return;
+            }
+            if (status === 'closed') {
+                document.getElementById('joinResultTitle').textContent = 'Signups are closed';
+                document.getElementById('joinResultSub').textContent = 'This performance call just closed.';
+                document.getElementById('joinedCount').textContent = '';
+                show('joinResultState');
+                return;
+            }
+
+            const { data: count } = await supabaseClient.rpc('get_performance_signup_count', {
+                p_performance_id: openPerformance.id
+            });
+
+            document.getElementById('joinResultTitle').textContent = "You're in! 🎉";
+            document.getElementById('joinResultSub').textContent = `"${openPerformance.title}"`;
+            document.getElementById('joinedCount').textContent = count ?? '';
+            show('joinResultState');
+        }
+
+        async function handleSeeSpot() {
+            if (!selectedMember) return;
+            const { data: result, error } = await supabaseClient.rpc('get_my_spot_by_phone', {
+                p_student_id: selectedMember.id,
+                p_phone: enteredPhone
+            });
+
+            if (error) {
+                document.getElementById('errorMessage').textContent = 'Could not load your spot right now.';
+                show('errorState');
+                return;
+            }
+
+            const swatch = document.getElementById('spotSwatch');
+            const emptyNote = document.getElementById('spotEmptyNote');
+            const posText = document.getElementById('spotPositionText');
+            const movementLabel = document.getElementById('spotMovementLabel');
+
+            if (result?.status === 'ok') {
+                movementLabel.textContent = result.movement_label || '';
+                posText.textContent = result.position_text || '';
+                emptyNote.textContent = '';
+                swatch.style.display = 'block';
+                swatch.style.background = result.dress_color ? (DRESS_COLOR_HEX[result.dress_color] || '#ccc') : '#ccc';
+            } else {
+                movementLabel.textContent = '';
+                posText.textContent = '';
+                swatch.style.display = 'none';
+                emptyNote.textContent = result?.status === 'not_joined'
+                    ? "You haven't joined a performance yet."
+                    : 'Positions haven\'t been planned yet — check back closer to the show.';
+            }
+            show('spotResultState');
+        }
+
+        document.getElementById('phoneContinueBtn').addEventListener('click', handlePhoneContinue);
+        document.getElementById('phoneInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handlePhoneContinue();
+        });
+        document.getElementById('pickBackBtn').addEventListener('click', backToPhoneEntry);
+        document.getElementById('actionBackBtn').addEventListener('click', backToPhoneEntry);
+        document.getElementById('joinBackBtn').addEventListener('click', () => show('actionState'));
+        document.getElementById('spotBackBtn').addEventListener('click', () => show('actionState'));
+        document.getElementById('joinBtn').addEventListener('click', handleJoin);
+        document.getElementById('spotBtn').addEventListener('click', handleSeeSpot);
+
+        init();
+    </script>
+</body>
+</html>

@@ -560,13 +560,11 @@
             // theoretical max extension the algorithm projects internally. Past
             // cycles are already locked in, so they always show it if it applied.
             function cycleDateLabel(cycle, isCurrent) {
-                const wasExtended = cycle.effectiveEnd !== cycle.naturalEnd;
-                const showExtended = wasExtended && (!isCurrent || autoExt.isExtended);
-                const end = showExtended ? cycle.effectiveEnd : cycle.naturalEnd;
-                const base = `${formatDisplayDate(cycle.start)} → ${formatDisplayDate(end)}`;
-                return showExtended
-                    ? `${base} <span style="color:#00796b;font-weight:700;">${t('extended_tag')}</span>`
-                    : base;
+                const info = cycleDisplayInfo(cycle, isCurrent, autoExt.isExtended);
+                const base = `${formatDisplayDate(cycle.start)} → ${formatDisplayDate(info.end)}`;
+                if (info.tag === 'extended') return `${base} <span style="color:#00796b;font-weight:700;">${t('extended_tag')}</span>`;
+                if (info.tag === 'closed_early') return `${base} <span style="color:#c0392b;font-weight:700;">${t('closed_early_tag')}</span>`;
+                return base;
             }
 
             // Renders a cycle's dates/pill/attendance-progress into one of the two
@@ -575,9 +573,10 @@
             function renderCycleCard(prefix, cycle, isCurrent) {
                 document.getElementById(`report${prefix}CycleDates`).innerHTML = cycleDateLabel(cycle, isCurrent);
 
+                const isGratis = cycle.paid && Number(cycle.record?.amount ?? -1) === 0;
                 const pill = document.getElementById(`report${prefix}CyclePill`);
                 pill.className = 'pill ' + (cycle.paid ? 'pill-paid' : 'pill-unpaid');
-                pill.textContent = cycle.paid ? t('pill_paid') : t('pill_unpaid');
+                pill.textContent = isGratis ? t('pill_gratis') : (cycle.paid ? t('pill_paid') : t('pill_unpaid'));
 
                 const dotsEl = document.getElementById(`report${prefix}Dots`);
                 dotsEl.innerHTML = '';
