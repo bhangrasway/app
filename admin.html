@@ -641,7 +641,7 @@
             </header>
 
             <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('students')">Students</button>
+                <button class="tab-btn active" onclick="switchTab('students')">Students<span id="passcodeReqBadge" style="display:none; pointer-events:none; margin-left:6px; background:#e74c3c; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.75em; font-weight:700; vertical-align:middle;"></span></button>
                 <button class="tab-btn" onclick="switchTab('payments')">Payments</button>
                 <button class="tab-btn" onclick="switchTab('attendance')">Attendance<span id="checkinReqBadge" style="display:none; pointer-events:none; margin-left:6px; background:#e74c3c; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.75em; font-weight:700; vertical-align:middle;"></span></button>
                 <button class="tab-btn" onclick="switchTab('fees')">Income & Expense</button>
@@ -660,7 +660,15 @@
                     <div id="studentsCount" style="font-weight:600; color:#333;">Loaded students: 0</div>
                     <button onclick="reloadStudents()" style="background:#3498db; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer;">Reload</button>
                 </div>
-                <form onsubmit="addStudent(event)" style="max-width:900px;">
+
+                <div style="margin:0 0 24px; padding:18px; border:1px solid #e2e2e2; border-radius:10px; background:#fafafa;">
+                    <h3 style="margin:0 0 8px;">Passcode Reset Requests</h3>
+                    <p style="margin:0 0 12px; color:#555; font-size:0.88em;">A member forgot their 4-digit passcode and can't get back into their report/check-in page. Approving clears their passcode — they can log in with just their mobile number again, or set a new one.</p>
+                    <div id="passcodeRequestsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    <div id="noPasscodeRequestsMsg" style="color:#888; font-size:0.9em; display:none;">No pending requests.</div>
+                </div>
+
+                <form onsubmit="addStudent(event)" style="max-width:900px;" autocomplete="off">
 
                     <!-- Row 1: Nome · Cognome · Age -->
                     <div style="background:linear-gradient(135deg,#f0f4ff,#e8eeff); border-left:4px solid #667eea; border-radius:8px; padding:12px 16px; margin-bottom:10px;">
@@ -668,20 +676,20 @@
                         <div style="display:grid; grid-template-columns:2fr 2fr 1fr 1fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>✏️ Nome *</label>
-                                <input type="text" id="studentNome" required placeholder="Nome">
+                                <input type="text" id="studentNome" required placeholder="Nome" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>✏️ Cognome *</label>
-                                <input type="text" id="studentCognome" required placeholder="Cognome">
+                                <input type="text" id="studentCognome" required placeholder="Cognome" autocomplete="off">
                                 <input type="hidden" id="studentName">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🎂 Età</label>
-                                <input type="number" id="studentAge" placeholder="Age">
+                                <input type="number" id="studentAge" placeholder="Age" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>⚥ Gender</label>
-                                <select id="studentGender">
+                                <select id="studentGender" autocomplete="off">
                                     <option value="">--</option>
                                     <option value="M">Boy</option>
                                     <option value="F">Girl</option>
@@ -696,15 +704,15 @@
                         <div style="display:grid; grid-template-columns:2fr 1fr 2fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>👨‍👩‍👧 Genitore *</label>
-                                <input type="text" id="parentName" required placeholder="Parent / Guardian">
+                                <input type="text" id="parentName" required placeholder="Parent / Guardian" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📱 Telefono</label>
-                                <input type="tel" id="studentPhone" placeholder="Phone">
+                                <input type="tel" id="studentPhone" placeholder="Phone" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🪪 Codice Fiscale</label>
-                                <input type="text" id="codiceFiscale" placeholder="Codice fiscale">
+                                <input type="text" id="codiceFiscale" placeholder="Codice fiscale" autocomplete="off">
                             </div>
                         </div>
                     </div>
@@ -715,25 +723,25 @@
                         <div style="display:grid; grid-template-columns:3fr 1fr 1fr; gap:12px; margin-bottom:10px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🛣️ Via / Strada</label>
-                                <input type="text" id="addrIndirizzo" placeholder="Via Roma">
+                                <input type="text" id="addrIndirizzo" placeholder="Via Roma" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🏠 N. Civico</label>
-                                <input type="text" id="addrHouse" placeholder="5">
+                                <input type="text" id="addrHouse" placeholder="5" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📮 CAP</label>
-                                <input type="text" id="addrCap" placeholder="26100" maxlength="10">
+                                <input type="text" id="addrCap" placeholder="26100" maxlength="10" autocomplete="off">
                             </div>
                         </div>
                         <div style="display:grid; grid-template-columns:3fr 1fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🏙️ Comune</label>
-                                <input type="text" id="addrComune" placeholder="Cremona">
+                                <input type="text" id="addrComune" placeholder="Cremona" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🗺️ Prov.</label>
-                                <input type="text" id="addrProvincia" placeholder="CR" maxlength="5">
+                                <input type="text" id="addrProvincia" placeholder="Piacenza (PC)" maxlength="30" autocomplete="off">
                             </div>
                         </div>
                         <input type="hidden" id="studentAddress">
@@ -745,7 +753,7 @@
                         <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🥋 Batch *</label>
-                                <select id="studentBatch" required>
+                                <select id="studentBatch" required autocomplete="off">
                                     <option value="">-- Select --</option>
                                     <option value="Beginner">Beginner</option>
                                     <option value="Intermediate">Intermediate</option>
@@ -755,11 +763,11 @@
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>💶 Fee (€) *</label>
-                                <input type="number" id="monthlyFees" required placeholder="30" step="1">
+                                <input type="number" id="monthlyFees" required placeholder="30" step="1" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📅 Join Date *</label>
-                                <input type="date" id="joinDate" required>
+                                <input type="date" id="joinDate" required autocomplete="off">
                             </div>
                         </div>
                     </div>
@@ -3601,6 +3609,7 @@
 
         function showLoginPage() {
             stopCheckinRequestsPolling();
+            stopPasscodeRequestsPolling();
             document.getElementById('loginPage').style.display = 'flex';
             document.getElementById('appPage').style.display = 'none';
             document.getElementById('email').value = '';
@@ -3625,11 +3634,27 @@
             checkinRequestsPollTimer = null;
         }
 
+        // Same polling pattern for passcode reset requests (Students tab badge).
+        let passcodeRequestsPollTimer = null;
+
+        function startPasscodeRequestsPolling() {
+            if (passcodeRequestsPollTimer) return;
+            loadPasscodeResetRequests();
+            passcodeRequestsPollTimer = setInterval(loadPasscodeResetRequests, 30000);
+        }
+
+        function stopPasscodeRequestsPolling() {
+            if (!passcodeRequestsPollTimer) return;
+            clearInterval(passcodeRequestsPollTimer);
+            passcodeRequestsPollTimer = null;
+        }
+
         function showApp() {
             document.getElementById('loginPage').style.display = 'none';
             document.getElementById('appPage').style.display = 'block';
             loadAllData();
             startCheckinRequestsPolling();
+            startPasscodeRequestsPolling();
         }
 
         async function checkAuthentication() {
@@ -4400,10 +4425,16 @@
         function renderStudentDetailHTML(student) {
             const currentMonth = getSelectedPaymentMonth();
             const currentMonthPaid = isStudentPaymentActive(student);
-            const currentCycleIsGratis = currentMonthPaid && Number(getMembershipTimeline(student).current?.record?.amount ?? -1) === 0;
+            const timelineForDetail = getMembershipTimeline(student);
+            const currentCycleIsGratis = currentMonthPaid && Number(timelineForDetail.current?.record?.amount ?? -1) === 0;
             const autoExt = getAutoExtension(student);
             const prevCycleUnpaid = hasPreviousCycleUnpaid(student);
             const prevMonth = getPreviousCycleMonth(student);
+            // Paid at registration but the first class was a free demo: the
+            // payment is on file, just not attached to a cycle yet, don't let
+            // it look unpaid. Only ever set when a record actually exists,
+            // unpaid demo students are untouched.
+            const awaitingPaidRecord = autoExt.awaitingFirstClass ? (timelineForDetail.unmatchedRecords || [])[0] : null;
             return `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
                     <h2 style="margin:0;">${student.name}</h2>
@@ -4428,10 +4459,12 @@
                     <div><strong>Join Date:</strong> ${student.joinDate ? formatDisplayDate(student.joinDate) : ''}</div>
                     <div><strong>Current Status:</strong> ${currentCycleIsGratis
                         ? `<span style="background:#e0f2f1; color:#16a085; border-radius:5px; padding:3px 9px; font-size:0.85em; font-weight:700;">🤝 SETTLED</span>`
-                        : `<span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span>`}</div>
+                        : awaitingPaidRecord
+                            ? `<span class="fees-status fees-paid">PAID</span>`
+                            : `<span class="fees-status ${currentMonthPaid ? 'fees-paid' : 'fees-unpaid'}">${currentMonthPaid ? 'PAID' : 'PENDING'}</span>`}</div>
                     ${autoExt.isExtended ? `<div><span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏳ Auto-extended, ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} classes · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span></div>` : ''}
                     ${autoExt.paused ? `<div><span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⏸ Plan paused, ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over when he returns</span></div>` : ''}
-                    ${autoExt.awaitingFirstClass ? `<div><span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">🎁 Demo taken, plan starts on their next attended class</span></div>` : ''}
+                    ${autoExt.awaitingFirstClass ? `<div><span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">🎁 Demo taken${awaitingPaidRecord ? ` · Paid €${Math.round(Number(awaitingPaidRecord.amount ?? student.monthlyFees ?? 0))} on ${formatDisplayDate(String(awaitingPaidRecord.paiddate ?? awaitingPaidRecord.paidDate ?? awaitingPaidRecord.paid_date ?? '').slice(0,10))}` : ''}, plan starts on their next attended class</span></div>` : ''}
                     ${autoExt.owedCount > 0 ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">💶 To pay: ${autoExt.owedCount} month${autoExt.owedCount > 1 ? 's' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span></div>` : ''}
                     ${prevCycleUnpaid && prevMonth ? `<div><span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:6px;padding:4px 11px;font-size:0.88em;font-weight:700;">⚠️ Last cycle unpaid, ${formatMonthLabel(prevMonth)}</span></div>` : ''}
                     <button class="btn-small" onclick="extendStudentPlan(${student.id})" style="background:#8e44ad;" title="Manually set next payment date to extend the plan">Extend Plan</button>
@@ -4517,7 +4550,14 @@
 
             let historyHtml = overrideBar;
             if (timeline.awaitingFirstClass) {
-                historyHtml += `<div style="padding:10px 14px; background:#fff3e0; border:1px solid #ffe0b2; border-radius:8px; color:#e65100; font-size:0.9em; font-weight:600;">🎁 Demo class taken (free), the first cycle starts automatically on their next attended class.</div>`;
+                // Payment already on file, just not attached to a cycle yet, say
+                // so explicitly, don't leave it looking unpaid. Only set when a
+                // record actually exists, unpaid demo students see the plain note.
+                const awaitingRecord = (timeline.unmatchedRecords || [])[0];
+                const paidNote = awaitingRecord
+                    ? ` Paid €${Math.round(Number(awaitingRecord.amount ?? student.monthlyFees ?? 0))} on ${formatDisplayDate(String(awaitingRecord.paiddate ?? awaitingRecord.paidDate ?? awaitingRecord.paid_date ?? '').slice(0,10))} — already recorded, just waiting on the cycle to start.`
+                    : '';
+                historyHtml += `<div style="padding:10px 14px; background:#fff3e0; border:1px solid #ffe0b2; border-radius:8px; color:#e65100; font-size:0.9em; font-weight:600;">🎁 Demo class taken (free), the first cycle starts automatically on their next attended class.${paidNote}</div>`;
             } else if (timeline.cycles.length === 0) {
                 historyHtml += '<div class="empty-message" style="padding:12px;">No membership cycles yet.</div>';
             }
@@ -6023,6 +6063,85 @@
                 .update({ status: 'dismissed', resolved_at: new Date().toISOString() })
                 .eq('id', requestId);
             loadCheckinRequests();
+        }
+
+        // ===== Passcode reset requests (Students tab) =====
+        // Same shape as the check-in requests panel above: a member who forgot
+        // their optional 4-digit passcode taps "Forgot passcode?" on member.html,
+        // which queues a row here instead of letting them reset it themselves.
+        let lastPasscodeRequestsSignature = null;
+
+        async function loadPasscodeResetRequests() {
+            const { data, error } = await supabaseClient
+                .from('passcode_reset_requests')
+                .select('*')
+                .eq('status', 'pending')
+                .order('requested_at', { ascending: false });
+
+            const badge = document.getElementById('passcodeReqBadge');
+            const pendingCount = (!error && data) ? data.length : 0;
+            badge.textContent = pendingCount;
+            badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+
+            const signature = (!error && data) ? data.map((r) => r.id).join(',') : 'err';
+            if (signature === lastPasscodeRequestsSignature) return;
+            lastPasscodeRequestsSignature = signature;
+
+            const list = document.getElementById('passcodeRequestsList');
+            const emptyMsg = document.getElementById('noPasscodeRequestsMsg');
+            list.innerHTML = '';
+
+            if (error || !data || data.length === 0) {
+                emptyMsg.style.display = 'block';
+                return;
+            }
+            emptyMsg.style.display = 'none';
+
+            data.forEach(req => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid #ddd; border-radius:8px; padding:10px 12px; flex-wrap:wrap; gap:8px;';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:600;">${req.student_name}</div>
+                        <div style="font-size:0.8em;color:#888;">Forgot passcode · ${timeAgo(req.requested_at)}</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button style="background:#27ae60;">Approve Reset</button>
+                        <button style="background:#999;">Dismiss</button>
+                    </div>
+                `;
+                const [approveBtn, dismissBtn] = row.querySelectorAll('button');
+                approveBtn.addEventListener('click', () => approvePasscodeReset(req.id, req.student_id, req.student_name));
+                dismissBtn.addEventListener('click', () => dismissPasscodeReset(req.id));
+                list.appendChild(row);
+            });
+        }
+
+        // Clearing passcode_hash is the whole recovery: it simultaneously
+        // restores phone-only access (the RPCs' passcode check passes
+        // automatically once it's null) and re-offers the "set a passcode"
+        // opt-in prompt next time the member visits.
+        async function approvePasscodeReset(requestId, studentId, studentName) {
+            try {
+                await supabaseClient.from('students')
+                    .update({ passcode_hash: null })
+                    .eq('id', studentId);
+                await supabaseClient.from('passcode_reset_requests')
+                    .update({ status: 'approved', resolved_at: new Date().toISOString() })
+                    .eq('id', requestId);
+
+                showSuccessMessage(`✓ Passcode cleared for ${studentName}`);
+                loadPasscodeResetRequests();
+            } catch (e) {
+                alert('Could not clear this passcode: ' + (e?.message || e));
+            }
+        }
+
+        async function dismissPasscodeReset(requestId) {
+            await supabaseClient.from('passcode_reset_requests')
+                .update({ status: 'dismissed', resolved_at: new Date().toISOString() })
+                .eq('id', requestId);
+            loadPasscodeResetRequests();
         }
 
         function switchTab(tabName) {

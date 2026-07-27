@@ -522,13 +522,21 @@
 
             const displayCycle = timeline.current || timeline.cycles[timeline.cycles.length - 1] || null;
 
+            // Paid at registration but the first class was a free demo: the
+            // payment is on file, just not attached to a cycle yet, don't show
+            // it as unpaid. Only true when a record actually exists, students
+            // who took a demo without paying keep seeing the unpaid badge.
+            const awaitingWithPayment = timeline.awaitingFirstClass && paidRecords.length > 0;
+
             let paymentStatus = 'UNPAID';
-            if (isPaid) paymentStatus = 'PAID';
+            if (isPaid || awaitingWithPayment) paymentStatus = 'PAID';
             else if (timeline.owedCycles.length > 0) paymentStatus = 'OVERDUE';
 
             const badge = document.getElementById('reportStatusBadge');
             badge.className = 'status-badge status-' + paymentStatus.toLowerCase();
-            badge.textContent = paymentStatus === 'PAID' ? t('badge_paid') : paymentStatus === 'OVERDUE' ? t('badge_overdue') : t('badge_unpaid');
+            badge.textContent = paymentStatus === 'PAID'
+                ? (awaitingWithPayment ? t('badge_paid_awaiting') : t('badge_paid'))
+                : paymentStatus === 'OVERDUE' ? t('badge_overdue') : t('badge_unpaid');
 
             // Fees are collected in advance, so the current cycle counts as due too
             // even before it's "complete" by the attendance rule (that rule only
@@ -598,8 +606,8 @@
             if (timeline.awaitingFirstClass) {
                 document.getElementById('reportCurrentCycleDates').textContent = t('starts_first_class');
                 const currentPill = document.getElementById('reportCurrentCyclePill');
-                currentPill.className = 'pill pill-unpaid';
-                currentPill.textContent = t('demo_taken_pill');
+                currentPill.className = 'pill ' + (awaitingWithPayment ? 'pill-paid' : 'pill-unpaid');
+                currentPill.textContent = awaitingWithPayment ? t('demo_taken_paid_pill') : t('demo_taken_pill');
                 document.getElementById('reportCurrentDots').innerHTML = '';
                 document.getElementById('reportCurrentClassesText').textContent = '';
             } else if (displayCycle) {
@@ -629,7 +637,9 @@
             const extensionEl = document.getElementById('reportExtensionNote');
             if (timeline.awaitingFirstClass) {
                 extensionEl.classList.remove('hidden');
-                extensionEl.textContent = t('demo_note');
+                extensionEl.textContent = awaitingWithPayment
+                    ? t('demo_note_paid', { amount: Math.round(Number(paidRecords[0]?.amount ?? student.monthlyFees ?? 0)) })
+                    : t('demo_note');
             } else if (autoExt.paused) {
                 extensionEl.classList.remove('hidden');
                 extensionEl.textContent = t('paused_note', { a: autoExt.attendedCount, b: AUTO_EXTENSION_CLASS_TARGET });

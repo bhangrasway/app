@@ -217,7 +217,10 @@ function buildMembershipTimeline(student, opts) {
             // paid plan still starts on the first REAL class, same as for
             // unpaid demo students, the payment attaches to that cycle.
             anchor = opts.firstAttendanceAfter('');
-            if (!anchor) return { ...empty, awaitingFirstClass: true };
+            // Payment already recorded, it just hasn't reached a cycle yet ,
+            // surface it as unmatchedRecords so callers can still show
+            // "paid on X" instead of the record silently vanishing from view.
+            if (!anchor) return { ...empty, unmatchedRecords: paidRecords, awaitingFirstClass: true };
         } else {
             anchor = joinDate;
         }
