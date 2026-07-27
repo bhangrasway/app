@@ -3667,14 +3667,32 @@
         }
 
         // ===== SUPABASE DATA FUNCTIONS =====
+        // Supabase/PostgREST caps an unpaginated select at 1000 rows by
+        // default, silently truncating anything beyond that (no error) ,
+        // the attendance table alone passed 1500 rows, causing random
+        // per-date discrepancies depending on which slice came back. Page
+        // through with .range() until a page comes back short.
+        async function fetchAllRows(table, selectClause = '*') {
+            const pageSize = 1000;
+            let rows = [];
+            let from = 0;
+            while (true) {
+                const { data, error } = await supabaseClient
+                    .from(table)
+                    .select(selectClause)
+                    .range(from, from + pageSize - 1);
+                if (error) throw error;
+                rows = rows.concat(data || []);
+                if (!data || data.length < pageSize) break;
+                from += pageSize;
+            }
+            return rows;
+        }
+
         async function loadAllData() {
             try {
                 // Load students
-                const { data: studentsData, error: studentsError } = await supabaseClient
-                    .from('students')
-                    .select('*');
-                
-                if (studentsError) throw studentsError;
+                const studentsData = await fetchAllRows('students');
                 students = (studentsData || []).map((student) => ({
                     ...student,
                     parentName: student.parentName ?? student.parent_name ?? student.parentname ?? '',
@@ -3686,11 +3704,7 @@
                 }));
 
                 // Load attendance
-                const { data: attendanceData, error: attendanceError } = await supabaseClient
-                    .from('attendance')
-                    .select('*');
-                
-                if (attendanceError) throw attendanceError;
+                const attendanceData = await fetchAllRows('attendance');
                 attendance = {};
                 demoAttendance = {};
                 if (attendanceData) {
@@ -3711,19 +3725,11 @@
                 }
 
                 // Load expenses
-                const { data: expensesData, error: expensesError } = await supabaseClient
-                    .from('expenses')
-                    .select('*');
-                
-                if (expensesError) throw expensesError;
+                const expensesData = await fetchAllRows('expenses');
                 expenses = (expensesData || []).map(normalizeExpense);
 
                 // Load fees paid
-                const { data: feesPaidData, error: feesPaidError } = await supabaseClient
-                    .from('fees_paid')
-                    .select('*');
-                
-                if (feesPaidError) throw feesPaidError;
+                const feesPaidData = await fetchAllRows('fees_paid');
                 feesPaid = {};
                 feePayments = feesPaidData || [];
                 if (feesPaidData) {
@@ -3741,11 +3747,7 @@
                 }
 
                 await cleanupOldFeeRecords();
-                const { data: refreshedFeesPaidData, error: refreshedFeesPaidError } = await supabaseClient
-                    .from('fees_paid')
-                    .select('*');
-
-                if (refreshedFeesPaidError) throw refreshedFeesPaidError;
+                const refreshedFeesPaidData = await fetchAllRows('fees_paid');
                 feesPaid = {};
                 feePayments = refreshedFeesPaidData || [];
                 if (refreshedFeesPaidData) {
@@ -5092,25 +5094,11 @@
                     isDemo: freshPresent ? !!freshDemo[id] : isDemoClass(id, attendanceDate)
                 }));
 
-                // TEMP DEBUG — remove once the 19-Jul issue is confirmed fixed.
-                console.log('[saveAttendance] date =', attendanceDate);
-                console.log('[saveAttendance] freshError =', freshError, 'freshRows count =', freshRows?.length);
-                console.log('[saveAttendance] pendingForDate =', JSON.parse(JSON.stringify(pendingForDate)));
-                console.log('[saveAttendance] outgoing records =', JSON.parse(JSON.stringify(attendanceRecords)));
-
-                const delResult = await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
-                console.log('[saveAttendance] delete done (no throw = ok)');
+                await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
 
                 if (attendanceRecords.length > 0) {
                     await insertAttendanceWithSchemaFallback(attendanceRecords);
-                    console.log('[saveAttendance] insert done (no throw = ok)');
                 }
-
-                const { data: verifyRows, error: verifyError } = await supabaseClient
-                    .from('attendance')
-                    .select('*')
-                    .eq('attendancedate', attendanceDate);
-                console.log('[saveAttendance] verify re-select right after insert:', verifyError, verifyRows);
 
                 // Clear pending state for this date after successful save
                 delete pendingAttendanceChanges[attendanceDate];
