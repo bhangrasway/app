@@ -42,7 +42,8 @@ create table if not exists public.passcode_reset_requests (
 -- and site_content.sql.
 alter table public.passcode_reset_requests enable row level security;
 
-create policy authenticated_all on public.passcode_reset_requests
+drop policy if exists "authenticated_all" on public.passcode_reset_requests;
+create policy "authenticated_all" on public.passcode_reset_requests
     for all to authenticated using (true) with check (true);
 
 -- ===== 2. Passcode-matching helper (not callable from outside) ==============
@@ -358,3 +359,187 @@ end;
 $$;
 
 grant execute on function public.get_student_report_by_phone(bigint, text, text) to anon;
+
+-- ===== 7. RPC: change an existing passcode (member already knows the old one) =====
+-- Unlike set_student_passcode_by_phone (first-time / post-reset only), this
+-- lets a member who can supply their CURRENT passcode pick a new one
+-- themselves, right from their dashboard -- standard "change password"
+-- semantics, no admin involved. Forgetting the old one still only goes
+-- through admin approval (request_passcode_reset_by_phone above).
+-- Returns: 'ok' | 'bad_phone' | 'no_passcode_set' | 'bad_old_passcode' | 'invalid_format'
+create or replace function public.change_student_passcode_by_phone(
+    p_student_id bigint,
+    p_phone text,
+    p_old_passcode text,
+    p_new_passcode text
+)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+    v_hash text;
+begin
+    if not public._phone_matches_student(p_student_id, p_phone) then
+        return 'bad_phone';
+    end if;
+
+    select passcode_hash into v_hash from public.students where id = p_student_id;
+    if v_hash is null then
+        return 'no_passcode_set';
+    end if;
+
+    if v_hash != crypt(coalesce(p_old_passcode, ''), v_hash) then
+        return 'bad_old_passcode';
+    end if;
+
+    if p_new_passcode !~ '^\d{4}$' then
+        return 'invalid_format';
+    end if;
+
+    update public.students
+    set passcode_hash = crypt(p_new_passcode, gen_salt('bf'))
+    where id = p_student_id;
+
+    return 'ok';
+end;
+$$;
+
+grant execute on function public.change_student_passcode_by_phone(bigint, text, text, text) to anon;
+
+-- ===== 8. Gate the performances.sql RPCs the same way (member.html "Perform" tab) =====
+-- Same p_passcode default-null treatment as section 6 above, so the
+-- Members/Attendance/Perform tabs are all consistently gated.
+
+drop function if exists public.join_performance_by_phone(bigint, bigint, text);
+
+-- Returns: 'joined' | 'closed' | 'not_found' | 'bad_phone' | 'bad_passcode'
+create or replace function public.join_performance_by_phone(
+    p_performance_id bigint,
+    p_student_id bigint,
+    p_phone text,
+    p_passcode text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_status text;
+    v_name   text;
+    v_batch  text;
+    v_tier   text;
+begin
+    if not public._phone_matches_student(p_student_id, p_phone) then
+        return 'bad_phone';
+    end if;
+
+    if not public._passcode_matches_student(p_student_id, p_passcode) then
+        return 'bad_passcode';
+    end if;
+
+    select status into v_status from public.performances where id = p_performance_id;
+    if v_status is null then
+        return 'not_found';
+    end if;
+    if v_status <> 'open' then
+        return 'closed';
+    end if;
+
+    select name, batch into v_name, v_batch from public.students where id = p_student_id;
+
+    v_tier := case
+        when v_batch in ('Advanced', 'Professional') then 'advanced'
+        when v_batch = 'Intermediate' then 'intermediate'
+        else 'beginner'
+    end;
+
+    insert into public.performance_signups (performance_id, student_id, student_name, roster_status)
+    values (p_performance_id, p_student_id, v_name, v_tier)
+    on conflict (performance_id, student_id) do nothing;
+
+    return 'joined';
+end;
+$$;
+
+grant execute on function public.join_performance_by_phone(bigint, bigint, text, text) to anon;
+
+drop function if exists public.get_my_spot_by_phone(bigint, text);
+
+-- Returns status: 'bad_phone' | 'bad_passcode' | 'not_joined' | 'no_movements' | 'ok'
+create or replace function public.get_my_spot_by_phone(
+    p_student_id bigint,
+    p_phone text,
+    p_passcode text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_signup   public.performance_signups%rowtype;
+    v_movement public.performance_movements%rowtype;
+    v_pos      public.performance_positions%rowtype;
+    v_row_band text;
+    v_col_band text;
+begin
+    if not public._phone_matches_student(p_student_id, p_phone) then
+        return jsonb_build_object('status', 'bad_phone');
+    end if;
+
+    if not public._passcode_matches_student(p_student_id, p_passcode) then
+        return jsonb_build_object('status', 'bad_passcode');
+    end if;
+
+    select * into v_signup
+    from public.performance_signups
+    where student_id = p_student_id
+    order by joined_at desc
+    limit 1;
+
+    if not found then
+        return jsonb_build_object('status', 'not_joined');
+    end if;
+
+    select * into v_movement
+    from public.performance_movements
+    where performance_id = v_signup.performance_id
+    order by movement_order desc
+    limit 1;
+
+    if not found then
+        return jsonb_build_object('status', 'no_movements');
+    end if;
+
+    select * into v_pos
+    from public.performance_positions
+    where movement_id = v_movement.id and student_id = p_student_id;
+
+    if not found then
+        return jsonb_build_object('status', 'no_movements');
+    end if;
+
+    v_row_band := case
+        when v_pos.y < 33 then 'Front row'
+        when v_pos.y < 66 then 'Middle row'
+        else 'Back row'
+    end;
+    v_col_band := case
+        when v_pos.x < 40 then 'left side'
+        when v_pos.x > 60 then 'right side'
+        else 'center'
+    end;
+
+    return jsonb_build_object(
+        'status', 'ok',
+        'dress_color', v_signup.dress_color,
+        'movement_label', coalesce(v_movement.label, 'Movement ' || v_movement.movement_order),
+        'position_text', v_row_band || ', ' || v_col_band
+    );
+end;
+$$;
+
+grant execute on function public.get_my_spot_by_phone(bigint, text, text) to anon;

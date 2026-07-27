@@ -676,20 +676,20 @@
                         <div style="display:grid; grid-template-columns:2fr 2fr 1fr 1fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>✏️ Nome *</label>
-                                <input type="text" id="studentNome" required placeholder="Nome" autocomplete="off">
+                                <input type="text" id="studentNome" name="f_1a" required placeholder="Nome" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>✏️ Cognome *</label>
-                                <input type="text" id="studentCognome" required placeholder="Cognome" autocomplete="off">
+                                <input type="text" id="studentCognome" name="f_1b" required placeholder="Cognome" autocomplete="off">
                                 <input type="hidden" id="studentName">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🎂 Età</label>
-                                <input type="number" id="studentAge" placeholder="Age" autocomplete="off">
+                                <input type="number" id="studentAge" name="f_1c" placeholder="Age" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>⚥ Gender</label>
-                                <select id="studentGender" autocomplete="off">
+                                <select id="studentGender" name="f_1d" autocomplete="off">
                                     <option value="">--</option>
                                     <option value="M">Boy</option>
                                     <option value="F">Girl</option>
@@ -704,15 +704,15 @@
                         <div style="display:grid; grid-template-columns:2fr 1fr 2fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>👨‍👩‍👧 Genitore *</label>
-                                <input type="text" id="parentName" required placeholder="Parent / Guardian" autocomplete="off">
+                                <input type="text" id="parentName" name="f_2a" required placeholder="Parent / Guardian" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📱 Telefono</label>
-                                <input type="tel" id="studentPhone" placeholder="Phone" autocomplete="off">
+                                <input type="tel" id="studentPhone" name="f_2b" placeholder="Phone" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🪪 Codice Fiscale</label>
-                                <input type="text" id="codiceFiscale" placeholder="Codice fiscale" autocomplete="off">
+                                <input type="text" id="codiceFiscale" name="f_2c" placeholder="Codice fiscale" autocomplete="off">
                             </div>
                         </div>
                     </div>
@@ -723,25 +723,25 @@
                         <div style="display:grid; grid-template-columns:3fr 1fr 1fr; gap:12px; margin-bottom:10px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🛣️ Via / Strada</label>
-                                <input type="text" id="addrIndirizzo" placeholder="Via Roma" autocomplete="off">
+                                <input type="text" id="addrIndirizzo" name="f_3a" placeholder="Via Roma" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🏠 N. Civico</label>
-                                <input type="text" id="addrHouse" placeholder="5" autocomplete="off">
+                                <input type="text" id="addrHouse" name="f_3b" placeholder="5" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📮 CAP</label>
-                                <input type="text" id="addrCap" placeholder="26100" maxlength="10" autocomplete="off">
+                                <input type="text" id="addrCap" name="f_3c" placeholder="26100" maxlength="10" autocomplete="off">
                             </div>
                         </div>
                         <div style="display:grid; grid-template-columns:3fr 1fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🏙️ Comune</label>
-                                <input type="text" id="addrComune" placeholder="Cremona" autocomplete="off">
+                                <input type="text" id="addrComune" name="f_3d" placeholder="Cremona" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🗺️ Prov.</label>
-                                <input type="text" id="addrProvincia" placeholder="Piacenza (PC)" maxlength="30" autocomplete="off">
+                                <input type="text" id="addrProvincia" name="f_3e" placeholder="Piacenza (PC)" maxlength="30" autocomplete="off">
                             </div>
                         </div>
                         <input type="hidden" id="studentAddress">
@@ -753,7 +753,7 @@
                         <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>🥋 Batch *</label>
-                                <select id="studentBatch" required autocomplete="off">
+                                <select id="studentBatch" name="f_4a" required autocomplete="off">
                                     <option value="">-- Select --</option>
                                     <option value="Beginner">Beginner</option>
                                     <option value="Intermediate">Intermediate</option>
@@ -763,11 +763,11 @@
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>💶 Fee (€) *</label>
-                                <input type="number" id="monthlyFees" required placeholder="30" step="1" autocomplete="off">
+                                <input type="number" id="monthlyFees" name="f_4b" required placeholder="30" step="1" autocomplete="off">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label>📅 Join Date *</label>
-                                <input type="date" id="joinDate" required autocomplete="off">
+                                <input type="date" id="joinDate" name="f_4c" required autocomplete="off">
                             </div>
                         </div>
                     </div>
@@ -4046,7 +4046,7 @@
                         <span class="fees-status ${(isPaid || awaitingPaidRecord) ? 'fees-paid' : 'fees-unpaid'}" style="margin-top:4px;">${(isPaid || awaitingPaidRecord) ? '✓ PAID' : '⏳ PENDING'}</span>
                         ${autoExt.isExtended ? `<span style="background:#e0f2f1;color:#00796b;border:1px solid #b2dfdb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⏳ Auto-ext ${Math.min(autoExt.attendedCount, AUTO_EXTENSION_CLASS_TARGET)}/${AUTO_EXTENSION_CLASS_TARGET} · due ${formatDisplayDate(addDaysToDate(autoExt.effectiveEndDate, 1))}</span>` : ''}
                         ${autoExt.paused ? `<span style="background:#eceff1;color:#546e7a;border:1px solid #cfd8dc;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">⏸ Paused, ${autoExt.attendedCount}/${AUTO_EXTENSION_CLASS_TARGET} classes carry over</span>` : ''}
-                        ${autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">🎁 Demo taken${awaitingPaidRecord ? ` · Paid €${Math.round(Number(awaitingPaidRecord.amount ?? student.monthlyFees ?? 0))}` : ''}, plan starts at next class</span>` : ''}
+                        ${autoExt.awaitingFirstClass ? `<span style="background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">🎁 Demo taken, plan starts next class</span>` : ''}
                         ${autoExt.owedCount > 0 ? `<span style="background:#fdecea;color:#c0392b;border:1px solid #f5c6cb;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;margin-top:2px;">💶 To pay: ${autoExt.owedCount} month${autoExt.owedCount > 1 ? 's' : ''} (€${Math.round((student.monthlyFees || 0) * autoExt.owedCount)})</span>` : ''}
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:130px;">

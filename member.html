@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Account - Bhangra Sway Cremona</title>
+    <title>Student Lobby - Bhangra Sway Cremona</title>
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
@@ -236,7 +236,7 @@
 
         /* ===== Passcode digit boxes ===== */
         .passcode-boxes { display: flex; gap: 10px; justify-content: center; margin: 6px 0 4px; }
-        .passcode-box {
+        .passcode-box, .pw-box {
             width: 54px; height: 62px;
             text-align: center;
             font-size: 1.7em;
@@ -246,7 +246,7 @@
             background: var(--bg-soft);
             transition: border-color .15s, background .15s, box-shadow .15s;
         }
-        .passcode-box:focus {
+        .passcode-box:focus, .pw-box:focus {
             border-color: var(--grad-a);
             background: #fff;
             outline: none;
@@ -307,6 +307,40 @@
         .month-label { font-size: 0.68em; font-weight: 800; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
         .paid-line { font-size: 0.78em; color: var(--good); font-weight: 700; margin-top: 6px; }
 
+        /* ===== Perform tab ===== */
+        .call-box {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .call-box .call-title { font-weight: 800; font-size: 1.02em; color: var(--ink); }
+        .call-box .call-date { color: var(--ink-faint); font-size: 0.85em; margin-top: 2px; }
+        .joined-count { text-align: center; font-size: 1.5em; font-weight: 800; color: var(--good); margin: 10px 0 2px; }
+        .swatch { width: 54px; height: 54px; border-radius: 50%; margin: 8px auto 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.18); }
+        .position-text { text-align: center; font-size: 1.02em; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
+
+        /* ===== Success toast (password saved, etc.) ===== */
+        .success-toast {
+            position: fixed;
+            left: 50%;
+            bottom: 26px;
+            transform: translate(-50%, 16px);
+            background: var(--ink);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.88em;
+            padding: 12px 20px;
+            border-radius: 999px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s var(--ease), transform .25s var(--ease);
+            z-index: 50;
+        }
+        .success-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
         /* ===== Stat strip ===== */
         .stat-strip {
             display: grid;
@@ -350,10 +384,10 @@
         .tab-bar {
             position: relative;
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             background: var(--bg-soft);
             border-radius: 999px;
-            padding: 4px;
+            padding: 5px;
             margin-bottom: 14px;
         }
         .tab-btn {
@@ -361,24 +395,24 @@
             z-index: 1;
             border: none;
             background: none;
-            padding: 9px 4px;
+            padding: 13px 4px;
             font-family: inherit;
-            font-size: 0.74em;
-            font-weight: 700;
+            font-size: 0.84em;
+            font-weight: 800;
             color: var(--ink-soft);
             cursor: pointer;
             border-radius: 999px;
-            display: flex; flex-direction: column; align-items: center; gap: 2px;
+            display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 5px;
             transition: color .2s;
             white-space: nowrap;
         }
-        .tab-btn .tab-icon { font-size: 1.15em; line-height: 1; }
+        .tab-btn .tab-icon { font-size: 1.2em; line-height: 1; }
         .tab-btn.active { color: var(--grad-a); }
         .tab-indicator {
             position: absolute;
-            top: 4px; bottom: 4px;
-            left: 4px;
-            width: calc(25% - 4px);
+            top: 5px; bottom: 5px;
+            left: 5px;
+            width: calc(33.333% - 5px);
             background: #fff;
             border-radius: 999px;
             box-shadow: 0 3px 10px rgba(20,10,50,0.14);
@@ -444,7 +478,7 @@
 <body>
     <div class="top-bar">
         <div class="lang-picker" id="langPicker"></div>
-        <a class="top-home-btn" href="home.html">🏠 <span data-i18n="home">Home</span></a>
+        <a class="top-home-btn" href="index.html">🏠 <span data-i18n="home">Home</span></a>
     </div>
     <div class="card">
         <div class="brand-row">
@@ -459,8 +493,8 @@
 
         <!-- PHONE ENTRY (the "home" screen, no names are ever listed) -->
         <div id="phoneState" class="hidden screen">
-            <h2 data-i18n="view_report">View Your Report</h2>
-            <p class="sub" data-i18n="enter_phone">Enter the mobile number we have on file for you.</p>
+            <h2 data-i18n="member_welcome_heading">Welcome! 👋</h2>
+            <p class="sub" data-i18n="member_welcome_body">Enter your mobile number to open your student account — check your report, mark attendance, or join a performance.</p>
             <input type="tel" id="phoneInput" inputmode="tel" placeholder="e.g. 333 123 4567" autocomplete="off" data-i18n-placeholder="phone_placeholder">
             <p class="error-text" id="phoneError"></p>
             <button class="primary" id="phoneContinueBtn" data-i18n="continue">Continue</button>
@@ -537,10 +571,9 @@
             </div>
 
             <div class="tab-bar" id="tabBar">
-                <button class="tab-btn active" data-tab="report" type="button"><span class="tab-icon">📅</span><span data-i18n="tab_report">Report</span></button>
-                <button class="tab-btn" data-tab="attendance" type="button"><span class="tab-icon">✅</span><span data-i18n="tab_attendance">Attend</span></button>
-                <button class="tab-btn" data-tab="grade" type="button"><span class="tab-icon">🎓</span><span data-i18n="tab_grade">Grade</span></button>
-                <button class="tab-btn" data-tab="improve" type="button"><span class="tab-icon">📈</span><span data-i18n="tab_improve">Improve</span></button>
+                <button class="tab-btn active" data-tab="report" type="button"><span class="tab-icon">👤</span><span data-i18n="tab_members">Members</span></button>
+                <button class="tab-btn" data-tab="attendance" type="button"><span class="tab-icon">✅</span><span data-i18n="tab_attendance">Attendance</span></button>
+                <button class="tab-btn" data-tab="perform" type="button"><span class="tab-icon">🎭</span><span data-i18n="tab_perform">Perform</span></button>
                 <div class="tab-indicator" id="tabIndicator"></div>
             </div>
 
@@ -619,20 +652,56 @@
                     </div>
                 </div>
 
-                <!-- Placeholders: not wired up yet, on purpose. -->
-                <div class="tab-panel" data-panel="grade">
-                    <div class="coming-soon-block">
-                        <div class="coming-soon-icon">🎓</div>
-                        <h3 style="margin:0;" data-i18n="grade_heading">Your Grade</h3>
-                        <div><span class="coming-soon-badge" data-i18n="coming_soon">Coming soon</span></div>
+                <!-- PERFORM: join an open call / see your spot, ported from perform.html -->
+                <div class="tab-panel" data-panel="perform">
+                    <div class="report-block">
+                        <div id="perfLoading"><div class="spinner small"></div></div>
+
+                        <div id="perfAction" class="hidden">
+                            <div class="call-box hidden" id="perfCallBox">
+                                <div class="call-title" id="perfCallTitle"></div>
+                                <div class="call-date" id="perfCallDate"></div>
+                            </div>
+                            <button class="secondary hidden" id="perfJoinBtn" data-i18n="perf_join_btn">🎭 I'm In!</button>
+                            <button class="secondary" id="perfSpotBtn" data-i18n="perf_spot_btn">📍 See My Spot</button>
+                            <p class="error-text" id="perfError"></p>
+                        </div>
+
+                        <div id="perfJoinResult" class="hidden">
+                            <div class="result-title" id="perfJoinTitle"></div>
+                            <div class="result-sub" id="perfJoinSub"></div>
+                            <div class="joined-count" id="perfJoinedCount"></div>
+                            <p class="result-sub" data-i18n="perf_dancers_joined">dancers have joined so far</p>
+                            <button class="link-btn" id="perfJoinBackBtn" data-i18n="perf_back_btn">← Back</button>
+                        </div>
+
+                        <div id="perfSpotResult" class="hidden">
+                            <div class="result-title" id="perfSpotMovementLabel"></div>
+                            <div class="swatch" id="perfSpotSwatch"></div>
+                            <div class="position-text" id="perfSpotPositionText"></div>
+                            <p class="sub" id="perfSpotEmptyNote" style="text-align:center;"></p>
+                            <button class="link-btn" id="perfSpotBackBtn" data-i18n="perf_back_btn">← Back</button>
+                        </div>
                     </div>
                 </div>
-                <div class="tab-panel" data-panel="improve">
-                    <div class="coming-soon-block">
-                        <div class="coming-soon-icon">📈</div>
-                        <h3 style="margin:0;" data-i18n="improve_heading">What to Improve</h3>
-                        <div><span class="coming-soon-badge" data-i18n="coming_soon">Coming soon</span></div>
+
+            </div>
+
+            <!-- Password management: label switches between "Create" (no
+                 passcode set yet) and "Change" (one already verified this
+                 session) based on enteredPasscode, right next to Logout. -->
+            <div id="passwordManageBlock">
+                <button class="link-btn" id="passwordManageToggleBtn"></button>
+                <div id="passwordManageForm" class="hidden">
+                    <div class="passcode-boxes" id="pwBoxes">
+                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="0">
+                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="1">
+                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="2">
+                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="3">
                     </div>
+                    <p class="error-text" id="pwError" style="text-align:center;"></p>
+                    <button class="secondary" id="pwSaveBtn" data-i18n="pw_save_btn">Save Password</button>
+                    <button class="link-btn" id="pwCancelBtn" data-i18n="pw_cancel_btn">Cancel</button>
                 </div>
             </div>
 
@@ -651,11 +720,15 @@
         const STUDIO_LNG = 10.0288616;
         const STUDIO_RADIUS_METERS = 500;
 
+        // Perform tab (ported from perform.html)
+        const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#1a237e' };
+
         let enteredPhone = '';
         let enteredPasscode = null; // null when the member has no passcode set
         let selectedMember = null;
         let passcodeMode = 'enter'; // 'enter' (passcode exists) | 'setup' (opt-in prompt)
         let householdMembers = []; // every member found under enteredPhone (siblings)
+        let openPerformance = null; // latest performances row with status='open', if any
 
         function show(id) {
             ['loadingState', 'phoneState', 'pickState', 'passcodeState', 'dashboardState'].forEach((s) => {
@@ -743,36 +816,41 @@
             document.getElementById('phoneInput').focus();
         }
 
-        // ===== Passcode step (4 separate digit boxes, auto-advance) =====
-        function getPasscodeValue() {
-            return Array.from(document.querySelectorAll('.passcode-box')).map((b) => b.value).join('');
+        // ===== 4-digit box groups (auto-advance, auto-submit), reused for
+        // both the identification passcode step and the password-change form =====
+        function getDigitBoxValue(selector) {
+            return Array.from(document.querySelectorAll(selector)).map((b) => b.value).join('');
         }
 
-        function clearPasscodeBoxes() {
-            document.querySelectorAll('.passcode-box').forEach((b) => { b.value = ''; });
+        function clearDigitBoxes(selector) {
+            document.querySelectorAll(selector).forEach((b) => { b.value = ''; });
         }
 
-        function shakePasscodeBoxes() {
-            const wrap = document.getElementById('passcodeBoxes');
+        function shakeBoxWrapper(wrapperId) {
+            const wrap = document.getElementById(wrapperId);
             wrap.classList.remove('shake');
             void wrap.offsetWidth; // restart the animation
             wrap.classList.add('shake');
         }
 
-        function setupPasscodeBoxes() {
-            const boxes = Array.from(document.querySelectorAll('.passcode-box'));
+        function setupDigitBoxGroup(selector, onComplete) {
+            const boxes = Array.from(document.querySelectorAll(selector));
             boxes.forEach((box, i) => {
                 box.addEventListener('input', () => {
                     box.value = box.value.replace(/\D/g, '').slice(0, 1);
                     if (box.value && boxes[i + 1]) boxes[i + 1].focus();
-                    if (boxes.every((b) => b.value)) handlePasscodeSubmit();
+                    if (boxes.every((b) => b.value)) onComplete();
                 });
                 box.addEventListener('keydown', (e) => {
                     if (e.key === 'Backspace' && !box.value && boxes[i - 1]) boxes[i - 1].focus();
-                    if (e.key === 'Enter') handlePasscodeSubmit();
+                    if (e.key === 'Enter') onComplete();
                 });
             });
         }
+
+        function getPasscodeValue() { return getDigitBoxValue('.passcode-box'); }
+        function clearPasscodeBoxes() { clearDigitBoxes('.passcode-box'); }
+        function shakePasscodeBoxes() { shakeBoxWrapper('passcodeBoxes'); }
 
         function pickMember(member) {
             selectedMember = member;
@@ -870,7 +948,7 @@
             const indicator = document.getElementById('tabIndicator');
             const barRect = bar.getBoundingClientRect();
             const btnRect = btn.getBoundingClientRect();
-            indicator.style.transform = `translateX(${btnRect.left - barRect.left - 4}px)`;
+            indicator.style.transform = `translateX(${btnRect.left - barRect.left - 5}px)`;
         }
 
         function switchTab(name) {
@@ -920,9 +998,11 @@
 
             renderReport(report);
             renderSiblingRow();
+            renderPasswordManageUI();
             show('dashboardState');
             switchTab('report');
             initAttendance();
+            initPerform();
         }
 
         // Lets a parent with more than one child registered under the same
@@ -949,6 +1029,93 @@
                 });
                 row.appendChild(chip);
             });
+        }
+
+        // ===== Password management (create / change), next to Logout =====
+        // enteredPasscode is the source of truth for "does this member already
+        // have a password verified this session": null after a Skip (no
+        // passcode set), the actual code after either verifying an existing
+        // one or just creating one.
+        function renderPasswordManageUI() {
+            document.getElementById('passwordManageForm').classList.add('hidden');
+            clearDigitBoxes('.pw-box');
+            document.getElementById('pwError').textContent = '';
+            document.getElementById('passwordManageToggleBtn').textContent = enteredPasscode === null
+                ? t('create_password_btn')
+                : t('change_password_btn');
+        }
+
+        function togglePasswordManageForm() {
+            const form = document.getElementById('passwordManageForm');
+            form.classList.toggle('hidden');
+            if (!form.classList.contains('hidden')) {
+                document.getElementById('pwError').textContent = '';
+                clearDigitBoxes('.pw-box');
+                document.querySelector('.pw-box').focus();
+            }
+        }
+
+        async function handlePwSave() {
+            const pwError = document.getElementById('pwError');
+            pwError.textContent = '';
+            const code = getDigitBoxValue('.pw-box');
+
+            if (!/^\d{4}$/.test(code)) {
+                pwError.textContent = t('passcode_invalid');
+                shakeBoxWrapper('pwBoxes');
+                return;
+            }
+
+            const btn = document.getElementById('pwSaveBtn');
+            btn.disabled = true;
+
+            const isCreating = enteredPasscode === null;
+            const { data: status, error } = isCreating
+                ? await supabaseClient.rpc('set_student_passcode_by_phone', {
+                    p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: code
+                })
+                : await supabaseClient.rpc('change_student_passcode_by_phone', {
+                    p_student_id: selectedMember.id, p_phone: enteredPhone,
+                    p_old_passcode: enteredPasscode, p_new_passcode: code
+                });
+
+            btn.disabled = false;
+
+            if (error) {
+                pwError.textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
+                return;
+            }
+            if (status === 'invalid_format') { pwError.textContent = t('passcode_invalid'); shakeBoxWrapper('pwBoxes'); return; }
+            if (status !== 'ok') {
+                // bad_phone / already_set / no_passcode_set / bad_old_passcode:
+                // all edge cases (e.g. an admin reset the passcode in the
+                // background) -- simplest safe recovery is a fresh login.
+                backToPhoneEntry(t('verify_failed'));
+                return;
+            }
+
+            enteredPasscode = code;
+            document.getElementById('passwordManageForm').classList.add('hidden');
+            renderPasswordManageUI();
+            showSuccessToast(t('pw_saved_msg'));
+        }
+
+        // A tiny, self-dismissing confirmation so saving a password doesn't
+        // need a whole extra screen.
+        function showSuccessToast(message) {
+            let toast = document.getElementById('successToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'successToast';
+                toast.className = 'success-toast';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.classList.remove('show');
+            void toast.offsetWidth;
+            toast.classList.add('show');
+            clearTimeout(showSuccessToast._timer);
+            showSuccessToast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
         }
 
         // ===== Render the report =====
@@ -1394,6 +1561,143 @@
             showAttn('attnResult');
         }
 
+        // ===== Perform tab (ported from perform.html) =====
+        // Identity (phone + passcode) is already established for the whole
+        // dashboard, so unlike perform.html this never re-asks for either --
+        // join/see-spot go straight to the join_performance_by_phone /
+        // get_my_spot_by_phone RPCs with what's already in page state.
+        function showPerf(id) {
+            ['perfLoading', 'perfAction', 'perfJoinResult', 'perfSpotResult'].forEach((s) => {
+                document.getElementById(s).classList.toggle('hidden', s !== id);
+            });
+        }
+
+        async function initPerform() {
+            showPerf('perfLoading');
+            document.getElementById('perfError').textContent = '';
+
+            const { data, error } = await supabaseClient
+                .from('performances')
+                .select('id, title, event_date, status')
+                .eq('status', 'open')
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            openPerformance = (!error && data && data[0]) || null;
+
+            const callBox = document.getElementById('perfCallBox');
+            const joinBtn = document.getElementById('perfJoinBtn');
+            if (openPerformance) {
+                callBox.classList.remove('hidden');
+                document.getElementById('perfCallTitle').textContent = openPerformance.title;
+                document.getElementById('perfCallDate').textContent = openPerformance.event_date || '';
+                joinBtn.classList.remove('hidden');
+            } else {
+                callBox.classList.add('hidden');
+                joinBtn.classList.add('hidden');
+            }
+            showPerf('perfAction');
+        }
+
+        async function handlePerfJoin() {
+            if (!openPerformance || !selectedMember) return;
+            const perfError = document.getElementById('perfError');
+            perfError.textContent = '';
+
+            const btn = document.getElementById('perfJoinBtn');
+            btn.disabled = true;
+            btn.textContent = t('perf_joining');
+
+            const { data: status, error } = await supabaseClient.rpc('join_performance_by_phone', {
+                p_performance_id: openPerformance.id,
+                p_student_id: selectedMember.id,
+                p_phone: enteredPhone,
+                p_passcode: enteredPasscode
+            });
+
+            btn.disabled = false;
+            btn.textContent = t('perf_join_btn');
+
+            if (status === 'bad_passcode') {
+                passcodeMode = 'enter';
+                renderPasscodeTexts();
+                document.getElementById('passcodeError').textContent = t('passcode_wrong');
+                clearPasscodeBoxes();
+                show('passcodeState');
+                shakePasscodeBoxes();
+                document.querySelector('.passcode-box').focus();
+                return;
+            }
+
+            if (error || status === 'bad_phone' || status === 'not_found') {
+                perfError.textContent = t('something_wrong') + (error ? ' (' + error.message + ')' : '');
+                return;
+            }
+
+            if (status === 'closed') {
+                document.getElementById('perfJoinTitle').textContent = t('perf_closed_title');
+                document.getElementById('perfJoinSub').textContent = t('perf_closed_sub');
+                document.getElementById('perfJoinedCount').textContent = '';
+                showPerf('perfJoinResult');
+                return;
+            }
+
+            const { data: count } = await supabaseClient.rpc('get_performance_signup_count', {
+                p_performance_id: openPerformance.id
+            });
+
+            document.getElementById('perfJoinTitle').textContent = t('perf_joined_title');
+            document.getElementById('perfJoinSub').textContent = `"${openPerformance.title}"`;
+            document.getElementById('perfJoinedCount').textContent = count ?? '';
+            showPerf('perfJoinResult');
+        }
+
+        async function handlePerfSeeSpot() {
+            if (!selectedMember) return;
+            const { data: result, error } = await supabaseClient.rpc('get_my_spot_by_phone', {
+                p_student_id: selectedMember.id,
+                p_phone: enteredPhone,
+                p_passcode: enteredPasscode
+            });
+
+            if (result?.status === 'bad_passcode') {
+                passcodeMode = 'enter';
+                renderPasscodeTexts();
+                document.getElementById('passcodeError').textContent = t('passcode_wrong');
+                clearPasscodeBoxes();
+                show('passcodeState');
+                shakePasscodeBoxes();
+                document.querySelector('.passcode-box').focus();
+                return;
+            }
+
+            if (error) {
+                document.getElementById('perfError').textContent = t('something_wrong') + ' (' + error.message + ')';
+                return;
+            }
+
+            const swatch = document.getElementById('perfSpotSwatch');
+            const emptyNote = document.getElementById('perfSpotEmptyNote');
+            const posText = document.getElementById('perfSpotPositionText');
+            const movementLabel = document.getElementById('perfSpotMovementLabel');
+
+            if (result?.status === 'ok') {
+                movementLabel.textContent = result.movement_label || '';
+                posText.textContent = result.position_text || '';
+                emptyNote.textContent = '';
+                swatch.style.display = 'block';
+                swatch.style.background = result.dress_color ? (DRESS_COLOR_HEX[result.dress_color] || '#ccc') : '#ccc';
+            } else {
+                movementLabel.textContent = '';
+                posText.textContent = '';
+                swatch.style.display = 'none';
+                emptyNote.textContent = result?.status === 'not_joined'
+                    ? t('perf_not_joined')
+                    : t('perf_no_positions');
+            }
+            showPerf('perfSpotResult');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('phoneContinueBtn').addEventListener('click', handlePhoneContinue);
             document.getElementById('phoneInput').addEventListener('keydown', (e) => {
@@ -1401,7 +1705,7 @@
             });
             document.getElementById('pickBackBtn').addEventListener('click', () => backToPhoneEntry(''));
 
-            setupPasscodeBoxes();
+            setupDigitBoxGroup('.passcode-box', handlePasscodeSubmit);
             document.getElementById('passcodeSubmitBtn').addEventListener('click', handlePasscodeSubmit);
             document.getElementById('passcodeSkipBtn').addEventListener('click', handlePasscodeSkip);
             document.getElementById('passcodeForgotBtn').addEventListener('click', handlePasscodeForgot);
@@ -1419,14 +1723,27 @@
             );
             document.getElementById('attnLocRetryBtn').addEventListener('click', initAttendance);
 
+            document.getElementById('perfJoinBtn').addEventListener('click', handlePerfJoin);
+            document.getElementById('perfSpotBtn').addEventListener('click', handlePerfSeeSpot);
+            document.getElementById('perfJoinBackBtn').addEventListener('click', () => showPerf('perfAction'));
+            document.getElementById('perfSpotBackBtn').addEventListener('click', () => showPerf('perfAction'));
+
             document.getElementById('dashStartOverBtn').addEventListener('click', () => {
                 selectedMember = null;
                 enteredPhone = '';
                 enteredPasscode = null;
                 householdMembers = [];
+                openPerformance = null;
                 lastReport = null;
                 backToPhoneEntry('');
             });
+
+            setupDigitBoxGroup('.pw-box', handlePwSave);
+            document.getElementById('passwordManageToggleBtn').addEventListener('click', togglePasswordManageForm);
+            document.getElementById('pwCancelBtn').addEventListener('click', () => {
+                document.getElementById('passwordManageForm').classList.add('hidden');
+            });
+            document.getElementById('pwSaveBtn').addEventListener('click', handlePwSave);
 
             window.addEventListener('resize', () => {
                 const activeBtn = document.querySelector('.tab-btn.active');
@@ -1444,6 +1761,9 @@
                     document.getElementById('branchLine').textContent = t(branchKey);
                     renderAttnClosedMessage();
                     renderAttnLocBlock();
+                    document.getElementById('passwordManageToggleBtn').textContent = enteredPasscode === null
+                        ? t('create_password_btn')
+                        : t('change_password_btn');
                 }
             };
 
