@@ -368,6 +368,17 @@
         .ring-bg { fill: none; stroke: var(--line); stroke-width: 3.2; }
         .ring-fg { fill: none; stroke: var(--grad-a); stroke-width: 3.2; stroke-linecap: round; stroke-dasharray: 100 100; transition: stroke-dashoffset .6s var(--ease); }
         .ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.72em; font-weight: 800; color: var(--ink); }
+        .ring-gift-badge {
+            position: absolute;
+            top: -5px; right: -5px;
+            width: 18px; height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.62em;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            animation: popIn .4s var(--ease);
+        }
 
         .status-badge {
             display: inline-block;
@@ -561,8 +572,9 @@
                             <path class="ring-fg" id="ringFg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" stroke-dashoffset="100"/>
                         </svg>
                         <div class="ring-label" id="ringLabel">0/4</div>
+                        <div class="ring-gift-badge hidden" id="ringGiftBadge">🎁</div>
                     </div>
-                    <span class="stat-chip-label" data-i18n="attendance_heading_short">Classes</span>
+                    <span class="stat-chip-label" id="classesChipLabel" data-i18n="attendance_heading_short">Classes</span>
                 </div>
                 <div class="stat-chip">
                     <div class="stat-chip-value" id="quickPendingAmount">€0</div>
@@ -571,7 +583,7 @@
             </div>
 
             <div class="tab-bar" id="tabBar">
-                <button class="tab-btn active" data-tab="report" type="button"><span class="tab-icon">👤</span><span data-i18n="tab_members">Members</span></button>
+                <button class="tab-btn active" data-tab="report" type="button"><span class="tab-icon">👤</span><span data-i18n="tab_report">Report</span></button>
                 <button class="tab-btn" data-tab="attendance" type="button"><span class="tab-icon">✅</span><span data-i18n="tab_attendance">Attendance</span></button>
                 <button class="tab-btn" data-tab="perform" type="button"><span class="tab-icon">🎭</span><span data-i18n="tab_perform">Perform</span></button>
                 <div class="tab-indicator" id="tabIndicator"></div>
@@ -1232,13 +1244,27 @@
 
             // The quick-glance ring always tracks the CURRENT cycle's progress
             // toward the 4-class guarantee, regardless of which cycle ends up
-            // as the "display" cycle below.
+            // as the "display" cycle below. The ring fill itself caps at 100%
+            // (it can't visually overflow), but the label shows the real
+            // attended count, and any bonus classes get a 🎁 badge + note,
+            // same "gifted" language as the detailed cycle card below.
             function updateRing(cycle) {
                 const target = AUTO_EXTENSION_CLASS_TARGET;
-                const attended = cycle ? Math.min(cycle.attended, target) : 0;
-                const pct = target > 0 ? (attended / target) * 100 : 0;
+                const attended = cycle ? cycle.attended : 0;
+                const pct = target > 0 ? (Math.min(attended, target) / target) * 100 : 0;
                 document.getElementById('ringFg').style.strokeDashoffset = String(100 - pct);
                 document.getElementById('ringLabel').textContent = `${attended}/${target}`;
+
+                const extra = attended - target;
+                const giftBadge = document.getElementById('ringGiftBadge');
+                const chipLabel = document.getElementById('classesChipLabel');
+                if (extra > 0) {
+                    giftBadge.classList.remove('hidden');
+                    chipLabel.textContent = tCount(extra, 'gifted_chip_one', 'gifted_chip_many');
+                } else {
+                    giftBadge.classList.add('hidden');
+                    chipLabel.textContent = t('attendance_heading_short');
+                }
             }
 
             // Builds one cycle card's markup, including which payment (date +

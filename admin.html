@@ -5092,11 +5092,25 @@
                     isDemo: freshPresent ? !!freshDemo[id] : isDemoClass(id, attendanceDate)
                 }));
 
-                await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
+                // TEMP DEBUG — remove once the 19-Jul issue is confirmed fixed.
+                console.log('[saveAttendance] date =', attendanceDate);
+                console.log('[saveAttendance] freshError =', freshError, 'freshRows count =', freshRows?.length);
+                console.log('[saveAttendance] pendingForDate =', JSON.parse(JSON.stringify(pendingForDate)));
+                console.log('[saveAttendance] outgoing records =', JSON.parse(JSON.stringify(attendanceRecords)));
+
+                const delResult = await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
+                console.log('[saveAttendance] delete done (no throw = ok)');
 
                 if (attendanceRecords.length > 0) {
                     await insertAttendanceWithSchemaFallback(attendanceRecords);
+                    console.log('[saveAttendance] insert done (no throw = ok)');
                 }
+
+                const { data: verifyRows, error: verifyError } = await supabaseClient
+                    .from('attendance')
+                    .select('*')
+                    .eq('attendancedate', attendanceDate);
+                console.log('[saveAttendance] verify re-select right after insert:', verifyError, verifyRows);
 
                 // Clear pending state for this date after successful save
                 delete pendingAttendanceChanges[attendanceDate];
