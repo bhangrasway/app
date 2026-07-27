@@ -1695,6 +1695,46 @@
             if (!phone) { alert('Phone number missing'); return; }
             window.open(buildWhatsAppUrl(phone, message), '_blank');
         }
+
+        // Same blank-chat behavior as a plain wa.me link, just centralized so
+        // it can be reused from the WA actions menu everywhere.
+        function openEmptyWhatsAppChat(phone) {
+            if (!phone) { alert('Phone number missing'); return; }
+            window.open(`https://wa.me/39${String(phone).replace(/\D/g, '')}`, '_blank');
+        }
+        // ─────────────────────────────────────────────────────────────────────────
+
+        // ── WA actions menu (Report / Empty Chat / Welcome) ──────────────────────
+        // One shared dropdown so every per-student WhatsApp entry point (list
+        // card, detail view, payments card) offers the same 3 actions instead
+        // of each showing a different single button.
+        function renderWaActionsMenu(student, menuId) {
+            if (!student.phone) {
+                return `<button class="btn-small" disabled title="No phone number registered for this student" style="background:#ccc; color:#888; cursor:not-allowed;">💬 WA</button>`;
+            }
+            return `
+                <div style="position:relative; display:inline-block;">
+                    <button class="btn-small" onclick="toggleWaMenu('${menuId}', event)" style="background:#25D366; color:#fff;">💬 WA ▾</button>
+                    <div class="wa-menu" id="${menuId}" style="display:none; position:absolute; top:100%; right:0; margin-top:4px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.15); z-index:50; min-width:190px; overflow:hidden;">
+                        <button onclick="sendStudentWhatsAppReport(${student.id}); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; cursor:pointer; font-size:0.88em;">📊 Send Report</button>
+                        <button onclick="openEmptyWhatsAppChat('${student.phone}'); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; cursor:pointer; font-size:0.88em; border-top:1px solid #eee;">💬 Open Empty Chat</button>
+                        <button onclick="sendStudentWelcomeMessage(${student.id}); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; cursor:pointer; font-size:0.88em; border-top:1px solid #eee;">🎉 Messaggio di Benvenuto</button>
+                    </div>
+                </div>`;
+        }
+
+        function toggleWaMenu(menuId, event) {
+            if (event) event.stopPropagation();
+            document.querySelectorAll('.wa-menu').forEach((el) => {
+                if (el.id !== menuId) el.style.display = 'none';
+            });
+            const menu = document.getElementById(menuId);
+            if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.wa-menu').forEach((el) => { el.style.display = 'none'; });
+        });
         // ─────────────────────────────────────────────────────────────────────────
 
         // ── WhatsApp Student Progress Report ─────────────────────────────────────
@@ -1833,6 +1873,7 @@
             }
 
             message += `\n${sep}\n\n`;
+            message += `🔗 See your full dashboard anytime: bhangrasway.com/member.html\n\n`;
             message += `❤️ Thank you for being part of our Bhangra family! Your dedication and positive energy make every class special. We can't wait to see you at the next session! 🎶🕺`;
 
             return message.trim();
@@ -1846,6 +1887,39 @@
                 return;
             }
             const message = generateWhatsAppReportMessage(student);
+            openWhatsApp(student.phone, message);
+        }
+        // ─────────────────────────────────────────────────────────────────────────
+
+        // ── WhatsApp Welcome Message ──────────────────────────────────────────────
+        // Onboarding message for new students, in Italian (first-preference
+        // language for most families here, unlike the Punjabi/English-flavored
+        // progress report above).
+        function generateWelcomeMessage(student) {
+            const welcomeWord = student.gender === 'F' ? 'Benvenuta' : 'Benvenuto';
+            return `👋 Ciao ${student.name}! 🎉 ${welcomeWord} a Bhangrasway!
+
+📱 Il tuo Portale: bhangrasway.com/member.html — accedi con il tuo numero di telefono. Puoi impostare un codice a 4 cifre oppure saltare questo passaggio (l'hai dimenticato? Contattaci e te lo reimpostiamo noi).
+
+📊 Report: qui vedi le lezioni frequentate e il pagamento dovuto. Il piano si estende automaticamente se non hai fatto 4 lezioni nel mese. Se vedi "non pagato", ti chiediamo di pagare al più presto.
+
+✅ Presenze: segnati presente ad ogni lezione (se il browser te lo permette, puoi farlo con la posizione), oppure invia una "richiesta di presenza" e la registriamo noi.
+
+🎭 Gli spettacoli vengono annunciati nel nostro gruppo WhatsApp — resta aggiornato/a!
+
+📢 Controlla sempre il gruppo WhatsApp prima di venire a lezione, nel caso in cui orari cambino o la lezione venga annullata.
+
+Tanti auguri per il tuo percorso di crescita! 💃🕺`;
+        }
+
+        function sendStudentWelcomeMessage(studentId) {
+            const student = students.find(s => s.id === studentId);
+            if (!student) { alert('Student not found.'); return; }
+            if (!student.phone) {
+                alert('No phone number registered for this student.\nPlease add a phone number in the student\'s profile first.');
+                return;
+            }
+            const message = generateWelcomeMessage(student);
             openWhatsApp(student.phone, message);
         }
         // ─────────────────────────────────────────────────────────────────────────
@@ -4054,7 +4128,7 @@
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:130px;">
                         <button onclick="showStudentDetail(${student.id})" class="btn-small" style="background:#27ae60;">View</button>
                         <button onclick="editStudent(${student.id})" class="btn-small" style="background:#3498db;">Edit</button>
-                        ${student.phone ? `<a href="https://wa.me/39${student.phone.replace(/\D/g,'')}" target="_blank" class="btn-small" style="background:#25D366; color:white; text-decoration:none; text-align:center;">💬 WA</a>` : '<span></span>'}
+                        ${renderWaActionsMenu(student, `waMenu-list-${student.id}`)}
                         <button onclick="deleteStudent(${student.id})" class="btn-small btn-delete">Delete</button>
                     </div>
                 `;
@@ -4449,10 +4523,7 @@
                     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                         <button class="btn-small" onclick="editStudent(${student.id}); backToStudents();" style="background:#3498db;">Edit Student</button>
                         <button class="btn-small btn-delete" onclick="deleteStudent(${student.id}); backToStudents();">Delete</button>
-                        ${student.phone
-                            ? `<button class="btn-small" onclick="sendStudentWhatsAppReport(${student.id})" style="background:#25D366; color:#fff;" title="Send 2-Month Progress Report on WhatsApp">📱 Send Report on WhatsApp</button>`
-                            : `<button class="btn-small" disabled title="No phone number registered for this student" style="background:#ccc; color:#888; cursor:not-allowed;">📱 Send Report on WhatsApp</button>`
-                        }
+                        ${renderWaActionsMenu(student, `waMenu-detail-${student.id}`)}
                     </div>
                 </div>
                 <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:10px;">
@@ -6421,7 +6492,7 @@
 
                 const overrideTag = hasOverride ? `<span style="background:#f0e6fa;color:#8e44ad;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">EXTENDED</span>` : '';
                 const overdueTag = isOverdue ? `<span style="background:#fdebd0;color:#e67e22;border-radius:5px;padding:2px 7px;font-size:0.78em;font-weight:700;">OVERDUE</span>` : '';
-                const waBtn = student.phone ? `<button onclick="sendStudentWhatsAppReport(${student.id})" title="Send WhatsApp Report" style="background:#25D366;color:#fff;padding:7px 12px;border:none;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;font-size:0.85em;">📱 WA</button>` : '';
+                const waBtn = renderWaActionsMenu(student, `waMenu-pay-${student.id}`);
 
                 const card = `
                     <div style="${cardStyle}">
