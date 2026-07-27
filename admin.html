@@ -1716,9 +1716,9 @@
                 <div style="position:relative; display:inline-block;">
                     <button class="btn-small" onclick="toggleWaMenu('${menuId}', event)" style="background:#25D366; color:#fff;">💬 WA ▾</button>
                     <div class="wa-menu" id="${menuId}" style="display:none; position:absolute; top:100%; right:0; margin-top:4px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.15); z-index:50; min-width:190px; overflow:hidden;">
-                        <button onclick="sendStudentWhatsAppReport(${student.id}); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; cursor:pointer; font-size:0.88em;">📊 Send Report</button>
-                        <button onclick="openEmptyWhatsAppChat('${student.phone}'); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; cursor:pointer; font-size:0.88em; border-top:1px solid #eee;">💬 Open Empty Chat</button>
-                        <button onclick="sendStudentWelcomeMessage(${student.id}); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; cursor:pointer; font-size:0.88em; border-top:1px solid #eee;">🎉 Messaggio di Benvenuto</button>
+                        <button onclick="sendStudentWhatsAppReport(${student.id}); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; color:#333; cursor:pointer; font-size:0.88em;">📊 Send Report</button>
+                        <button onclick="openEmptyWhatsAppChat('${student.phone}'); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; color:#333; cursor:pointer; font-size:0.88em; border-top:1px solid #eee;">💬 Open Empty Chat</button>
+                        <button onclick="sendStudentWelcomeMessage(${student.id}); toggleWaMenu('${menuId}');" style="display:block; width:100%; text-align:left; padding:9px 12px; border:none; background:#fff; color:#333; cursor:pointer; font-size:0.88em; border-top:1px solid #eee;">🎉 Messaggio di Benvenuto</button>
                     </div>
                 </div>`;
         }
