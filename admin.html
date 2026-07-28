@@ -666,6 +666,9 @@
                     <p style="margin:0 0 12px; color:#555; font-size:0.88em;">A member forgot their 4-digit passcode and can't get back into their report/check-in page. Approving clears their passcode — they can log in with just their mobile number again, or set a new one.</p>
                     <div id="passcodeRequestsList" style="display:flex; flex-direction:column; gap:8px;"></div>
                     <div id="noPasscodeRequestsMsg" style="color:#888; font-size:0.9em; display:none;">No pending requests.</div>
+                    <div id="passcodeStatsBox" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid #e2e2e2; color:#555; font-size:0.88em;">
+                        <span id="passcodeStatsText"></span>
+                    </div>
                 </div>
 
                 <form onsubmit="addStudent(event)" style="max-width:900px;" autocomplete="off">
@@ -3714,6 +3717,7 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
         function startPasscodeRequestsPolling() {
             if (passcodeRequestsPollTimer) return;
             loadPasscodeResetRequests();
+            loadPasscodeStats();
             passcodeRequestsPollTimer = setInterval(loadPasscodeResetRequests, 30000);
         }
 
@@ -3766,7 +3770,13 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
         async function loadAllData() {
             try {
                 // Load students
-                const studentsData = await fetchAllRows('students');
+                // Explicit column list (not '*') so passcode_hash never
+                // travels to the browser — the dashboard never displays it,
+                // it's only written (see approvePasscodeReset).
+                const studentsData = await fetchAllRows(
+                    'students',
+                    'id,name,parentname,phone,age,gender,address,codicefiscale,batch,monthlyfees,joindate,nextpaymentdate,paidatregistration'
+                );
                 students = (studentsData || []).map((student) => ({
                     ...student,
                     parentName: student.parentName ?? student.parent_name ?? student.parentname ?? '',
@@ -6196,6 +6206,23 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
             });
         }
 
+        // Requires passcode_tracking.sql (get_passcode_stats RPC + the
+        // passcode_changed_at column) to already be applied — until then this
+        // just fails silently and hides the box.
+        async function loadPasscodeStats() {
+            const box = document.getElementById('passcodeStatsBox');
+            const { data, error } = await supabaseClient.rpc('get_passcode_stats');
+            if (error || !data) { box.style.display = 'none'; return; }
+
+            box.style.display = 'block';
+            const setBeforeNote = data.set_before_tracking > 0
+                ? ` (${data.set_before_tracking} of those were set before this tracking existed, so their change date is unknown)`
+                : '';
+            document.getElementById('passcodeStatsText').textContent =
+                `${data.with_passcode} of ${data.total_students} students have set a passcode. ` +
+                `${data.changed_last_30_days} changed it in the last 30 days, ${data.changed_last_90_days} in the last 90.${setBeforeNote}`;
+        }
+
         // Clearing passcode_hash is the whole recovery: it simultaneously
         // restores phone-only access (the RPCs' passcode check passes
         // automatically once it's null) and re-offers the "set a passcode"
@@ -6203,7 +6230,7 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
         async function approvePasscodeReset(requestId, studentId, studentName) {
             try {
                 await supabaseClient.from('students')
-                    .update({ passcode_hash: null })
+                    .update({ passcode_hash: null, passcode_changed_at: null })
                     .eq('id', studentId);
                 await supabaseClient.from('passcode_reset_requests')
                     .update({ status: 'approved', resolved_at: new Date().toISOString() })
@@ -6211,6 +6238,7 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
 
                 showSuccessMessage(`✓ Passcode cleared for ${studentName}`);
                 loadPasscodeResetRequests();
+                loadPasscodeStats();
             } catch (e) {
                 alert('Could not clear this passcode: ' + (e?.message || e));
             }
