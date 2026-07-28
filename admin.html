@@ -641,11 +641,11 @@
             </header>
 
             <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('students')">Students<span id="passcodeReqBadge" style="display:none; pointer-events:none; margin-left:6px; background:#e74c3c; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.75em; font-weight:700; vertical-align:middle;"></span></button>
+                <button class="tab-btn active" onclick="switchTab('students')">Students</button>
                 <button class="tab-btn" onclick="switchTab('payments')">Payments</button>
                 <button class="tab-btn" onclick="switchTab('attendance')">Attendance<span id="checkinReqBadge" style="display:none; pointer-events:none; margin-left:6px; background:#e74c3c; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.75em; font-weight:700; vertical-align:middle;"></span></button>
                 <button class="tab-btn" onclick="switchTab('fees')">Income & Expense</button>
-                <button class="tab-btn" onclick="switchTab('reports')">Reports</button>
+                <button class="tab-btn" onclick="switchTab('reports')">Reports<span id="passcodeReqBadge" style="display:none; pointer-events:none; margin-left:6px; background:#e74c3c; color:#fff; border-radius:999px; padding:1px 7px; font-size:0.75em; font-weight:700; vertical-align:middle;"></span></button>
                 <button class="tab-btn" onclick="switchTab('website')">Website</button>
                 <button class="tab-btn" onclick="switchTab('performances')">Performances</button>
             </div>
@@ -659,16 +659,6 @@
                 <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
                     <div id="studentsCount" style="font-weight:600; color:#333;">Loaded students: 0</div>
                     <button onclick="reloadStudents()" style="background:#3498db; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer;">Reload</button>
-                </div>
-
-                <div style="margin:0 0 24px; padding:18px; border:1px solid #e2e2e2; border-radius:10px; background:#fafafa;">
-                    <h3 style="margin:0 0 8px;">Passcode Reset Requests</h3>
-                    <p style="margin:0 0 12px; color:#555; font-size:0.88em;">A member forgot their 4-digit passcode and can't get back into their report/check-in page. Approving clears their passcode — they can log in with just their mobile number again, or set a new one.</p>
-                    <div id="passcodeRequestsList" style="display:flex; flex-direction:column; gap:8px;"></div>
-                    <div id="noPasscodeRequestsMsg" style="color:#888; font-size:0.9em; display:none;">No pending requests.</div>
-                    <div id="passcodeStatsBox" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid #e2e2e2; color:#555; font-size:0.88em;">
-                        <span id="passcodeStatsText"></span>
-                    </div>
                 </div>
 
                 <form onsubmit="addStudent(event)" style="max-width:900px;" autocomplete="off">
@@ -1028,6 +1018,20 @@
             <!-- REPORTS TAB -->
             <div id="reports" class="tab-content">
                 <h2>Reports Overview</h2>
+
+                <div style="margin:0 0 24px; padding:18px; border:1px solid #e2e2e2; border-radius:10px; background:#fafafa;">
+                    <h3 style="margin:0 0 8px;">Passcode Reset Requests</h3>
+                    <p style="margin:0 0 12px; color:#555; font-size:0.88em;">A member forgot their 4-digit passcode and can't get back into their report/check-in page. Approving clears their passcode — they can log in with just their mobile number again, or set a new one.</p>
+                    <div id="passcodeRequestsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    <div id="noPasscodeRequestsMsg" style="color:#888; font-size:0.9em; display:none;">No pending requests.</div>
+                    <div id="passcodeStatsBox" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid #e2e2e2; color:#555; font-size:0.88em;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                            <span id="passcodeStatsText"></span>
+                            <button id="togglePasscodeChangesBtn" onclick="togglePasscodeChangesList()" style="background:#eee; color:#333; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.85em; white-space:nowrap;">Show list</button>
+                        </div>
+                        <div id="passcodeChangesList" style="display:none; margin-top:10px;"></div>
+                    </div>
+                </div>
 
                 <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; margin-bottom:20px;">
                     <div>
@@ -6203,11 +6207,14 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
         // Requires passcode_tracking.sql (get_passcode_stats RPC + the
         // passcode_changed_at column) to already be applied — until then this
         // just fails silently and hides the box.
+        let passcodeStatsData = null;
+
         async function loadPasscodeStats() {
             const box = document.getElementById('passcodeStatsBox');
             const { data, error } = await supabaseClient.rpc('get_passcode_stats');
-            if (error || !data) { box.style.display = 'none'; return; }
+            if (error || !data) { box.style.display = 'none'; passcodeStatsData = null; return; }
 
+            passcodeStatsData = data;
             box.style.display = 'block';
             const setBeforeNote = data.set_before_tracking > 0
                 ? ` (${data.set_before_tracking} of those were set before this tracking existed, so their change date is unknown)`
@@ -6215,6 +6222,45 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
             document.getElementById('passcodeStatsText').textContent =
                 `${data.with_passcode} of ${data.total_students} students have set a passcode. ` +
                 `${data.changed_last_30_days} changed it in the last 30 days, ${data.changed_last_90_days} in the last 90.${setBeforeNote}`;
+
+            // Keep an already-open list in sync (e.g. right after an admin reset)
+            const list = document.getElementById('passcodeChangesList');
+            if (list.style.display !== 'none') renderPasscodeChangesList();
+        }
+
+        function renderPasscodeChangesList() {
+            const container = document.getElementById('passcodeChangesList');
+            if (!passcodeStatsData) { container.innerHTML = ''; return; }
+
+            const changes = passcodeStatsData.changes || [];
+            const untracked = passcodeStatsData.set_before_tracking_names || [];
+
+            let html = changes.length
+                ? '<div style="font-weight:600; margin-bottom:4px;">Changed passcode:</div>' +
+                  '<ul style="margin:0 0 10px; padding-left:18px;">' +
+                  changes.map(c => `<li>${escSiteHtml(c.name)} — ${timeAgo(c.changed_at)}</li>`).join('') +
+                  '</ul>'
+                : '<div style="color:#888;">No recorded passcode changes yet.</div>';
+
+            if (untracked.length) {
+                html += `<div style="color:#888; font-size:0.85em;">Set before tracking existed (change date unknown): ${untracked.map(escSiteHtml).join(', ')}</div>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function togglePasscodeChangesList() {
+            const list = document.getElementById('passcodeChangesList');
+            const btn = document.getElementById('togglePasscodeChangesBtn');
+            const showing = list.style.display !== 'none';
+            if (showing) {
+                list.style.display = 'none';
+                btn.textContent = 'Show list';
+            } else {
+                renderPasscodeChangesList();
+                list.style.display = 'block';
+                btn.textContent = 'Hide list';
+            }
         }
 
         // Clearing passcode_hash is the whole recovery: it simultaneously
@@ -6270,6 +6316,8 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
             } else if (tabName === 'reports') {
                 displayReports();
                 renderTaxRecords();
+                loadPasscodeResetRequests();
+                loadPasscodeStats();
             } else if (tabName === 'website') {
                 loadWebsiteTab();
             } else if (tabName === 'performances') {

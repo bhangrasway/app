@@ -103,13 +103,22 @@ security definer
 set search_path = public, pg_temp
 as $$
     select jsonb_build_object(
-        'total_students', count(*),
-        'with_passcode', count(*) filter (where passcode_hash is not null),
-        'changed_last_30_days', count(*) filter (where passcode_changed_at >= now() - interval '30 days'),
-        'changed_last_90_days', count(*) filter (where passcode_changed_at >= now() - interval '90 days'),
-        'set_before_tracking', count(*) filter (where passcode_hash is not null and passcode_changed_at is null)
-    )
-    from public.students;
+        'total_students', (select count(*) from public.students),
+        'with_passcode', (select count(*) from public.students where passcode_hash is not null),
+        'changed_last_30_days', (select count(*) from public.students where passcode_changed_at >= now() - interval '30 days'),
+        'changed_last_90_days', (select count(*) from public.students where passcode_changed_at >= now() - interval '90 days'),
+        'set_before_tracking', (select count(*) from public.students where passcode_hash is not null and passcode_changed_at is null),
+        'changes', coalesce((
+            select jsonb_agg(jsonb_build_object('name', name, 'changed_at', passcode_changed_at) order by passcode_changed_at desc)
+            from public.students
+            where passcode_changed_at is not null
+        ), '[]'::jsonb),
+        'set_before_tracking_names', coalesce((
+            select jsonb_agg(name order by name)
+            from public.students
+            where passcode_hash is not null and passcode_changed_at is null
+        ), '[]'::jsonb)
+    );
 $$;
 
 revoke execute on function public.get_passcode_stats() from public, anon;
