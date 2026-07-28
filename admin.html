@@ -3770,13 +3770,7 @@ Ti auguriamo il meglio per il tuo percorso di crescita! 💃🕺`;
         async function loadAllData() {
             try {
                 // Load students
-                // Explicit column list (not '*') so passcode_hash never
-                // travels to the browser — the dashboard never displays it,
-                // it's only written (see approvePasscodeReset).
-                const studentsData = await fetchAllRows(
-                    'students',
-                    'id,name,parentname,phone,age,gender,address,codicefiscale,batch,monthlyfees,joindate,nextpaymentdate,paidatregistration'
-                );
+                const studentsData = await fetchAllRows('students');
                 students = (studentsData || []).map((student) => ({
                     ...student,
                     parentName: student.parentName ?? student.parent_name ?? student.parentname ?? '',
