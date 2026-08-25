@@ -56,6 +56,7 @@ begin
                 'photo_path', s.photo_path,
                 'monthlyfees', coalesce(s.monthlyfees, 0),
                 'v2_credit_balance', coalesce(s.v2_credit_balance, 0),
+                'per_class_rate', coalesce(s.per_class_rate, 10),
                 'pre_cutover_balance_snapshot', s.pre_cutover_balance_snapshot
             )
             from public.students s

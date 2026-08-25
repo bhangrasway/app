@@ -37,6 +37,7 @@ declare
     v_today    date      := (now() at time zone 'Europe/Rome')::date;
     v_existing public.attendance%rowtype;
     v_newly_present boolean := false;
+    v_rate     numeric;
 begin
     if not public._phone_matches_student(p_student_id, p_phone) then
         return 'bad_phone';
@@ -75,15 +76,22 @@ begin
 
     -- v2 credit system: a self check-in on/after the cutover deducts one
     -- class, exactly like an admin marking the same day present from
-    -- admin_v2.html's Attendance tab (deductV2CreditForAttendance). Never
+    -- admin.html's Attendance tab (deductV2CreditForAttendance). Never
     -- touches the old credit_balance/credit_transactions columns.
+    --
+    -- Per-student rate (students.per_class_rate, v2_custom_rate.sql): null
+    -- means the standard €10 everyone else pays. Read once, then used for
+    -- BOTH the balance move and the ledger row so the two can never disagree.
     if v_newly_present and v_today >= '2026-09-02'::date then
+        select coalesce(per_class_rate, 10) into v_rate
+        from public.students where id = p_student_id;
+
         update public.students
-        set v2_credit_balance = coalesce(v2_credit_balance, 0) - 10
+        set v2_credit_balance = coalesce(v2_credit_balance, 0) - v_rate
         where id = p_student_id;
 
         insert into public.v2_credit_transactions (student_id, type, amount, note, attendance_date)
-        values (p_student_id, 'class_deduction', -10, 'Class attendance — self check-in', v_today);
+        values (p_student_id, 'class_deduction', -v_rate, 'Class attendance — self check-in', v_today);
     end if;
 
     return 'checked_in';

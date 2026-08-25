@@ -694,14 +694,6 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:14px;">
                 <div>
-                    <div style="font-size:0.68em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">Balance from before 2 Sep 2026</div>
-                    <div id="svmPreCutoverValue" style="font-size:0.95em; font-weight:700; color:var(--ink-soft); margin-top:2px;"></div>
-                </div>
-                <button class="btn btn-outline btn-sm" onclick="openPreCutoverEdit()" id="svmPreCutoverEditBtn"></button>
-            </div>
-
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:14px;">
-                <div>
                     <div style="font-size:0.68em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">Status</div>
                     <div id="svmActiveStatusReason" style="font-size:0.95em; font-weight:700; color:var(--ink-soft); margin-top:2px;"></div>
                 </div>
@@ -710,6 +702,14 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <option value="active">Force Active</option>
                     <option value="inactive">Force Inactive</option>
                 </select>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:14px;">
+                <div>
+                    <div style="font-size:0.68em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">Rate per class</div>
+                    <div id="svmRateValue" style="font-size:0.95em; font-weight:700; color:var(--ink-soft); margin-top:2px;"></div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="openRateEdit()" id="svmRateEditBtn"></button>
             </div>
 
             <div class="section-label" id="svmOverviewLabel"></div>
@@ -756,20 +756,21 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     </div>
 </div>
 
-<!-- PRE-CUTOVER BALANCE EDIT MODAL -->
-<div id="preCutoverModal" class="modal-backdrop" onclick="if(event.target===this) closePreCutoverEdit()">
+<!-- PER-CLASS RATE EDIT MODAL -->
+<div id="rateModal" class="modal-backdrop" onclick="if(event.target===this) closeRateEdit()">
     <div class="modal-box" style="max-width:380px;">
         <div class="modal-header">
-            <h3 style="font-size:1em;">Balance from before 2 Sep 2026</h3>
-            <button class="icon-btn-close" onclick="closePreCutoverEdit()" id="preCutoverCloseBtn"></button>
+            <h3 style="font-size:1em;">Rate per class</h3>
+            <button class="icon-btn-close" onclick="closeRateEdit()" id="rateCloseBtn"></button>
         </div>
         <div class="modal-body">
-            <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">Check the old admin page's reports for this student's real old-plan balance/debt, then enter it here. This number is reference-only — it never affects the live balance above.</p>
-            <div class="field"><label>Amount (€, can be negative)</label><input type="number" id="preCutoverAmountInput" step="1"></div>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">Everyone pays €10 a class by default. Enter a different amount to put this student on their own rate — every class they attend from now on, marked here or self-checked-in from the member portal, deducts that amount instead. Leave the box empty to put them back on the standard rate.</p>
+            <div class="field"><label>Amount per class (€)</label><input type="number" id="rateAmountInput" step="0.5" min="0" placeholder="10"></div>
+            <div style="font-size:0.78em; color:var(--ink-faint);">Only affects future classes — classes already deducted keep the amount they were charged.</div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-outline" onclick="closePreCutoverEdit()">Cancel</button>
-            <button class="btn btn-primary" onclick="confirmPreCutoverEdit()" id="preCutoverSaveBtn">Save</button>
+            <button class="btn btn-outline" onclick="closeRateEdit()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmRateEdit()" id="rateSaveBtn">Save</button>
         </div>
     </div>
 </div>
@@ -883,6 +884,10 @@ const CUTOVER_DATE = '2026-09-02';
 // deleted). students.active_override lets the admin force either direction
 // regardless of attendance recency — see isStudentActive().
 const INACTIVE_MONTHS_THRESHOLD = 3;
+
+// Standard price per class. students.per_class_rate lets specific students
+// (e.g. family) pay a different flat rate — null means "use this default".
+const DEFAULT_CLASS_RATE = 10;
 
 // ===== Inline SVG icon set — stroke-style, 24x24 viewbox, currentColor.
 // No emoji anywhere in this file; every icon need routes through here. =====
@@ -1008,10 +1013,10 @@ async function loadAllData() {
             joinDate: s.joinDate ?? s.join_date ?? s.joindate ?? '',
             v2CreditBalance: Number(s.v2_credit_balance) || 0,
             monthlyFees: Number(s.monthlyFees ?? s.monthly_fees ?? s.monthlyfees ?? 0),
-            preCutoverBalance: s.pre_cutover_balance_snapshot === null || s.pre_cutover_balance_snapshot === undefined ? null : Number(s.pre_cutover_balance_snapshot),
             onCreditPlan: !!(s.on_credit_plan),
             oldCreditBalance: Number(s.credit_balance) || 0,
-            activeOverride: s.active_override === null || s.active_override === undefined ? null : !!s.active_override
+            activeOverride: s.active_override === null || s.active_override === undefined ? null : !!s.active_override,
+            perClassRate: s.per_class_rate === null || s.per_class_rate === undefined ? null : Number(s.per_class_rate)
         }));
 
         const attendanceRows = await fetchAllRows('attendance');
@@ -1132,6 +1137,21 @@ async function setStudentActiveOverride(studentId, value) {
     if (currentViewingStudentId === studentId) renderStudentViewModal(student);
 }
 
+// ===== Per-class rate =====
+// What one class costs this student. A missing/blank/invalid override falls
+// back to the standard rate rather than producing NaN or a free class —
+// billing should never fail open.
+function getPerClassRate(student) {
+    const rate = Number(student && student.perClassRate);
+    return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_CLASS_RATE;
+}
+function getPerClassRateById(studentId) {
+    return getPerClassRate(students.find((s) => s.id === studentId));
+}
+function hasCustomPerClassRate(student) {
+    return !!student && student.perClassRate !== null && student.perClassRate !== undefined;
+}
+
 // ===== Students tab =====
 function setStudentsActiveFilter(value) {
     studentsActiveFilter = value;
@@ -1179,13 +1199,14 @@ function renderStudentsList() {
             ? `<span class="badge badge-success">${icon('check-circle', 13)} Has balance</span>`
             : `<span class="badge badge-warning">${icon('warning', 13)} Needs recharge</span>`;
         const inactiveBadge = isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`;
+        const rateBadge = hasCustomPerClassRate(s) ? `<span class="badge badge-neutral">${icon('credit-card', 13)} €${getPerClassRate(s)}/class</span>` : '';
         return `
             <div class="student-row">
                 <div class="student-info">
                     <div class="student-avatar" style="${avatarStyle}">${s.photo_path ? '' : initials}</div>
                     <div>
                         <div class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</div>
-                        <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; ${escapeHtml(s.phone || '—')} &nbsp;·&nbsp; ${escapeHtml(getBatchDisplayLabel(s.batch))} ${inactiveBadge}</div>
+                        <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; ${escapeHtml(s.phone || '—')} &nbsp;·&nbsp; ${escapeHtml(getBatchDisplayLabel(s.batch))} ${inactiveBadge} ${rateBadge}</div>
                     </div>
                 </div>
                 <div class="student-balance-block">
@@ -1294,13 +1315,14 @@ function renderPaymentsList() {
             .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
         const lastRechargeLabel = lastRecharge ? String(lastRecharge.created_at).slice(0, 10) : 'Never';
         const inactiveBadge = isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`;
+        const rateBadge = hasCustomPerClassRate(s) ? `<span class="badge badge-neutral">${icon('credit-card', 13)} €${getPerClassRate(s)}/class</span>` : '';
         return `
             <div class="student-row">
                 <div class="student-info">
                     ${renderAvatarHtml(s)}
                     <div>
                         <div class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</div>
-                        <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Last recharge: ${lastRechargeLabel} &nbsp;·&nbsp; ${totalClasses} classes total ${inactiveBadge}</div>
+                        <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Last recharge: ${lastRechargeLabel} &nbsp;·&nbsp; ${totalClasses} classes total ${inactiveBadge} ${rateBadge}</div>
                     </div>
                 </div>
                 <div class="student-balance-block">
@@ -3007,9 +3029,10 @@ async function insertAttendanceWithSchemaFallback(recordsToInsert) {
 
 async function deductV2CreditForAttendance(studentIds, attendanceDate) {
     for (const id of studentIds) {
+        const rate = getPerClassRateById(id);
         const { data: inserted, error } = await supabaseClient
             .from('v2_credit_transactions')
-            .insert({ student_id: id, type: 'class_deduction', amount: -10, note: 'Class attendance', attendance_date: attendanceDate, created_at: new Date().toISOString() })
+            .insert({ student_id: id, type: 'class_deduction', amount: -rate, note: 'Class attendance', attendance_date: attendanceDate, created_at: new Date().toISOString() })
             .select().single();
         if (error) { console.error('Error deducting v2 credit for student', id, error); continue; }
         v2CreditTransactions.push(inserted);
@@ -3532,8 +3555,6 @@ function renderStudentViewModal(s) {
     }
     document.getElementById('svmBalanceAmount').textContent = `€${balance}`;
 
-    document.getElementById('svmPreCutoverValue').textContent = s.preCutoverBalance === null ? 'Not set' : `€${s.preCutoverBalance}`;
-
     const isActiveNow = isStudentActive(s);
     const statusSelectEl = document.getElementById('svmActiveStatusSelect');
     document.getElementById('svmActiveStatusReason').textContent = getActiveStatusReason(s);
@@ -3541,6 +3562,11 @@ function renderStudentViewModal(s) {
     statusSelectEl.value = s.activeOverride === null || s.activeOverride === undefined ? 'auto' : (s.activeOverride ? 'active' : 'inactive');
     statusSelectEl.style.color = isActiveNow ? '' : 'var(--danger)';
     statusSelectEl.style.borderColor = isActiveNow ? '' : 'var(--danger)';
+
+    const rateEl = document.getElementById('svmRateValue');
+    const customRate = hasCustomPerClassRate(s);
+    rateEl.textContent = customRate ? `€${getPerClassRate(s)} (custom)` : `€${DEFAULT_CLASS_RATE} (standard)`;
+    rateEl.style.color = customRate ? 'var(--accent)' : 'var(--ink-soft)';
 
     const totalClasses = getTotalClassesAttended(s.id);
     document.getElementById('svmOverviewLabel').innerHTML = iconLabel('calendar', 'Overview', 13);
@@ -3691,27 +3717,32 @@ async function recomputeV2Balance(studentId) {
     return total;
 }
 
-// ===== Pre-cutover balance (manual, reference-only) =====
-function openPreCutoverEdit() {
+// ===== Per-class rate (per-student override of DEFAULT_CLASS_RATE) =====
+// Same shape as the pre-cutover balance edit above: an empty input clears
+// the override and puts the student back on the standard rate.
+function openRateEdit() {
     const s = students.find((x) => x.id === currentViewingStudentId);
     if (!s) return;
-    document.getElementById('preCutoverAmountInput').value = s.preCutoverBalance ?? '';
-    document.getElementById('preCutoverModal').style.display = 'flex';
+    document.getElementById('rateAmountInput').value = s.perClassRate ?? '';
+    document.getElementById('rateModal').style.display = 'flex';
 }
-function closePreCutoverEdit() { document.getElementById('preCutoverModal').style.display = 'none'; }
-async function confirmPreCutoverEdit() {
+function closeRateEdit() { document.getElementById('rateModal').style.display = 'none'; }
+async function confirmRateEdit() {
     const s = students.find((x) => x.id === currentViewingStudentId);
-    if (!s) { closePreCutoverEdit(); return; }
-    const raw = document.getElementById('preCutoverAmountInput').value;
+    if (!s) { closeRateEdit(); return; }
+    const raw = String(document.getElementById('rateAmountInput').value).trim();
     const value = raw === '' ? null : Number(raw);
-    if (raw !== '' && !Number.isFinite(value)) { alert('Enter a valid number.'); return; }
+    if (raw !== '' && (!Number.isFinite(value) || value <= 0)) {
+        alert('Enter an amount greater than 0, or leave it empty for the standard €10 rate.');
+        return;
+    }
 
-    await supabaseClient.from('students').update({
-        pre_cutover_balance_snapshot: value,
-        pre_cutover_balance_updated_at: new Date().toISOString()
-    }).eq('id', s.id);
-    s.preCutoverBalance = value;
-    closePreCutoverEdit();
+    const { error } = await supabaseClient.from('students').update({ per_class_rate: value }).eq('id', s.id);
+    if (error) { alert('Could not update the rate: ' + error.message); return; }
+    s.perClassRate = value;
+    closeRateEdit();
+    renderStudentsList();
+    renderPaymentsList();
     renderStudentViewModal(s);
 }
 
@@ -3913,11 +3944,11 @@ function applyIcons() {
     document.getElementById('cameraBtnLabel').innerHTML = iconLabel('camera', 'Camera', 15);
     document.getElementById('uploadBtnLabel').innerHTML = iconLabel('upload', 'Upload', 15);
     document.getElementById('svmCloseBtn').innerHTML = icon('x', 16);
-    document.getElementById('svmPreCutoverEditBtn').innerHTML = iconLabel('edit', 'Edit', 14);
+    document.getElementById('svmRateEditBtn').innerHTML = iconLabel('edit', 'Edit', 14);
+    document.getElementById('rateCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('rechargeCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('rechargeDeleteBtn').innerHTML = iconLabel('trash', 'Delete', 15);
     document.getElementById('rechargeSaveBtn').innerHTML = iconLabel('check', 'Save', 15);
-    document.getElementById('preCutoverCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('freeClassCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('taxCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('freeClassSaveBtn').innerHTML = iconLabel('check', 'Give Free Class', 15);

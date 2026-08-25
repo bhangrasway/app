@@ -284,7 +284,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="tab-panel active" data-panel="report">
             <div class="report-block">
                 <h3 id="creditHeadingLabel"></h3>
-                <p class="subtitle" data-i18n="mv2_credit_sub">€10 per class. Top up anytime with your instructor. No monthly plan to keep track of.</p>
+                <p class="subtitle" id="creditSubLabel">€10 per class. Top up anytime with your instructor. No monthly plan to keep track of.</p>
                 <div id="creditBalanceCard" style="border-radius:var(--radius-lg); padding:18px 18px 15px;">
                     <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
                         <div style="font-size:2.1em; font-weight:800; line-height:1;" id="creditBalanceAmount"></div>
@@ -479,6 +479,19 @@ const SUPABASE_URL = 'https://geeqcyfnkgamcjclulay.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const CUTOVER_DATE = '2026-09-02';
+
+// Mirrors admin.html's DEFAULT_CLASS_RATE and the coalesce() default in
+// get_student_report_v2_by_phone. Only ever used if the RPC didn't send a
+// rate at all (a cached copy of this page against a pre-migration database).
+const DEFAULT_CLASS_RATE = 10;
+// What one class costs the member currently on screen — set on every
+// dashboard load; applyStaticLabels() reads it so switching language
+// mid-session keeps the right number in the credit subtitle.
+let currentPerClassRate = DEFAULT_CLASS_RATE;
+function resolvePerClassRate(student) {
+    const rate = Number(student && student.per_class_rate);
+    return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_CLASS_RATE;
+}
 
 const ICONS = {
     'check-circle': '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.6 2.6L16 9.4"/>',
@@ -792,6 +805,8 @@ function renderReport(report) {
 
 async function renderCreditStatus(student, totalClasses) {
     const balance = student.v2_credit_balance;
+    const rate = resolvePerClassRate(student);
+    currentPerClassRate = rate;
     const card = document.getElementById('creditBalanceCard');
     const amountEl = document.getElementById('creditBalanceAmount');
     const pillEl = document.getElementById('creditBalancePill');
@@ -804,16 +819,17 @@ async function renderCreditStatus(student, totalClasses) {
         amountEl.style.color = 'var(--ink)';
         pillEl.className = 'badge badge-success';
         pillEl.innerHTML = iconLabel('check-circle', 'Ready', 13);
-        classesLeftEl.textContent = `${Math.floor(balance / 10)} class${Math.floor(balance / 10) === 1 ? '' : 'es'} left`;
+        classesLeftEl.textContent = `${Math.floor(balance / rate)} class${Math.floor(balance / rate) === 1 ? '' : 'es'} left`;
     } else {
         card.style.background = 'linear-gradient(160deg, var(--warning-soft), #fff7ed)';
         card.style.border = `1px solid ${balance < 0 ? '#f6d4ce' : '#fbdca0'}`;
         amountEl.style.color = balance < 0 ? 'var(--danger)' : 'var(--ink)';
         pillEl.className = balance < 0 ? 'badge badge-danger' : 'badge badge-warning';
         pillEl.innerHTML = iconLabel('warning', 'Needs recharge', 13);
-        classesLeftEl.textContent = balance < 0 ? `${Math.ceil(Math.abs(balance) / 10)} class${Math.ceil(Math.abs(balance) / 10) === 1 ? '' : 'es'} on credit` : '0 classes left';
+        classesLeftEl.textContent = balance < 0 ? `${Math.ceil(Math.abs(balance) / rate)} class${Math.ceil(Math.abs(balance) / rate) === 1 ? '' : 'es'} on credit` : '0 classes left';
     }
     document.getElementById('creditTotalClassesLine').textContent = `${totalClasses} classes total`;
+    renderCreditSubtitle();
 
     const { data: ledger, error } = await supabaseClient.rpc('get_my_credit_ledger_v2_by_phone', {
         p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
@@ -825,6 +841,14 @@ async function renderCreditStatus(student, totalClasses) {
         : 'No recharge yet';
 
     renderPaymentHistoryCard(rows);
+}
+
+// Reads currentPerClassRate (set by renderCreditStatus on every dashboard/
+// sibling load) rather than taking a param, so window.onLangChange can call
+// this with zero context on a plain language switch.
+function renderCreditSubtitle() {
+    const el = document.getElementById('creditSubLabel');
+    if (el) el.textContent = t('mv2_credit_sub', { rate: currentPerClassRate });
 }
 
 function renderPaymentHistoryCard(rows) {
@@ -1405,6 +1429,7 @@ function applyStaticLabels() {
     document.getElementById('tabBtnAttendance').innerHTML = iconLabel('calendar', t('mv2_tab_attendance'), 16);
     document.getElementById('tabBtnPerform').innerHTML = iconLabel('users', t('mv2_tab_perform'), 16);
     document.getElementById('creditHeadingLabel').innerHTML = chipLabel('credit-card', t('mv2_credit_heading'), 'icon-chip-success');
+    renderCreditSubtitle();
     document.getElementById('ledgerHeadingLabel').innerHTML = chipLabel('file-text', t('mv2_ledger_heading'), 'icon-chip-accent');
     document.getElementById('batchHeadingLabel').innerHTML = chipLabel('users-group', t('mv2_batch_heading'), 'icon-chip-purple');
     document.getElementById('certHeadingLabel').innerHTML = chipLabel('stethoscope', t('mv2_cert_heading'), 'icon-chip-warning');
