@@ -1,530 +1,239 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Lobby - Bhangra Sway Cremona</title>
-    <link rel="icon" type="image/png" href="logo.png">
-    <link rel="apple-touch-icon" href="logo.png">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#667eea">
-    <script src="i18n.js?v=3"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Shared trust-based membership engine (same file the admin dashboard
-         loads, so this report can never drift from the admin's math) -->
-    <script src="membership.js?v=2"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --grad-a: #667eea;
-            --grad-b: #764ba2;
-            --ink: #1f2430;
-            --ink-soft: #5b6472;
-            --ink-faint: #94a0b2;
-            --line: #ecedf3;
-            --bg-soft: #f6f7fb;
-            --good: #1e7e34;
-            --good-bg: #e3f6e9;
-            --bad: #c0392b;
-            --bad-bg: #fdecea;
-            --warn: #b9770e;
-            --warn-bg: #fdf1de;
-            --radius-lg: 22px;
-            --radius-md: 14px;
-            --radius-sm: 10px;
-            --ease: cubic-bezier(.22,.9,.32,1.28);
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: 'Inter', 'Segoe UI', sans-serif;
-            background:
-                radial-gradient(1200px 600px at 15% -10%, rgba(255,255,255,0.18), transparent 60%),
-                linear-gradient(135deg, var(--grad-a) 0%, var(--grad-b) 100%);
-            background-attachment: fixed;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            padding: 20px 12px;
-            color: var(--ink);
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bhangra Sway: My Account</title>
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // This page defaults to Italian, unlike member.html/checkin.html (which
+    // stay English-default via i18n.js's own logic) — only seeds the saved
+    // choice if there isn't one yet, so a returning visitor's own pick (any
+    // language, including English) is never overridden.
+    try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
+</script>
+<script src="i18n.js?v=1"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Same design system as admin_v2.html — professional/neutral, no emoji.
+   ============================================================================ */
+:root{
+    --ink:#0f172a; --ink-soft:#334155; --ink-faint:#64748b;
+    --bg:#f8fafc; --surface:#ffffff; --border:#e2e8f0; --border-soft:#eef2f7;
+    --accent:#2563eb; --accent-soft:#eff6ff; --accent-ink:#1d4ed8;
+    --success:#16a34a; --success-soft:#f0fdf4;
+    --warning:#d97706; --warning-soft:#fffbeb;
+    --danger:#dc2626; --danger-soft:#fef2f2;
+    --purple:#7c3aed; --purple-soft:#f5f3ff;
+    --radius-lg:14px; --radius-md:10px; --radius-sm:7px;
+    --shadow-sm:0 1px 2px rgba(15,23,42,0.06);
+    --shadow-md:0 4px 16px rgba(15,23,42,0.08);
+    --shadow-lg:0 20px 50px rgba(15,23,42,0.18);
+}
+*{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+    margin:0; font-family:'Inter','Segoe UI',sans-serif; background:var(--bg); color:var(--ink);
+    line-height:1.55; overflow-wrap:break-word; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{ margin:0; letter-spacing:-0.01em; }
+button{ font-family:inherit; }
+input, select, textarea{ font-family:inherit; font-size:0.92em; }
+/* i18n.js's own .lang-dd-toggle styling (white-on-white translucency) is
+   built for sitting on a dark/colored header bar. This page's background is
+   light everywhere the picker now floats, so it needs real contrast —
+   overridden here at higher specificity rather than editing the shared
+   i18n.js CSS, which other pages still rely on as-is. */
+#langPicker .lang-dd-toggle{ background:var(--surface); border:1px solid var(--border); color:var(--ink-soft); box-shadow:var(--shadow-sm); }
+#langPicker .lang-dd-toggle:hover{ border-color:var(--ink-faint); }
+.icon{ display:inline-flex; flex-shrink:0; vertical-align:middle; }
+.hidden{ display:none !important; }
 
-        /* ===== Shell ===== */
-        .top-bar {
-            width: 100%;
-            max-width: 420px;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .lang-picker { display: flex; gap: 6px; }
-        .lang-btn {
-            background: rgba(255,255,255,0.18);
-            border: 1px solid rgba(255,255,255,0.45);
-            color: #fff;
-            font-weight: 700;
-            font-size: 0.76em;
-            padding: 6px 10px;
-            border-radius: 999px;
-            cursor: pointer;
-            font-family: inherit;
-            transition: transform .15s var(--ease), background .15s;
-        }
-        .lang-btn:active { transform: scale(0.94); }
-        .lang-btn.active { background: #fff; color: #5b3fa0; border-color: #fff; }
-        .top-home-btn {
-            background: rgba(255,255,255,0.18);
-            border: 1px solid rgba(255,255,255,0.45);
-            color: #fff;
-            font-weight: 700;
-            font-size: 0.76em;
-            padding: 6px 12px;
-            border-radius: 999px;
-            text-decoration: none;
-            transition: transform .15s var(--ease);
-        }
-        .top-home-btn:active { transform: scale(0.94); }
+.btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    height:40px; padding:0 16px; border-radius:var(--radius-sm); border:1px solid transparent;
+    font-size:0.9em; font-weight:600; cursor:pointer; white-space:nowrap; line-height:1;
+    transition:background .12s, border-color .12s, color .12s;
+}
+.btn-sm{ height:32px; padding:0 11px; font-size:0.82em; }
+.btn-block{ width:100%; }
+.btn-primary{ background:var(--accent); color:#fff; }
+.btn-primary:hover{ background:var(--accent-ink); }
+.btn-outline{ background:var(--surface); color:var(--ink-soft); border-color:var(--border); }
+.btn-outline:hover{ border-color:var(--ink-faint); color:var(--ink); }
+.btn-danger{ background:var(--danger-soft); color:var(--danger); }
+.btn-danger:hover{ background:#fde2e2; }
+.btn-success{ background:var(--success); color:#fff; }
+.btn-success:hover{ background:#15803d; }
+.btn-outline-success{ background:var(--surface); color:var(--success); border-color:var(--success); }
+.btn-outline-success:hover{ background:var(--success-soft); }
+.btn-ghost{ background:transparent; color:var(--ink-soft); }
+.btn-ghost:hover{ background:var(--border-soft); }
+.btn:disabled{ opacity:0.55; cursor:not-allowed; }
+.link-btn{ background:none; border:none; color:var(--accent-ink); font-size:0.85em; font-weight:600; cursor:pointer; padding:6px 0; }
+.link-btn:hover{ text-decoration:underline; }
 
-        .card {
-            width: 100%;
-            max-width: 420px;
-            background: #fff;
-            border-radius: var(--radius-lg);
-            box-shadow: 0 24px 60px rgba(20,10,50,0.28), 0 2px 8px rgba(20,10,50,0.10);
-            padding: 22px 18px 18px;
-            position: relative;
-            overflow: hidden;
-            animation: cardIn .5s var(--ease);
-        }
-        .card::before {
-            content: '';
-            position: absolute; top: 0; left: 0; right: 0; height: 5px;
-            background: linear-gradient(90deg, var(--grad-a), var(--grad-b));
-        }
-        @keyframes cardIn {
-            from { opacity: 0; transform: translateY(14px) scale(.98); }
-            to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); }
+.field{ margin-bottom:14px; }
+.field label{ display:block; font-size:0.76em; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin-bottom:5px; }
+.field input, .field select{
+    width:100%; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em; color:var(--ink); background:var(--surface);
+}
+.field input:focus, .field select:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 
-        .brand-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-        .brand-row img {
-            height: 40px;
-            width: auto;
-            border-radius: 9px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.18);
-        }
-        .brand-row h1 { font-size: 0.98em; margin: 0; color: var(--ink); font-weight: 800; letter-spacing: -0.01em; }
+.badge{ display:inline-flex; align-items:center; gap:4px; font-size:0.74em; font-weight:700; padding:3px 9px; border-radius:999px; }
+.badge-success{ background:var(--success-soft); color:var(--success); }
+.badge-warning{ background:var(--warning-soft); color:var(--warning); }
+.badge-danger{ background:var(--danger-soft); color:var(--danger); }
+.badge-neutral{ background:var(--border-soft); color:var(--ink-soft); }
 
-        h2 { font-size: 1.2em; margin: 0 0 4px; color: var(--ink); font-weight: 800; letter-spacing: -0.01em; }
-        p.sub { color: var(--ink-soft); margin: 0 0 16px; line-height: 1.45; font-size: 0.92em; }
+.section-label{ font-size:0.72em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint); margin:16px 0 8px; }
+.section-label:first-child{ margin-top:0; }
+.error-text{ color:var(--danger); font-size:0.84em; min-height:1.2em; margin:6px 0 0; }
+.empty-note{ color:var(--ink-faint); font-size:0.85em; }
 
-        /* ===== Screen transitions ===== */
-        .hidden { display: none !important; }
-        .screen { animation: screenIn .38s var(--ease); }
-        @keyframes screenIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
+/* ---- auth shell ---- */
+#authShell{ min-height:100vh; display:flex; align-items:flex-start; justify-content:center; background:linear-gradient(160deg,#0f172a,#1e293b); padding:32px 16px; }
+.auth-card{ background:var(--surface); border-radius:var(--radius-lg); padding:30px 26px; width:100%; max-width:400px; box-shadow:var(--shadow-lg); }
+.auth-brand-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; gap:10px; }
+.auth-brand{ display:flex; align-items:center; gap:10px; text-decoration:none; }
+.auth-brand img{ width:34px; height:34px; border-radius:8px; }
+.auth-brand span{ font-weight:800; font-size:1.05em; color:var(--ink); }
+.auth-home-link{ font-size:0.82em; font-weight:700; color:var(--accent-ink); text-decoration:none; white-space:nowrap; }
+.auth-home-link:hover{ text-decoration:underline; }
+.screen{ }
+.spinner{ width:34px; height:34px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; margin:30px auto; animation:spin .8s linear infinite; }
+.spinner.small{ width:22px; height:22px; border-width:2.5px; margin:16px auto; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
 
-        /* ===== Inputs & buttons ===== */
-        input[type="tel"] {
-            width: 100%;
-            padding: 13px 14px;
-            font-size: 17px;
-            letter-spacing: 0.4px;
-            border: 1.5px solid var(--line);
-            border-radius: var(--radius-sm);
-            margin-bottom: 12px;
-            background: var(--bg-soft);
-            transition: border-color .15s, background .15s, box-shadow .15s;
-        }
-        input[type="tel"]:focus {
-            border-color: var(--grad-a);
-            background: #fff;
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(102,126,234,0.14);
-        }
+.member-pick-row{
+    display:flex; align-items:center; gap:12px; width:100%; padding:13px 14px; margin-bottom:8px;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); cursor:pointer; font-size:0.95em; font-weight:700; color:var(--ink);
+}
+.member-pick-row:hover{ border-color:var(--accent); background:var(--accent-soft); }
 
-        button.primary {
-            width: 100%;
-            padding: 15px;
-            font-size: 1.02em;
-            font-weight: 800;
-            color: #fff;
-            background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
-            border: none;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            box-shadow: 0 10px 22px rgba(102,126,234,0.35);
-            transition: transform .15s var(--ease), box-shadow .15s;
-        }
-        button.primary:hover { box-shadow: 0 12px 26px rgba(102,126,234,0.45); }
-        button.primary:active { transform: scale(0.97); }
-        button.primary:disabled { background: #c8cdf5; box-shadow: none; cursor: not-allowed; }
+.passcode-boxes{ display:flex; gap:10px; justify-content:center; margin:18px 0 6px; }
+.passcode-box{
+    width:52px; height:58px; text-align:center; font-size:1.5em; font-weight:800; border-radius:var(--radius-sm);
+    border:1.5px solid var(--border); color:var(--ink);
+}
+.passcode-box:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+.shake{ animation:shakeAnim .35s; }
+@keyframes shakeAnim{ 10%,90%{transform:translateX(-2px);} 20%,80%{transform:translateX(3px);} 30%,50%,70%{transform:translateX(-5px);} 40%,60%{transform:translateX(5px);} }
 
-        button.secondary {
-            width: 100%;
-            padding: 13px;
-            margin-top: 8px;
-            font-size: 0.96em;
-            font-weight: 700;
-            color: var(--grad-a);
-            background: #eef1ff;
-            border: none;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: transform .15s var(--ease), background .15s;
-        }
-        button.secondary:hover { background: #e3e8ff; }
-        button.secondary:active { transform: scale(0.97); }
+.result-icon{ font-size:2.2em; margin-bottom:8px; text-align:center; }
+.result-title{ font-weight:800; font-size:1.1em; text-align:center; margin-bottom:4px; }
+.result-sub{ color:var(--ink-soft); font-size:0.88em; text-align:center; margin-bottom:4px; }
 
-        button.link-btn {
-            width: 100%;
-            padding: 11px;
-            margin-top: 8px;
-            font-size: 0.9em;
-            color: var(--ink-soft);
-            background: none;
-            border: none;
-            cursor: pointer;
-            text-decoration: underline;
-        }
-        .error-text {
-            color: var(--bad);
-            font-size: 0.87em;
-            margin: -4px 0 12px;
-            min-height: 1.2em;
-            font-weight: 600;
-        }
+/* ---- dashboard shell ---- */
+#dashboardShell{ max-width:640px; margin:0 auto; padding:0 0 60px; }
+.dash-header{
+    background:var(--surface); border-bottom:1px solid var(--border); padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.dash-head-left{ display:flex; align-items:center; gap:11px; min-width:0; }
+.dash-avatar{
+    width:46px; height:46px; border-radius:50%; background-color:var(--accent); color:#fff; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.05em; background-size:cover; background-position:center;
+    box-shadow:0 2px 8px rgba(37,99,235,0.35);
+}
+.dash-greet{ font-weight:800; font-size:1.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dash-sub{ color:var(--ink-faint); font-size:0.78em; margin-top:1px; }
 
-        .spinner {
-            width: 32px; height: 32px; margin: 26px auto;
-            border: 3.5px solid #eef1ff; border-top-color: var(--grad-a); border-radius: 50%;
-            animation: spin 0.75s linear infinite;
-        }
-        .spinner.small { width: 22px; height: 22px; margin: 8px auto; border-width: 3px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+.icon-chip{
+    display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:10px;
+    margin-right:9px; vertical-align:middle; flex-shrink:0;
+}
+.icon-chip svg{ width:17px; height:17px; }
+.icon-chip-accent{ background:var(--accent-soft); color:var(--accent-ink); }
+.icon-chip-success{ background:var(--success-soft); color:var(--success); }
+.icon-chip-warning{ background:var(--warning-soft); color:var(--warning); }
+.icon-chip-purple{ background:var(--purple-soft); color:var(--purple); }
+.icon-chip-danger{ background:var(--danger-soft); color:var(--danger); }
+.block-heading{ display:flex; align-items:center; margin-bottom:10px; }
+.block-heading h3{ font-size:1.05em; font-weight:800; }
 
-        /* ===== Household picker ===== */
-        .student-list { max-height: 300px; overflow-y: auto; }
-        .student-row {
-            width: 100%;
-            text-align: left;
-            padding: 13px 15px;
-            border: 1.5px solid var(--line);
-            border-radius: var(--radius-sm);
-            background: var(--bg-soft);
-            margin-bottom: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: transform .15s var(--ease), border-color .15s, background .15s;
-        }
-        .student-row:hover { border-color: var(--grad-a); background: #eef1ff; }
-        .student-row:active { transform: scale(0.98); }
-        .student-row .name { font-weight: 700; color: var(--ink); }
-        .empty-note { color: var(--ink-faint); text-align: center; padding: 18px 0; font-size: 0.9em; }
+.sibling-row{ display:flex; gap:8px; flex-wrap:wrap; padding:12px 18px 0; }
+.sibling-chip{
+    display:flex; align-items:center; gap:6px; padding:6px 11px 6px 6px; border-radius:999px; border:1px solid var(--border);
+    background:var(--surface); font-size:0.82em; font-weight:700; color:var(--ink-soft); cursor:pointer;
+}
+.sibling-chip.active{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); }
+.sibling-avatar{ width:20px; height:20px; border-radius:50%; background:var(--border-soft); display:flex; align-items:center; justify-content:center; font-size:0.72em; font-weight:800; }
 
-        /* ===== Passcode digit boxes ===== */
-        .passcode-boxes { display: flex; gap: 10px; justify-content: center; margin: 6px 0 4px; }
-        .passcode-box, .pw-box {
-            width: 54px; height: 62px;
-            text-align: center;
-            font-size: 1.7em;
-            font-weight: 800;
-            border: 1.5px solid var(--line);
-            border-radius: var(--radius-sm);
-            background: var(--bg-soft);
-            transition: border-color .15s, background .15s, box-shadow .15s;
-        }
-        .passcode-box:focus, .pw-box:focus {
-            border-color: var(--grad-a);
-            background: #fff;
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(102,126,234,0.14);
-        }
-        .passcode-boxes.shake { animation: shake .4s; }
-        @keyframes shake {
-            10%, 90% { transform: translateX(-1px); }
-            20%, 80% { transform: translateX(2px); }
-            30%, 50%, 70% { transform: translateX(-5px); }
-            40%, 60% { transform: translateX(5px); }
-        }
+.tab-row{ display:flex; gap:2px; padding:0 18px; background:var(--surface); border-bottom:1px solid var(--border); margin-top:10px; }
+.tab-btn{
+    display:flex; align-items:center; gap:7px; padding:13px 14px; border:none; background:none; cursor:pointer;
+    font-size:0.9em; font-weight:700; color:var(--ink-faint); border-bottom:2.5px solid transparent; white-space:nowrap; flex:1; justify-content:center;
+    border-radius:var(--radius-sm) var(--radius-sm) 0 0; transition:background .12s,color .12s;
+}
+.tab-btn:hover{ color:var(--ink-soft); background:var(--bg); }
+.tab-btn.active{ color:var(--accent-ink); border-bottom-color:var(--accent); background:var(--accent-soft); }
+.tab-panel{ display:none; padding:18px; }
+.tab-panel.active{ display:block; }
 
-        .result-icon { font-size: 2.6em; text-align: center; margin-bottom: 6px; animation: popIn .4s var(--ease); }
-        @keyframes popIn { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        .result-title { text-align: center; font-size: 1.08em; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
-        .result-sub { text-align: center; color: var(--ink-soft); font-size: 0.9em; }
+.report-block{ margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--border-soft); }
+.report-block:last-of-type{ border-bottom:none; }
+.report-block h3{ font-size:1.05em; font-weight:800; margin-bottom:0; display:flex; align-items:center; }
+.report-block .subtitle{ color:var(--ink-faint); font-size:0.78em; margin:2px 0 12px 41px; }
 
-        /* ===== Dashboard head ===== */
-        .dash-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-        .dash-avatar {
-            width: 44px; height: 44px; border-radius: 50%;
-            background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
-            color: #fff; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 1.1em; flex-shrink: 0;
-            box-shadow: 0 6px 14px rgba(102,126,234,0.35);
-        }
-        .dash-greet { font-size: 1.05em; font-weight: 800; color: var(--ink); line-height: 1.2; }
-        .dash-sub-line { font-size: 0.82em; color: var(--ink-soft); margin-top: 1px; }
+.ledger-row{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border-soft); }
+.ledger-icon{ width:34px; height:34px; border-radius:10px; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--ink-soft); }
 
-        /* ===== Sibling switcher ===== */
-        .sibling-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-        .sibling-chip {
-            display: flex; align-items: center; gap: 6px;
-            padding: 5px 12px 5px 5px;
-            border: 1.5px solid var(--line);
-            border-radius: 999px;
-            background: var(--bg-soft);
-            font-family: inherit;
-            font-size: 0.8em;
-            font-weight: 700;
-            color: var(--ink-soft);
-            cursor: pointer;
-            transition: transform .15s var(--ease), border-color .15s, background .15s, color .15s;
-        }
-        .sibling-chip:active { transform: scale(0.96); }
-        .sibling-chip.active { border-color: var(--grad-a); background: #eef1ff; color: var(--grad-a); }
-        .sibling-chip .sibling-avatar {
-            width: 22px; height: 22px; border-radius: 50%;
-            background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
-            color: #fff; display: flex; align-items: center; justify-content: center;
-            font-size: 0.78em; font-weight: 800; flex-shrink: 0;
-        }
+.hist-archive{ background:var(--bg); border:1.5px dashed var(--success); border-radius:var(--radius-lg); padding:18px; margin-top:28px; }
+.hist-date-badge{ background:#dbeafe; color:#1d4ed8; }
+.hist-archive .section-label{ color:var(--ink-faint); }
 
-        /* ===== Attendance grouped by month ===== */
-        .month-group { margin-top: 10px; }
-        .month-group:first-child { margin-top: 4px; }
-        .month-label { font-size: 0.68em; font-weight: 800; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
-        .paid-line { font-size: 0.78em; color: var(--good); font-weight: 700; margin-top: 6px; }
-
-        /* ===== Perform tab ===== */
-        .call-box {
-            background: #fff;
-            border: 1px solid var(--line);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            margin-bottom: 14px;
-        }
-        .call-box .call-title { font-weight: 800; font-size: 1.02em; color: var(--ink); }
-        .call-box .call-date { color: var(--ink-faint); font-size: 0.85em; margin-top: 2px; }
-        .joined-count { text-align: center; font-size: 1.5em; font-weight: 800; color: var(--good); margin: 10px 0 2px; }
-        .swatch { width: 54px; height: 54px; border-radius: 50%; margin: 8px auto 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.18); }
-        .position-text { text-align: center; font-size: 1.02em; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
-
-        /* ===== Success toast (password saved, etc.) ===== */
-        .success-toast {
-            position: fixed;
-            left: 50%;
-            bottom: 26px;
-            transform: translate(-50%, 16px);
-            background: var(--ink);
-            color: #fff;
-            font-weight: 700;
-            font-size: 0.88em;
-            padding: 12px 20px;
-            border-radius: 999px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.3);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity .25s var(--ease), transform .25s var(--ease);
-            z-index: 50;
-        }
-        .success-toast.show { opacity: 1; transform: translate(-50%, 0); }
-
-        /* ===== Stat strip ===== */
-        .stat-strip {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 8px;
-            align-items: stretch;
-            margin-bottom: 14px;
-        }
-        .stat-chip {
-            background: var(--bg-soft);
-            border: 1px solid var(--line);
-            border-radius: var(--radius-md);
-            padding: 10px 8px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            gap: 3px;
-            text-align: center;
-        }
-        .stat-chip .stat-chip-value { font-size: 1.15em; font-weight: 800; color: var(--ink); line-height: 1; }
-        .stat-chip .stat-chip-value.negative { color: var(--bad); }
-        .stat-chip .stat-chip-value.positive { color: var(--good); }
-        .stat-chip .stat-chip-label { font-size: 0.66em; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-        .ring-chip { padding: 8px; }
-        .ring-wrap { position: relative; width: 54px; height: 54px; }
-        .ring-wrap svg { width: 54px; height: 54px; transform: rotate(-90deg); }
-        .ring-bg { fill: none; stroke: var(--line); stroke-width: 3.2; }
-        .ring-fg { fill: none; stroke: var(--grad-a); stroke-width: 3.2; stroke-linecap: round; stroke-dasharray: 100 100; transition: stroke-dashoffset .6s var(--ease); }
-        .ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.72em; font-weight: 800; color: var(--ink); }
-        .ring-gift-badge {
-            position: absolute;
-            top: -5px; right: -5px;
-            width: 18px; height: 18px;
-            background: #fff;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.62em;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            animation: popIn .4s var(--ease);
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 5px 12px;
-            border-radius: 999px;
-            font-weight: 800;
-            font-size: 0.82em;
-        }
-        .status-badge.status-paid { background: var(--good-bg); color: var(--good); }
-        .status-badge.status-overdue { background: var(--bad-bg); color: var(--bad); }
-        .status-badge.status-unpaid { background: var(--warn-bg); color: var(--warn); }
-
-        /* ===== Tabs ===== */
-        .tab-bar {
-            position: relative;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            background: var(--bg-soft);
-            border-radius: 999px;
-            padding: 5px;
-            margin-bottom: 14px;
-        }
-        .tab-btn {
-            position: relative;
-            z-index: 1;
-            border: none;
-            background: none;
-            padding: 13px 4px;
-            font-family: inherit;
-            font-size: 0.84em;
-            font-weight: 800;
-            color: var(--ink-soft);
-            cursor: pointer;
-            border-radius: 999px;
-            display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 5px;
-            transition: color .2s;
-            white-space: nowrap;
-        }
-        .tab-btn .tab-icon { font-size: 1.2em; line-height: 1; }
-        .tab-btn.active { color: var(--grad-a); }
-        .tab-indicator {
-            position: absolute;
-            top: 5px; bottom: 5px;
-            left: 5px;
-            width: calc(33.333% - 5px);
-            background: #fff;
-            border-radius: 999px;
-            box-shadow: 0 3px 10px rgba(20,10,50,0.14);
-            transition: transform .3s var(--ease);
-        }
-
-        .tab-panels { position: relative; }
-        .tab-panel { display: none; animation: panelIn .3s var(--ease); }
-        .tab-panel.active { display: block; }
-        @keyframes panelIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        /* ===== Report content ===== */
-        .report-block { margin-bottom: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-soft); }
-        .report-block h3 { margin: 0 0 8px; font-size: 0.92em; color: var(--ink); font-weight: 800; }
-        .report-block p { margin: 4px 0; color: var(--ink-soft); font-size: 0.88em; }
-        .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-        .chip { background: #eef1ff; color: #4a56a6; font-size: 0.78em; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
-
-        .cycle-card { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 10px; background: #fff; }
-        .cycle-card:first-of-type { margin-top: 10px; }
-        .cycle-card-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
-        .cycle-card .cycle-label { font-weight: 800; color: var(--ink); font-size: 0.82em; }
-        .cycle-card .cycle-dates { color: var(--ink-soft); font-size: 0.78em; margin-bottom: 8px; }
-        .attendance-progress { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .dot-row { display: flex; gap: 4px; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex-shrink: 0; transition: background .3s; }
-        .dot.filled { background: var(--good); }
-        .progress-text { font-size: 0.75em; color: var(--ink-faint); }
-        .pill { font-size: 0.74em; font-weight: 800; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
-        .pill.pill-paid { background: var(--good-bg); color: var(--good); }
-        .pill.pill-unpaid { background: var(--bad-bg); color: var(--bad); }
-
-        .stat-grid { display: flex; gap: 10px; margin-top: 2px; }
-        .stat-box { flex: 1; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 11px; text-align: center; }
-        .stat-box .stat-value { font-size: 1.2em; font-weight: 800; color: var(--ink); }
-        .stat-box .stat-value.negative { color: var(--bad); }
-        .stat-box .stat-value.positive { color: var(--good); }
-        .stat-box .stat-label { font-size: 0.68em; color: var(--ink-faint); margin-top: 2px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-        .stat-box .stat-sub { font-size: 0.7em; color: var(--ink-faint); margin-top: 3px; }
-
-        /* ===== Attendance tab ===== */
-        .branch-line { font-size: 0.82em; color: var(--good); font-weight: 700; margin: 0 0 10px; }
-        .branch-line.pending { color: var(--ink-faint); }
-
-        /* ===== Coming soon ===== */
-        .coming-soon-block { text-align: center; padding: 34px 10px; }
-        .coming-soon-icon { font-size: 2.4em; margin-bottom: 8px; }
-        .coming-soon-badge {
-            display: inline-block;
-            background: #eef1ff;
-            color: #4a56a6;
-            font-size: 0.82em;
-            font-weight: 800;
-            padding: 6px 14px;
-            border-radius: 999px;
-            margin-top: 6px;
-        }
-    </style>
+@media (max-width:640px){
+    #authShell{ padding:20px 12px; align-items:center; }
+    .auth-card{ padding:26px 20px; }
+    .dash-header{ padding:12px 14px; }
+    .dash-greet{ font-size:0.98em; }
+    .tab-panel{ padding:14px; }
+    .tab-row{ padding:0 6px; }
+    .tab-btn{ padding:11px 6px; font-size:0.82em; gap:5px; }
+    .report-block .subtitle{ margin-left:0; }
+    .report-block{ margin-bottom:20px; padding-bottom:20px; }
+}
+</style>
 </head>
 <body>
-    <div class="top-bar">
-        <div class="lang-picker" id="langPicker"></div>
-        <a class="top-home-btn" href="index.html">🏠 <span data-i18n="home">Home</span></a>
-    </div>
-    <div class="card">
-        <div class="brand-row">
-            <img src="logo.png" alt="Bhangra Sway Logo">
-            <h1>Bhangra Sway Cremona</h1>
+
+<div id="authShell">
+    <div class="auth-card">
+        <div class="auth-brand-row">
+            <a href="https://bhangrasway.com" class="auth-brand"><img src="logo.png" alt="Bhangra Sway"><span>Bhangra Sway</span></a>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div id="authLangSlot"><div class="lang-picker" id="langPicker"></div></div>
+                <a href="https://bhangrasway.com" class="auth-home-link">Home</a>
+            </div>
         </div>
 
-        <!-- LOADING -->
-        <div id="loadingState">
-            <div class="spinner"></div>
-        </div>
+        <div id="loadingState" class="screen"><div class="spinner"></div></div>
 
-        <!-- PHONE ENTRY (the "home" screen, no names are ever listed) -->
         <div id="phoneState" class="hidden screen">
-            <h2 data-i18n="member_welcome_heading">Welcome! 👋</h2>
-            <p class="sub" data-i18n="member_welcome_body">Enter your mobile number to open your student account — check your report, mark attendance, or join a performance.</p>
-            <input type="tel" id="phoneInput" inputmode="tel" placeholder="e.g. 333 123 4567" autocomplete="off" data-i18n-placeholder="phone_placeholder">
+            <h2 data-i18n="mv2_welcome_title">Welcome</h2>
+            <p style="color:var(--ink-faint); font-size:0.88em; margin:4px 0 18px;" data-i18n="mv2_welcome_sub">Enter your mobile number to open your account: check your balance, mark attendance, or join a performance.</p>
+            <div class="field"><input type="tel" id="phoneInput" inputmode="tel" placeholder="e.g. 333 123 4567" data-i18n-placeholder="mv2_phone_placeholder" autocomplete="off"></div>
             <p class="error-text" id="phoneError"></p>
-            <button class="primary" id="phoneContinueBtn" data-i18n="continue">Continue</button>
+            <button class="btn btn-primary btn-block" id="phoneContinueBtn" onclick="handlePhoneContinue()" data-i18n="mv2_continue">Continue</button>
         </div>
 
-        <!-- PICK (several members share this phone, one household only) -->
         <div id="pickState" class="hidden screen">
-            <h2 data-i18n="who_are_you">Who are you?</h2>
-            <p class="sub" data-i18n="pick_self">More than one member is registered under this number, pick yourself.</p>
-            <div class="student-list" id="memberList"></div>
-            <button class="link-btn" id="pickBackBtn" data-i18n="use_diff_number">← Use a different number</button>
+            <h2 data-i18n="mv2_pick_title">Who are you?</h2>
+            <p style="color:var(--ink-faint); font-size:0.88em; margin:4px 0 18px;" data-i18n="mv2_pick_sub">More than one member is registered under this number. Pick yourself.</p>
+            <div id="memberList"></div>
+            <button class="link-btn" onclick="backToPhoneEntry('')" data-i18n="mv2_use_different_number">Use a different number</button>
         </div>
 
-        <!-- PASSCODE: either "set one up" (no passcode on file yet) or
-             "enter it" (one is already set) -- toggled by passcodeMode. -->
         <div id="passcodeState" class="hidden screen">
             <div id="passcodeForm">
                 <h2 id="passcodeHeading"></h2>
-                <p class="sub" id="passcodeBody"></p>
+                <p style="color:var(--ink-faint); font-size:0.88em; margin:4px 0 4px;" id="passcodeBody"></p>
                 <div class="passcode-boxes" id="passcodeBoxes">
                     <input type="tel" inputmode="numeric" maxlength="1" class="passcode-box" data-idx="0">
                     <input type="tel" inputmode="numeric" maxlength="1" class="passcode-box" data-idx="1">
@@ -532,1269 +241,1201 @@
                     <input type="tel" inputmode="numeric" maxlength="1" class="passcode-box" data-idx="3">
                 </div>
                 <p class="error-text" id="passcodeError" style="text-align:center;"></p>
-                <button class="primary" id="passcodeSubmitBtn"></button>
-                <button class="secondary hidden" id="passcodeSkipBtn" data-i18n="passcode_skip_btn">Skip for now</button>
-                <button class="link-btn hidden" id="passcodeForgotBtn" data-i18n="passcode_forgot_link">Forgot your passcode?</button>
+                <button class="btn btn-primary btn-block" id="passcodeSubmitBtn" onclick="handlePasscodeSubmit()"></button>
+                <button class="btn btn-outline btn-block hidden" id="passcodeSkipBtn" style="margin-top:8px;" onclick="handlePasscodeSkip()" data-i18n="mv2_skip_for_now">Skip for now</button>
+                <div style="text-align:center; margin-top:10px;"><button class="link-btn hidden" id="passcodeForgotBtn" onclick="handlePasscodeForgot()" data-i18n="mv2_forgot_passcode">Forgot your passcode?</button></div>
             </div>
             <div id="passcodeForgotSent" class="hidden">
-                <div class="result-icon">📨</div>
-                <div class="result-title" data-i18n="passcode_reset_sent_title">Request sent</div>
-                <div class="result-sub" data-i18n="passcode_reset_sent_body">Your instructor has been notified. Once approved, you can log in with just your mobile number, or set a new passcode.</div>
+                <div class="result-icon">✉</div>
+                <div class="result-title" data-i18n="mv2_request_sent_title">Request sent</div>
+                <div class="result-sub" data-i18n="mv2_request_sent_sub">One last step: confirm on WhatsApp so we know it's really you. Requests aren't approved without this.</div>
+                <textarea id="passcodeWaMessageBox" readonly rows="3" style="width:100%; margin-top:14px; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; color:var(--ink-soft); background:var(--bg); resize:none;"></textarea>
+                <a id="passcodeWaBtn" class="btn btn-primary btn-block" href="#" target="_blank" rel="noopener" style="text-decoration:none; margin-top:10px;" data-i18n="mv2_send_wa_confirm">Send WhatsApp Confirmation</a>
+                <div style="text-align:center; margin-top:8px;"><button type="button" class="link-btn" id="passcodeCopyBtn" data-i18n="mv2_copy_manually">Or copy the message to send manually</button></div>
             </div>
-            <button class="link-btn" id="passcodeBackBtn" data-i18n="use_diff_number">← Use a different number</button>
-        </div>
-
-        <!-- DASHBOARD: compact stat strip + tabs (Report / Attendance / Grade / Improve) -->
-        <div id="dashboardState" class="hidden screen">
-            <div class="dash-head">
-                <div class="dash-avatar" id="dashAvatar"></div>
-                <div>
-                    <div class="dash-greet"><span data-i18n="report_hi">Hi,</span> <span id="dashStudentName"></span> 👋</div>
-                    <div class="dash-sub-line" data-i18n="progress_intro">Here's your Bhangra progress report.</div>
-                </div>
-            </div>
-
-            <!-- Shown only when >1 member shares this phone (e.g. siblings):
-                 switches to another household member without re-entering the
-                 phone number, only re-prompting for a passcode if that
-                 sibling has one set. -->
-            <div class="sibling-row hidden" id="siblingRow"></div>
-
-            <div class="stat-strip">
-                <div class="stat-chip">
-                    <span class="status-badge" id="quickStatusBadge"></span>
-                    <span class="stat-chip-label" data-i18n="membership_heading_short">Status</span>
-                </div>
-                <div class="stat-chip ring-chip">
-                    <div class="ring-wrap">
-                        <svg viewBox="0 0 36 36">
-                            <path class="ring-bg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31"/>
-                            <path class="ring-fg" id="ringFg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" stroke-dashoffset="100"/>
-                        </svg>
-                        <div class="ring-label" id="ringLabel">0/4</div>
-                        <div class="ring-gift-badge hidden" id="ringGiftBadge">🎁</div>
-                    </div>
-                    <span class="stat-chip-label" id="classesChipLabel" data-i18n="attendance_heading_short">Classes</span>
-                </div>
-                <div class="stat-chip">
-                    <div class="stat-chip-value" id="quickPendingAmount">€0</div>
-                    <span class="stat-chip-label" data-i18n="total_pending">Total Pending</span>
-                </div>
-            </div>
-
-            <div class="tab-bar" id="tabBar">
-                <button class="tab-btn active" data-tab="report" type="button"><span class="tab-icon">👤</span><span data-i18n="tab_report">Report</span></button>
-                <button class="tab-btn" data-tab="attendance" type="button"><span class="tab-icon">✅</span><span data-i18n="tab_attendance">Attendance</span></button>
-                <button class="tab-btn" data-tab="perform" type="button"><span class="tab-icon">🎭</span><span data-i18n="tab_perform">Perform</span></button>
-                <div class="tab-indicator" id="tabIndicator"></div>
-            </div>
-
-            <div class="tab-panels">
-                <!-- REPORT -->
-                <div class="tab-panel active" data-panel="report">
-                    <div class="report-block">
-                        <h3 data-i18n="attendance_heading">📅 Attendance History</h3>
-                        <p><strong id="reportClassCount"></strong> <span data-i18n="classes_attended_suffix">classes attended</span></p>
-                        <div id="reportAttendanceGroups"></div>
-                        <p id="launchNote" style="display:none; margin:8px 0 0; font-size:0.78em; color:var(--ink-faint);" data-i18n="launch_note">ℹ️ Classes before June 2026 are not recorded here.</p>
-                        <script>if (new Date() < new Date('2026-09-01T00:00:00')) document.getElementById('launchNote').style.display = 'block';</script>
-                    </div>
-
-                    <div class="report-block">
-                        <h3 data-i18n="membership_heading">💳 Membership Status</h3>
-                        <p style="color:var(--ink-faint); font-size:0.76em; margin:0 0 8px;" data-i18n="guarantee_note">ℹ️ Don't worry, every cycle guarantees you 4 classes. If you miss some, your plan automatically extends (up to 2 months) until you get all 4.</p>
-                        <span class="status-badge" id="reportStatusBadge"></span>
-                        <p id="reportOverdueNote" class="hidden" style="background:var(--bad-bg); color:var(--bad); padding:8px 12px; border-radius:8px; font-size:0.82em; font-weight:700; margin-top:8px;"></p>
-
-                        <!-- Every cycle the member has ever had, newest first,
-                             each showing whether/when it was paid. -->
-                        <div id="cyclesList"></div>
-
-                        <p id="reportExtensionNote" class="hidden" style="background:#eef1ff; color:#4a56a6; padding:8px 12px; border-radius:8px; font-size:0.82em; margin-top:10px;"></p>
-                        <p id="reportNextPayment" style="color:var(--good); font-weight:700; margin-top:12px; font-size:0.88em;"></p>
-                    </div>
-
-                    <div class="report-block">
-                        <h3 data-i18n="payments_heading">💶 Payments</h3>
-                        <div class="stat-grid">
-                            <div class="stat-box">
-                                <div class="stat-value" id="reportLastPaymentAmount">,</div>
-                                <div class="stat-label" data-i18n="last_payment">Last Payment</div>
-                                <div class="stat-sub" id="reportLastPaymentSub"></div>
-                            </div>
-                            <div class="stat-box">
-                                <div class="stat-value" id="reportTotalPendingAmount">,</div>
-                                <div class="stat-label" data-i18n="total_pending">Total Pending</div>
-                                <div class="stat-sub" id="reportTotalPendingSub"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ATTENDANCE: self check-in, ported from checkin.html -->
-                <div class="tab-panel" data-panel="attendance">
-                    <div class="report-block">
-                        <p class="branch-line pending" id="branchLine" data-i18n="checking_in_pending">📍 Checking in…</p>
-
-                        <div id="attnLoading"><div class="spinner small"></div></div>
-
-                        <div id="attnClosed" class="hidden">
-                            <p class="sub" id="attnClosedMessage" style="margin-bottom:10px;"></p>
-                            <button class="secondary" id="attnNotifyFromClosedBtn" data-i18n="notify_from_closed">Can't check in? Notify your instructor</button>
-                        </div>
-
-                        <div id="attnTooFar" class="hidden">
-                            <h3 id="attnLocHeading" style="margin-bottom:4px;"></h3>
-                            <p class="sub" id="attnLocBody" style="margin-bottom:10px;"></p>
-                            <button class="secondary" id="attnNotifyFromTooFarBtn" data-i18n="request_attendance">Request Attendance</button>
-                            <button class="link-btn" id="attnLocRetryBtn"></button>
-                        </div>
-
-                        <div id="attnReady" class="hidden">
-                            <button class="secondary" id="attnConfirmBtn" data-i18n="confirm_checkin">Confirm Check-In</button>
-                        </div>
-
-                        <div id="attnResult" class="hidden">
-                            <div class="result-icon" id="attnResultIcon"></div>
-                            <div class="result-title" id="attnResultTitle"></div>
-                            <div class="result-sub" id="attnResultSub"></div>
-                        </div>
-
-                        <p class="error-text" id="attnError"></p>
-                    </div>
-                </div>
-
-                <!-- PERFORM: join an open call / see your spot, ported from perform.html -->
-                <div class="tab-panel" data-panel="perform">
-                    <div class="report-block">
-                        <div id="perfLoading"><div class="spinner small"></div></div>
-
-                        <div id="perfAction" class="hidden">
-                            <div class="call-box hidden" id="perfCallBox">
-                                <div class="call-title" id="perfCallTitle"></div>
-                                <div class="call-date" id="perfCallDate"></div>
-                            </div>
-                            <button class="secondary hidden" id="perfJoinBtn" data-i18n="perf_join_btn">🎭 I'm In!</button>
-                            <button class="secondary" id="perfSpotBtn" data-i18n="perf_spot_btn">📍 See My Spot</button>
-                            <p class="error-text" id="perfError"></p>
-                        </div>
-
-                        <div id="perfJoinResult" class="hidden">
-                            <div class="result-title" id="perfJoinTitle"></div>
-                            <div class="result-sub" id="perfJoinSub"></div>
-                            <div class="joined-count" id="perfJoinedCount"></div>
-                            <p class="result-sub" data-i18n="perf_dancers_joined">dancers have joined so far</p>
-                            <button class="link-btn" id="perfJoinBackBtn" data-i18n="perf_back_btn">← Back</button>
-                        </div>
-
-                        <div id="perfSpotResult" class="hidden">
-                            <div class="result-title" id="perfSpotMovementLabel"></div>
-                            <div class="swatch" id="perfSpotSwatch"></div>
-                            <div class="position-text" id="perfSpotPositionText"></div>
-                            <p class="sub" id="perfSpotEmptyNote" style="text-align:center;"></p>
-                            <button class="link-btn" id="perfSpotBackBtn" data-i18n="perf_back_btn">← Back</button>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- Password management: label switches between "Create" (no
-                 passcode set yet) and "Change" (one already verified this
-                 session) based on enteredPasscode, right next to Logout. -->
-            <div id="passwordManageBlock">
-                <button class="link-btn" id="passwordManageToggleBtn"></button>
-                <div id="passwordManageForm" class="hidden">
-                    <div class="passcode-boxes" id="pwBoxes">
-                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="0">
-                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="1">
-                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="2">
-                        <input type="tel" inputmode="numeric" maxlength="1" class="pw-box" data-idx="3">
-                    </div>
-                    <p class="error-text" id="pwError" style="text-align:center;"></p>
-                    <button class="secondary" id="pwSaveBtn" data-i18n="pw_save_btn">Save Password</button>
-                    <button class="link-btn" id="pwCancelBtn" data-i18n="pw_cancel_btn">Cancel</button>
-                </div>
-            </div>
-
-            <button class="link-btn" id="dashStartOverBtn" data-i18n="logout_btn">Logout</button>
+            <div style="text-align:center; margin-top:6px;"><button class="link-btn" onclick="backToPhoneEntry('')" data-i18n="mv2_use_different_number">Use a different number</button></div>
         </div>
     </div>
-
-    <script>
-        // ===== SUPABASE CONFIGURATION (same project as the admin dashboard) =====
-        const SUPABASE_URL = 'https://geeqcyfnkgamcjclulay.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        // Bhangra Sway, Cremona (from the studio's Google Maps listing)
-        const STUDIO_LAT = 45.1395108;
-        const STUDIO_LNG = 10.0288616;
-        const STUDIO_RADIUS_METERS = 500;
-
-        // Perform tab (ported from perform.html)
-        const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#1a237e' };
-
-        let enteredPhone = '';
-        let enteredPasscode = null; // null when the member has no passcode set
-        let selectedMember = null;
-        let passcodeMode = 'enter'; // 'enter' (passcode exists) | 'setup' (opt-in prompt)
-        let householdMembers = []; // every member found under enteredPhone (siblings)
-        let openPerformance = null; // latest performances row with status='open', if any
-
-        function show(id) {
-            ['loadingState', 'phoneState', 'pickState', 'passcodeState', 'dashboardState'].forEach((s) => {
-                document.getElementById(s).classList.toggle('hidden', s !== id);
-            });
-        }
-
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
-        // Surname shown as an initial only in the household picker, siblings
-        // sharing a phone don't need each other's full surnames on screen.
-        function maskName(full) {
-            const parts = String(full || '').trim().split(/\s+/);
-            if (parts.length <= 1) return parts[0] || '';
-            return parts[0] + ' ' + parts.slice(1).map((p) => p[0].toUpperCase() + '.').join(' ');
-        }
-
-        // ===== Member identification =====
-        // No member names ever reach this page up-front: the member types their
-        // phone number and the find_members_by_phone RPC returns only the
-        // member(s) registered under that exact number (their own household),
-        // now also flagging whether each one has a passcode set.
-        async function handlePhoneContinue() {
-            const phoneError = document.getElementById('phoneError');
-            phoneError.textContent = '';
-
-            const raw = document.getElementById('phoneInput').value;
-            const digits = raw.replace(/\D/g, '');
-            if (digits.length < 9) {
-                phoneError.textContent = t('phone_invalid');
-                return;
-            }
-
-            const btn = document.getElementById('phoneContinueBtn');
-            btn.disabled = true;
-            btn.textContent = t('searching');
-
-            const { data: result, error } = await supabaseClient
-                .rpc('find_members_by_phone', { p_phone: raw });
-
-            btn.disabled = false;
-            btn.textContent = t('continue');
-
-            if (error) {
-                phoneError.textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
-                return;
-            }
-
-            if (result?.status !== 'ok' || !Array.isArray(result.members) || result.members.length === 0) {
-                phoneError.textContent = t('phone_not_found');
-                return;
-            }
-
-            enteredPhone = raw;
-            householdMembers = result.members;
-            if (result.members.length === 1) {
-                pickMember(result.members[0]);
-            } else {
-                renderMemberList(result.members);
-                show('pickState');
-            }
-        }
-
-        function renderMemberList(members) {
-            const list = document.getElementById('memberList');
-            list.innerHTML = '';
-            members.forEach((m) => {
-                const row = document.createElement('button');
-                row.type = 'button';
-                row.className = 'student-row';
-                row.innerHTML = `<div class="name">${escapeHtml(maskName(m.name))}</div>`;
-                row.addEventListener('click', () => pickMember(m));
-                list.appendChild(row);
-            });
-        }
-
-        function backToPhoneEntry(message) {
-            document.getElementById('phoneInput').value = '';
-            document.getElementById('phoneError').textContent = message || '';
-            show('phoneState');
-            document.getElementById('phoneInput').focus();
-        }
-
-        // ===== 4-digit box groups (auto-advance, auto-submit), reused for
-        // both the identification passcode step and the password-change form =====
-        function getDigitBoxValue(selector) {
-            return Array.from(document.querySelectorAll(selector)).map((b) => b.value).join('');
-        }
-
-        function clearDigitBoxes(selector) {
-            document.querySelectorAll(selector).forEach((b) => { b.value = ''; });
-        }
-
-        function shakeBoxWrapper(wrapperId) {
-            const wrap = document.getElementById(wrapperId);
-            wrap.classList.remove('shake');
-            void wrap.offsetWidth; // restart the animation
-            wrap.classList.add('shake');
-        }
-
-        function setupDigitBoxGroup(selector, onComplete) {
-            const boxes = Array.from(document.querySelectorAll(selector));
-            boxes.forEach((box, i) => {
-                box.addEventListener('input', () => {
-                    box.value = box.value.replace(/\D/g, '').slice(0, 1);
-                    if (box.value && boxes[i + 1]) boxes[i + 1].focus();
-                    if (boxes.every((b) => b.value)) onComplete();
-                });
-                box.addEventListener('keydown', (e) => {
-                    if (e.key === 'Backspace' && !box.value && boxes[i - 1]) boxes[i - 1].focus();
-                    if (e.key === 'Enter') onComplete();
-                });
-            });
-        }
-
-        function getPasscodeValue() { return getDigitBoxValue('.passcode-box'); }
-        function clearPasscodeBoxes() { clearDigitBoxes('.passcode-box'); }
-        function shakePasscodeBoxes() { shakeBoxWrapper('passcodeBoxes'); }
-
-        function pickMember(member) {
-            selectedMember = member;
-            enteredPasscode = null;
-            clearPasscodeBoxes();
-            document.getElementById('passcodeError').textContent = '';
-            document.getElementById('passcodeForm').classList.remove('hidden');
-            document.getElementById('passcodeForgotSent').classList.add('hidden');
-
-            passcodeMode = member.has_passcode ? 'enter' : 'setup';
-            renderPasscodeTexts();
-            show('passcodeState');
-            document.querySelector('.passcode-box').focus();
-        }
-
-        function renderPasscodeTexts() {
-            const skipBtn = document.getElementById('passcodeSkipBtn');
-            const forgotBtn = document.getElementById('passcodeForgotBtn');
-            if (passcodeMode === 'setup') {
-                document.getElementById('passcodeHeading').textContent = t('passcode_prompt_heading');
-                document.getElementById('passcodeBody').textContent = t('passcode_prompt_body');
-                document.getElementById('passcodeSubmitBtn').textContent = t('passcode_set_btn');
-                skipBtn.classList.remove('hidden');
-                forgotBtn.classList.add('hidden');
-            } else {
-                document.getElementById('passcodeHeading').textContent = t('passcode_enter_heading');
-                document.getElementById('passcodeBody').textContent = t('passcode_enter_body');
-                document.getElementById('passcodeSubmitBtn').textContent = t('passcode_verify_btn');
-                skipBtn.classList.add('hidden');
-                forgotBtn.classList.remove('hidden');
-            }
-        }
-
-        async function handlePasscodeSubmit() {
-            const passcodeError = document.getElementById('passcodeError');
-            passcodeError.textContent = '';
-            const code = getPasscodeValue();
-
-            if (!/^\d{4}$/.test(code)) {
-                passcodeError.textContent = t('passcode_invalid');
-                shakePasscodeBoxes();
-                return;
-            }
-
-            const btn = document.getElementById('passcodeSubmitBtn');
-            btn.disabled = true;
-
-            if (passcodeMode === 'setup') {
-                const { data: status, error } = await supabaseClient
-                    .rpc('set_student_passcode_by_phone', {
-                        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: code
-                    });
-                btn.disabled = false;
-
-                if (error) {
-                    passcodeError.textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
-                    return;
-                }
-                if (status === 'bad_phone') { backToPhoneEntry(t('verify_failed')); return; }
-                if (status === 'invalid_format') { passcodeError.textContent = t('passcode_invalid'); shakePasscodeBoxes(); return; }
-                // 'ok' or 'already_set' (race with another device): either way,
-                // proceed into the dashboard using this code from now on.
-                enteredPasscode = status === 'ok' ? code : null;
-                loadDashboard(selectedMember);
-                return;
-            }
-
-            // mode === 'enter'
-            enteredPasscode = code;
-            loadDashboard(selectedMember);
-            btn.disabled = false;
-        }
-
-        function handlePasscodeSkip() {
-            enteredPasscode = null;
-            loadDashboard(selectedMember);
-        }
-
-        async function handlePasscodeForgot() {
-            const { error } = await supabaseClient
-                .rpc('request_passcode_reset_by_phone', { p_student_id: selectedMember.id, p_phone: enteredPhone });
-
-            if (error) {
-                document.getElementById('passcodeError').textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
-                return;
-            }
-
-            document.getElementById('passcodeForm').classList.add('hidden');
-            document.getElementById('passcodeForgotSent').classList.remove('hidden');
-        }
-
-        // ===== Tabs =====
-        function moveTabIndicator(btn) {
-            const bar = document.getElementById('tabBar');
-            const indicator = document.getElementById('tabIndicator');
-            const barRect = bar.getBoundingClientRect();
-            const btnRect = btn.getBoundingClientRect();
-            indicator.style.transform = `translateX(${btnRect.left - barRect.left - 5}px)`;
-        }
-
-        function switchTab(name) {
-            document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-            document.querySelectorAll('.tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
-            const activeBtn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
-            if (activeBtn) moveTabIndicator(activeBtn);
-        }
-
-        function initTabs() {
-            document.querySelectorAll('.tab-btn').forEach((btn) => {
-                btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-            });
-            switchTab('report');
-        }
-
-        // ===== Dashboard: report + attendance =====
-        async function loadDashboard(member) {
-            selectedMember = member;
-            show('loadingState');
-
-            const { data: report, error } = await supabaseClient
-                .rpc('get_student_report_by_phone', {
-                    p_student_id: member.id, p_phone: enteredPhone, p_passcode: enteredPasscode
-                });
-
-            if (error) {
-                backToPhoneEntry(t('report_load_failed', { err: error.message || 'unknown error' }));
-                return;
-            }
-
-            if (report?.status === 'bad_passcode') {
-                passcodeMode = 'enter';
-                renderPasscodeTexts();
-                document.getElementById('passcodeError').textContent = t('passcode_wrong');
-                clearPasscodeBoxes();
-                show('passcodeState');
-                shakePasscodeBoxes();
-                document.querySelector('.passcode-box').focus();
-                return;
-            }
-
-            if (report?.status !== 'ok') {
-                backToPhoneEntry(t('verify_failed'));
-                return;
-            }
-
-            renderReport(report);
-            renderSiblingRow();
-            renderPasswordManageUI();
-            show('dashboardState');
-            switchTab('report');
-            initAttendance();
-            initPerform();
-        }
-
-        // Lets a parent with more than one child registered under the same
-        // phone number jump straight to a sibling's dashboard without
-        // re-entering the phone number -- only re-prompting for a passcode
-        // if that sibling has one set (each child's passcode is independent).
-        function renderSiblingRow() {
-            const row = document.getElementById('siblingRow');
-            if (householdMembers.length <= 1) {
-                row.classList.add('hidden');
-                row.innerHTML = '';
-                return;
-            }
-            row.classList.remove('hidden');
-            row.innerHTML = '';
-            householdMembers.forEach((m) => {
-                const chip = document.createElement('button');
-                chip.type = 'button';
-                chip.className = 'sibling-chip' + (selectedMember && String(selectedMember.id) === String(m.id) ? ' active' : '');
-                const initial = String(m.name || '?').trim().charAt(0).toUpperCase();
-                chip.innerHTML = `<span class="sibling-avatar">${escapeHtml(initial)}</span><span>${escapeHtml(maskName(m.name))}</span>`;
-                chip.addEventListener('click', () => {
-                    if (!selectedMember || String(selectedMember.id) !== String(m.id)) pickMember(m);
-                });
-                row.appendChild(chip);
-            });
-        }
-
-        // ===== Password management (create / change), next to Logout =====
-        // enteredPasscode is the source of truth for "does this member already
-        // have a password verified this session": null after a Skip (no
-        // passcode set), the actual code after either verifying an existing
-        // one or just creating one.
-        function renderPasswordManageUI() {
-            document.getElementById('passwordManageForm').classList.add('hidden');
-            clearDigitBoxes('.pw-box');
-            document.getElementById('pwError').textContent = '';
-            document.getElementById('passwordManageToggleBtn').textContent = enteredPasscode === null
-                ? t('create_password_btn')
-                : t('change_password_btn');
-        }
-
-        function togglePasswordManageForm() {
-            const form = document.getElementById('passwordManageForm');
-            form.classList.toggle('hidden');
-            if (!form.classList.contains('hidden')) {
-                document.getElementById('pwError').textContent = '';
-                clearDigitBoxes('.pw-box');
-                document.querySelector('.pw-box').focus();
-            }
-        }
-
-        async function handlePwSave() {
-            const pwError = document.getElementById('pwError');
-            pwError.textContent = '';
-            const code = getDigitBoxValue('.pw-box');
-
-            if (!/^\d{4}$/.test(code)) {
-                pwError.textContent = t('passcode_invalid');
-                shakeBoxWrapper('pwBoxes');
-                return;
-            }
-
-            const btn = document.getElementById('pwSaveBtn');
-            btn.disabled = true;
-
-            const isCreating = enteredPasscode === null;
-            const { data: status, error } = isCreating
-                ? await supabaseClient.rpc('set_student_passcode_by_phone', {
-                    p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: code
-                })
-                : await supabaseClient.rpc('change_student_passcode_by_phone', {
-                    p_student_id: selectedMember.id, p_phone: enteredPhone,
-                    p_old_passcode: enteredPasscode, p_new_passcode: code
-                });
-
-            btn.disabled = false;
-
-            if (error) {
-                pwError.textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
-                return;
-            }
-            if (status === 'invalid_format') { pwError.textContent = t('passcode_invalid'); shakeBoxWrapper('pwBoxes'); return; }
-            if (status !== 'ok') {
-                // bad_phone / already_set / no_passcode_set / bad_old_passcode:
-                // all edge cases (e.g. an admin reset the passcode in the
-                // background) -- simplest safe recovery is a fresh login.
-                backToPhoneEntry(t('verify_failed'));
-                return;
-            }
-
-            enteredPasscode = code;
-            document.getElementById('passwordManageForm').classList.add('hidden');
-            renderPasswordManageUI();
-            showSuccessToast(t('pw_saved_msg'));
-        }
-
-        // A tiny, self-dismissing confirmation so saving a password doesn't
-        // need a whole extra screen.
-        function showSuccessToast(message) {
-            let toast = document.getElementById('successToast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'successToast';
-                toast.className = 'success-toast';
-                document.body.appendChild(toast);
-            }
-            toast.textContent = message;
-            toast.classList.remove('show');
-            void toast.offsetWidth;
-            toast.classList.add('show');
-            clearTimeout(showSuccessToast._timer);
-            showSuccessToast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
-        }
-
-        // ===== Render the report =====
-        // All payment/cycle math comes from membership.js, the exact same
-        // engine the admin dashboard runs, fed with the rows the RPC returned.
-        let lastReport = null; // kept so a language switch can re-render in place
-
-        function renderReport(report) {
-            lastReport = report;
-
-            const student = {
-                id: report.student.id,
-                name: report.student.name || '',
-                joinDate: String(report.student.joindate || ''),
-                nextPaymentDate: String(report.student.nextpaymentdate || ''),
-                monthlyFees: Number(report.student.monthlyfees || 0)
-            };
-            const attendanceRows = report.attendance || [];
-            const feesRows = report.fees || [];
-
-            const studentAttendanceRows = getStudentAttendanceRows(student.id, attendanceRows);
-            const membership = makeRowMembershipOpts(student, feesRows, studentAttendanceRows);
-
-            // Every attended class, all time (not just a recent window),
-            // grouped by month so a long history stays scannable.
-            const allDates = studentAttendanceRows
-                .filter((r) => !r.isDemo)
-                .map((r) => r.date)
-                .sort();
-
-            document.getElementById('dashStudentName').textContent = student.name;
-            document.getElementById('dashAvatar').textContent = (student.name || '?').trim().charAt(0).toUpperCase();
-            document.getElementById('reportClassCount').textContent = allDates.length;
-
-            const groupsEl = document.getElementById('reportAttendanceGroups');
-            groupsEl.innerHTML = '';
-            if (allDates.length === 0) {
-                groupsEl.innerHTML = `<span class="empty-note">${t('no_attendance')}</span>`;
-            } else {
-                const byMonth = new Map(); // 'YYYY-MM' -> [dates]
-                allDates.forEach((d) => {
-                    const key = d.slice(0, 7);
-                    if (!byMonth.has(key)) byMonth.set(key, []);
-                    byMonth.get(key).push(d);
-                });
-                Array.from(byMonth.keys()).sort().reverse().forEach((key) => {
-                    const group = document.createElement('div');
-                    group.className = 'month-group';
-
-                    const label = document.createElement('div');
-                    label.className = 'month-label';
-                    label.textContent = new Date(key + '-01T00:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-                    group.appendChild(label);
-
-                    const chipRow = document.createElement('div');
-                    chipRow.className = 'chip-row';
-                    byMonth.get(key).forEach((d) => {
-                        const dt = new Date(d + 'T00:00:00');
-                        const chip = document.createElement('span');
-                        chip.className = 'chip';
-                        chip.textContent = String(dt.getDate()).padStart(2, '0');
-                        chipRow.appendChild(chip);
-                    });
-                    group.appendChild(chipRow);
-                    groupsEl.appendChild(group);
-                });
-            }
-
-            const timeline = buildMembershipTimeline(student, membership);
-            const autoExt = buildAutoExtension(student, membership);
-            const isPaid = computePaymentActive(student, membership);
-            const paidRecords = getStudentPaidRecordsFromRows(student.id, feesRows);
-
-            const displayCycle = timeline.current || timeline.cycles[timeline.cycles.length - 1] || null;
-
-            let paymentStatus = 'UNPAID';
-            if (isPaid) paymentStatus = 'PAID';
-            else if (timeline.owedCycles.length > 0) paymentStatus = 'OVERDUE';
-
-            const statusText = paymentStatus === 'PAID' ? t('badge_paid') : paymentStatus === 'OVERDUE' ? t('badge_overdue') : t('badge_unpaid');
-            const statusClass = 'status-badge status-' + paymentStatus.toLowerCase();
-
-            const badge = document.getElementById('reportStatusBadge');
-            badge.className = statusClass;
-            badge.textContent = statusText;
-            // Quick-glance chip mirrors the same badge, at the top of the dashboard.
-            const quickBadge = document.getElementById('quickStatusBadge');
-            quickBadge.className = statusClass;
-            quickBadge.textContent = statusText;
-
-            const currentCycleAlsoPending = displayCycle && !displayCycle.paid && !timeline.owedCycles.includes(displayCycle);
-            const owedCount = timeline.owedCycles.length + (currentCycleAlsoPending ? 1 : 0);
-            const totalPendingAmount = owedCount * (student.monthlyFees || 0);
-            document.getElementById('quickPendingAmount').textContent = `€${Math.round(totalPendingAmount)}`;
-
-            const overdueEl = document.getElementById('reportOverdueNote');
-            if (paymentStatus === 'OVERDUE') {
-                overdueEl.classList.remove('hidden');
-                overdueEl.textContent = t('overdue_note', {
-                    months: tCount(timeline.owedCycles.length, 'month_one', 'month_many'),
-                    amount: Math.round(timeline.owedCycles.length * (student.monthlyFees || 0))
-                });
-            } else {
-                overdueEl.classList.add('hidden');
-            }
-
-            function cycleDateLabel(cycle, isCurrent) {
-                const info = cycleDisplayInfo(cycle, isCurrent, autoExt.isExtended);
-                const base = `${formatDisplayDate(cycle.start)} → ${formatDisplayDate(info.end)}`;
-                if (info.tag === 'extended') return `${base} <span style="color:#00796b;font-weight:700;">${t('extended_tag')}</span>`;
-                if (info.tag === 'closed_early') return `${base} <span style="color:var(--bad);font-weight:700;">${t('closed_early_tag')}</span>`;
-                return base;
-            }
-
-            // The quick-glance ring always tracks the CURRENT cycle's progress
-            // toward the 4-class guarantee, regardless of which cycle ends up
-            // as the "display" cycle below. The ring fill itself caps at 100%
-            // (it can't visually overflow), but the label shows the real
-            // attended count, and any bonus classes get a 🎁 badge + note,
-            // same "gifted" language as the detailed cycle card below.
-            function updateRing(cycle) {
-                const target = AUTO_EXTENSION_CLASS_TARGET;
-                const attended = cycle ? cycle.attended : 0;
-                const pct = target > 0 ? (Math.min(attended, target) / target) * 100 : 0;
-                document.getElementById('ringFg').style.strokeDashoffset = String(100 - pct);
-                document.getElementById('ringLabel').textContent = `${attended}/${target}`;
-
-                const extra = attended - target;
-                const giftBadge = document.getElementById('ringGiftBadge');
-                const chipLabel = document.getElementById('classesChipLabel');
-                if (extra > 0) {
-                    giftBadge.classList.remove('hidden');
-                    chipLabel.textContent = tCount(extra, 'gifted_chip_one', 'gifted_chip_many');
-                } else {
-                    giftBadge.classList.add('hidden');
-                    chipLabel.textContent = t('attendance_heading_short');
-                }
-            }
-
-            // Builds one cycle card's markup, including which payment (date +
-            // amount) covered it, so "which cycle did I pay for?" is answered
-            // directly on the card instead of just an aggregate paid/unpaid pill.
-            function buildCycleCardHtml(cycle, label, isCurrentForTag) {
-                const isGratis = cycle.paid && Number(cycle.record?.amount ?? -1) === 0;
-                const pillClass = cycle.paid ? 'pill-paid' : 'pill-unpaid';
-                const pillText = isGratis ? t('pill_gratis') : (cycle.paid ? t('pill_paid') : t('pill_unpaid'));
-
-                let dots = '';
-                for (let i = 0; i < AUTO_EXTENSION_CLASS_TARGET; i += 1) {
-                    dots += `<span class="dot${i < cycle.attended ? ' filled' : ''}"></span>`;
-                }
-                const carryNote = cycle.carriedIn > 0 ? t('carried_note', { n: cycle.carriedIn }) : '';
-                const extra = cycle.attended - AUTO_EXTENSION_CLASS_TARGET;
-                let classesLabel = t('classes_progress', { a: cycle.attended, b: AUTO_EXTENSION_CLASS_TARGET });
-                if (extra > 0) classesLabel += tCount(extra, 'extra_gifted_one', 'extra_gifted_many');
-
-                let paidLine = '';
-                if (cycle.paid && cycle.record && !isGratis) {
-                    const paidDateRaw = String(cycle.record.paiddate ?? cycle.record.paidDate ?? cycle.record.paid_date ?? '').slice(0, 10);
-                    const amount = Math.round(Number(cycle.record.amount ?? 0));
-                    if (paidDateRaw) {
-                        paidLine = `<div class="paid-line">${escapeHtml(t('paid_on_line', { date: formatDisplayDate(paidDateRaw), amount }))}</div>`;
-                    }
-                }
-
-                return `
-                    <div class="cycle-card">
-                        <div class="cycle-card-top">
-                            <span class="cycle-label">${escapeHtml(label)}</span>
-                            <span class="pill ${pillClass}">${escapeHtml(pillText)}</span>
-                        </div>
-                        <div class="cycle-dates">${cycleDateLabel(cycle, isCurrentForTag)}</div>
-                        <div class="attendance-progress">
-                            <div class="dot-row">${dots}</div>
-                            <span class="progress-text">${escapeHtml(classesLabel + carryNote)}</span>
-                        </div>
-                        ${paidLine}
+</div>
+
+<div id="dashboardState" class="hidden">
+    <div id="dashboardShell">
+        <div class="dash-header">
+            <div class="dash-head-left">
+                <div class="dash-avatar" id="dashAvatar"></div>
+                <div style="min-width:0;">
+                    <div class="dash-greet">Hi, <span id="dashStudentName"></span></div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                <div id="dashLangSlot"></div>
+                <button class="btn btn-ghost btn-sm" id="settingsBtn" onclick="openSettingsScreen()" title="Settings"></button>
+                <button class="btn btn-ghost btn-sm" id="startOverBtn"></button>
+            </div>
+        </div>
+        <div class="sibling-row hidden" id="siblingRow"></div>
+
+        <div class="tab-row">
+            <button class="tab-btn active" data-tab="report" onclick="switchTab('report')" id="tabBtnReport"></button>
+            <button class="tab-btn" data-tab="attendance" onclick="switchTab('attendance')" id="tabBtnAttendance"></button>
+            <button class="tab-btn" data-tab="perform" onclick="switchTab('perform')" id="tabBtnPerform"></button>
+        </div>
+
+        <div class="tab-panel active" data-panel="report">
+            <div class="report-block">
+                <h3 id="creditHeadingLabel"></h3>
+                <p class="subtitle" data-i18n="mv2_credit_sub">€10 per class. Top up anytime with your instructor. No monthly plan to keep track of.</p>
+                <div id="creditBalanceCard" style="border-radius:var(--radius-lg); padding:18px 18px 15px;">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+                        <div style="font-size:2.1em; font-weight:800; line-height:1;" id="creditBalanceAmount"></div>
+                        <span id="creditBalancePill" class="badge"></span>
                     </div>
-                `;
-            }
-
-            const cyclesListEl = document.getElementById('cyclesList');
-            cyclesListEl.innerHTML = '';
-
-            if (timeline.awaitingFirstClass) {
-                cyclesListEl.innerHTML = `
-                    <div class="cycle-card">
-                        <div class="cycle-card-top">
-                            <span class="cycle-label">${escapeHtml(t('current_cycle'))}</span>
-                            <span class="pill pill-unpaid">${escapeHtml(t('demo_taken_pill'))}</span>
-                        </div>
-                        <div class="cycle-dates">${escapeHtml(t('starts_first_class'))}</div>
+                    <div id="creditClassesLeftLine" style="font-size:0.85em; color:var(--ink-soft); margin-top:10px;"></div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid rgba(0,0,0,0.06); font-size:0.78em; color:var(--ink-faint);">
+                        <span id="creditLastRechargeLine"></span>
+                        <span id="creditTotalClassesLine"></span>
                     </div>
-                `;
-                updateRing(null);
-            } else if (timeline.cycles.length === 0) {
-                cyclesListEl.innerHTML = `<span class="empty-note">${t('na')}</span>`;
-                updateRing(null);
-            } else {
-                // Newest first: the member's current/most-recent cycle is always
-                // the first card, full history scrolls below it.
-                const ordered = timeline.cycles.slice().reverse();
-                ordered.forEach((cycle, i) => {
-                    const label = i === 0 ? t('current_cycle')
-                        : i === 1 ? t('previous_cycle')
-                        : tCount(i, 'cycles_ago_one', 'cycles_ago_many');
-                    cyclesListEl.insertAdjacentHTML('beforeend', buildCycleCardHtml(cycle, label, cycle === timeline.current));
-                });
-                updateRing(ordered[0]);
-            }
+                </div>
+            </div>
 
-            const extensionEl = document.getElementById('reportExtensionNote');
-            if (timeline.awaitingFirstClass) {
-                extensionEl.classList.remove('hidden');
-                extensionEl.textContent = t('demo_note');
-            } else if (autoExt.paused) {
-                extensionEl.classList.remove('hidden');
-                extensionEl.textContent = t('paused_note', { a: autoExt.attendedCount, b: AUTO_EXTENSION_CLASS_TARGET });
-            } else if (autoExt.isExtended) {
-                const classesLeft = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - autoExt.attendedCount);
-                const left = tCount(classesLeft, 'more_classes_one', 'more_classes_many');
-                extensionEl.classList.remove('hidden');
-                extensionEl.textContent = t(
-                    displayCycle && displayCycle.paid ? 'ext_note_paid' : 'ext_note_unpaid',
-                    {
-                        a: autoExt.attendedCount,
-                        b: AUTO_EXTENSION_CLASS_TARGET,
-                        left,
-                        date: formatDisplayDate(autoExt.effectiveEndDate)
-                    }
-                );
-            } else {
-                extensionEl.classList.add('hidden');
-            }
+            <div class="report-block">
+                <h3 id="ledgerHeadingLabel"></h3>
+                <p class="subtitle" data-i18n="mv2_ledger_sub">Every recharge and class, in order.</p>
+                <div id="creditLedgerList"></div>
+                <div id="creditLedgerHidden" class="hidden"></div>
+                <button id="creditLedgerToggleBtn" class="link-btn hidden" onclick="toggleCreditLedger()"></button>
+            </div>
 
-            const lastRecord = paidRecords[paidRecords.length - 1] || null;
-            if (lastRecord) {
-                const lastAmount = String(Math.round(Number(lastRecord.amount ?? student.monthlyFees ?? 0)));
-                const lastPaidDateRaw = String(lastRecord.paiddate ?? lastRecord.paidDate ?? lastRecord.paid_date ?? '').slice(0, 10);
-                document.getElementById('reportLastPaymentAmount').textContent = `€${lastAmount}`;
-                document.getElementById('reportLastPaymentSub').textContent = lastPaidDateRaw ? formatDisplayDate(lastPaidDateRaw) : ',';
-            } else {
-                document.getElementById('reportLastPaymentAmount').textContent = ',';
-                document.getElementById('reportLastPaymentSub').textContent = t('no_payments');
-            }
+            <div class="report-block">
+                <h3 id="batchHeadingLabel"></h3>
+                <p><strong id="currentBatchLabel"></strong></p>
+                <div id="batchRequestForm" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+                    <select id="batchRequestSelect" style="flex:1; min-width:180px; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em;"></select>
+                    <button type="button" class="btn btn-outline" id="batchRequestBtnLabel" onclick="requestBatchMove()"></button>
+                </div>
+                <p id="batchRequestStatus" class="hidden empty-note" style="margin-top:8px;"></p>
+            </div>
 
-            const totalPendingAmountEl = document.getElementById('reportTotalPendingAmount');
-            totalPendingAmountEl.textContent = `€${Math.round(totalPendingAmount)}`;
-            totalPendingAmountEl.className = 'stat-value ' + (owedCount > 0 ? 'negative' : 'positive');
-            document.getElementById('reportTotalPendingSub').textContent = owedCount > 0
-                ? tCount(owedCount, 'cycles_unpaid_one', 'cycles_unpaid_many')
-                : t('caught_up');
+            <div class="report-block">
+                <h3 id="certHeadingLabel"></h3>
+                <p id="certificateStatusLabel" class="empty-note"></p>
+                <div id="certificateApprovedActions" class="hidden" style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-outline btn-sm" id="certViewBtnLabel" onclick="viewMedicalCertificate()"></button>
+                    <button type="button" class="btn btn-danger btn-sm" id="certDeleteBtnLabel" onclick="deleteMedicalCertificate()"></button>
+                </div>
+                <label class="btn btn-primary" id="certificateUploadLabel" style="cursor:pointer; margin-top:8px;">
+                    <span id="certificateUploadBtnText"></span>
+                    <input type="file" id="certificateUploadInput" accept="application/pdf" style="display:none;" onchange="uploadMedicalCertificate(this.files)">
+                </label>
+            </div>
 
-            const nextPaymentEl = document.getElementById('reportNextPayment');
-            const advanceCount = timeline.unmatchedRecords.length;
-            if (paymentStatus === 'PAID' && advanceCount > 0) {
-                const paidThrough = projectAdvancePaidThrough(timeline, autoExt.isExtended);
-                nextPaymentEl.textContent = t(advanceCount === 1 ? 'advance_paid_note_one' : 'advance_paid_note_many', {
-                    n: advanceCount,
-                    date: paidThrough ? formatDisplayDate(paidThrough) : '—'
-                });
-            } else if (paymentStatus === 'PAID' && displayCycle) {
-                const classesRemaining = Math.max(0, AUTO_EXTENSION_CLASS_TARGET - displayCycle.attended);
-                const nextPayBase = autoExt.isExtended ? displayCycle.effectiveEnd : displayCycle.naturalEnd;
-                const nextPayDate = formatDisplayDate(addDaysToDate(nextPayBase, 1));
-                nextPaymentEl.textContent = t('next_payment_note', {
-                    date: nextPayDate,
-                    left: tCount(classesRemaining, 'more_classes_one', 'more_classes_many'),
-                    a: Math.min(displayCycle.attended, AUTO_EXTENSION_CLASS_TARGET),
-                    b: AUTO_EXTENSION_CLASS_TARGET
-                });
-            } else {
-                nextPaymentEl.textContent = '';
-            }
-        }
+            <div class="report-block">
+                <h3 id="invoicesHeadingLabel"></h3>
+                <div id="invoicesList"></div>
+            </div>
 
-        // ===== Attendance tab (ported from checkin.html) =====
-        let branchKey = 'checking_in_pending';
-        let attnClosedMsg = null;
-        let attnLocStatus = 'too-far';
+            <div class="hist-archive" id="histArchive">
+                <div class="section-label" id="histLabel"></div>
+                <p class="empty-note" style="margin:0 0 14px;" data-i18n="mv2_hist_sub">Your record from before 2 September 2026, kept for reference only and separate from your live balance and activity above.</p>
+                <div id="histBalanceRow" class="hidden" style="margin-bottom:16px;">
+                    <div class="section-label" style="margin:0 0 4px;" data-i18n="mv2_hist_balance_label">Balance carried over</div>
+                    <div id="histBalanceValue" style="font-weight:800; font-size:1.05em;"></div>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <div class="section-label" style="margin:0 0 6px;" data-i18n="mv2_hist_payments_label">Past Payments</div>
+                    <div id="histPaymentsList"></div>
+                </div>
+                <div>
+                    <div class="section-label" style="margin:0 0 6px;" data-i18n="mv2_hist_attendance_label">Past Attendance</div>
+                    <div id="histAttendanceList" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+                </div>
+            </div>
+        </div>
 
-        function showAttn(id) {
-            ['attnLoading', 'attnClosed', 'attnTooFar', 'attnReady', 'attnResult'].forEach((s) => {
-                document.getElementById(s).classList.toggle('hidden', s !== id);
-            });
-            document.getElementById('attnError').textContent = '';
-        }
+        <div class="tab-panel" data-panel="attendance">
+            <div class="report-block">
+                <p style="font-size:0.85em; font-weight:700; color:var(--ink-soft);" id="branchLine"></p>
+                <div id="attnLoading"><div class="spinner small"></div></div>
+                <div id="attnClosed" class="hidden">
+                    <p style="color:var(--ink-soft); font-size:0.9em; margin-bottom:12px;" id="attnClosedMessage"></p>
+                    <button class="btn btn-outline-success" id="attnNotifyFromClosedBtnLabel"></button>
+                </div>
+                <div id="attnTooFar" class="hidden">
+                    <h3 id="attnLocHeading" style="margin-bottom:4px;"></h3>
+                    <p style="color:var(--ink-soft); font-size:0.9em; margin-bottom:12px;" id="attnLocBody"></p>
+                    <button class="btn btn-outline-success" id="attnNotifyFromTooFarBtnLabel" style="margin-right:8px;"></button>
+                    <button class="link-btn" id="attnLocRetryBtn"></button>
+                </div>
+                <div id="attnReady" class="hidden">
+                    <button class="btn btn-primary btn-block" id="attnConfirmBtnLabel" onclick="handleAttnConfirm()"></button>
+                </div>
+                <div id="attnResult" class="hidden">
+                    <div class="result-icon" id="attnResultIcon"></div>
+                    <div class="result-title" id="attnResultTitle"></div>
+                    <div class="result-sub" id="attnResultSub"></div>
+                </div>
+                <p class="error-text" id="attnError"></p>
+            </div>
+        </div>
 
-        function formatTime(tm) {
-            const [h, m] = String(tm).split(':').map(Number);
-            const period = h >= 12 ? 'PM' : 'AM';
-            const hour12 = ((h + 11) % 12) + 1;
-            return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
-        }
+        <div class="tab-panel" data-panel="perform">
+            <div class="report-block">
+                <div id="perfLoading"><div class="spinner small"></div></div>
+                <div id="perfAction" class="hidden">
+                    <div class="card hidden" id="perfCallBox" style="padding:16px; margin-bottom:14px;">
+                        <div style="font-weight:800; font-size:1.05em;" id="perfCallTitle"></div>
+                        <div style="color:var(--ink-faint); font-size:0.85em; margin-top:2px;" id="perfCallDate"></div>
+                    </div>
+                    <button class="btn btn-primary btn-block hidden" id="perfJoinBtnLabel" style="margin-bottom:8px;" onclick="handlePerfJoin()"></button>
+                    <button class="btn btn-outline btn-block" id="perfSpotBtnLabel" onclick="handlePerfSeeSpot()"></button>
+                    <p class="error-text" id="perfError"></p>
+                </div>
+                <div id="perfJoinResult" class="hidden" style="text-align:center;">
+                    <div class="result-title" id="perfJoinTitle"></div>
+                    <div class="result-sub" id="perfJoinSub"></div>
+                    <div style="font-size:1.8em; font-weight:800; margin:10px 0 2px;" id="perfJoinedCount"></div>
+                    <p class="result-sub">dancers have joined so far</p>
+                    <button class="link-btn" onclick="showPerf('perfAction')">Back</button>
+                </div>
+                <div id="perfSpotResult" class="hidden" style="text-align:center;">
+                    <div class="result-title" id="perfSpotMovementLabel"></div>
+                    <div id="perfSpotSwatch" style="width:44px; height:44px; border-radius:50%; margin:10px auto; display:none;"></div>
+                    <div class="result-sub" id="perfSpotPositionText"></div>
+                    <p class="empty-note" id="perfSpotEmptyNote" style="text-align:center;"></p>
+                    <button class="link-btn" onclick="showPerf('perfAction')">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-        function haversineMeters(lat1, lng1, lat2, lng2) {
-            const R = 6371000;
-            const toRad = (d) => (d * Math.PI) / 180;
-            const dLat = toRad(lat2 - lat1);
-            const dLng = toRad(lng2 - lng1);
-            const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-            return 2 * R * Math.asin(Math.sqrt(a));
-        }
+<!-- SETTINGS SCREEN -->
+<div id="settingsScreen" class="hidden" style="position:fixed; inset:0; background:var(--bg); z-index:250; overflow-y:auto;">
+    <div style="max-width:480px; margin:0 auto; padding:20px 18px 40px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+            <h2 style="font-size:1.2em; margin:0;" data-i18n="mv2_settings_title">Settings</h2>
+            <button class="btn btn-ghost btn-sm" onclick="closeSettingsScreen()" id="settingsCloseBtn"></button>
+        </div>
 
-        async function checkLocationStatus() {
-            if (!navigator.geolocation) return 'unknown';
-            return await new Promise((resolve) => {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        const distance = haversineMeters(
-                            pos.coords.latitude, pos.coords.longitude, STUDIO_LAT, STUDIO_LNG
-                        );
-                        resolve(distance <= STUDIO_RADIUS_METERS ? 'confirmed' : 'too-far');
-                    },
-                    () => resolve('unknown'),
-                    { timeout: 8000, maximumAge: 60000 }
-                );
-            });
-        }
+        <div class="report-block">
+            <h3 id="profileHeadingLabel"></h3>
+            <div id="profilePhotoContent" style="display:flex; flex-direction:column; align-items:center; text-align:center;"></div>
+        </div>
 
-        async function confirmBranchSilently() {
-            const status = await checkLocationStatus();
-            const branchLine = document.getElementById('branchLine');
-            branchKey = status === 'confirmed' ? 'branch_confirmed' : 'branch_default';
-            branchLine.textContent = t(branchKey);
-            branchLine.classList.remove('pending');
-            return status;
-        }
+        <div class="report-block">
+            <h3 id="resetPasscodeHeadingLabel"></h3>
+            <div id="resetPasscodeDefault">
+                <p class="empty-note" style="margin:0 0 12px;" data-i18n="mv2_reset_passcode_body">Forgot your passcode, or want it reset for any reason? Send a request to your instructor.</p>
+                <button class="btn btn-outline" id="resetPasscodeBtnLabel" onclick="handleSettingsPasscodeReset()"></button>
+            </div>
+            <div id="resetPasscodeSent" class="hidden">
+                <p class="empty-note" style="margin:0 0 10px;" data-i18n="mv2_reset_passcode_sent_body">Request sent. Confirm on WhatsApp so your instructor sees it right away.</p>
+                <textarea id="resetPasscodeWaMessageBox" readonly rows="3" style="width:100%; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; color:var(--ink-soft); background:var(--bg); resize:none;"></textarea>
+                <a id="resetPasscodeWaBtn" class="btn btn-primary btn-block" href="#" target="_blank" rel="noopener" style="text-decoration:none; margin-top:10px;" data-i18n="mv2_send_wa_confirm">Send WhatsApp Confirmation</a>
+                <div style="text-align:center; margin-top:8px;"><button type="button" class="link-btn" id="resetPasscodeCopyBtn" data-i18n="mv2_copy_manually">Or copy the message to send manually</button></div>
+            </div>
+        </div>
+    </div>
+</div>
 
-        function renderAttnClosedMessage() {
-            if (!attnClosedMsg) return;
-            if (attnClosedMsg.key === 'not_setup') {
-                document.getElementById('attnClosedMessage').textContent = t('not_setup');
-                return;
-            }
-            const dayList = attnClosedMsg.days.map((d) => tDay(d)).join(' & ');
-            document.getElementById('attnClosedMessage').textContent = t('closed_msg', {
-                days: dayList,
-                start: formatTime(attnClosedMsg.start),
-                end: formatTime(attnClosedMsg.end)
-            });
-        }
+<!-- CAMERA CAPTURE MODAL -->
+<div id="memberCameraModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.85); z-index:300; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#111; border-radius:var(--radius-lg); overflow:hidden; max-width:420px; width:100%; box-shadow:var(--shadow-lg);">
+        <video id="memberCameraVideo" autoplay playsinline muted style="width:100%; display:block; background:#000; max-height:60vh; object-fit:cover;"></video>
+        <div style="display:flex; gap:10px; padding:14px; background:#1a1a1a;">
+            <button type="button" class="btn btn-outline" style="flex:1; background:#333; color:#fff; border-color:#333;" onclick="closeMemberCameraCapture()">Cancel</button>
+            <button type="button" class="btn btn-success" style="flex:1;" onclick="captureMemberCameraPhoto()">Capture</button>
+        </div>
+    </div>
+</div>
+<canvas id="memberCameraCanvas" style="display:none;"></canvas>
 
-        function renderAttnLocBlock() {
-            const unknown = attnLocStatus === 'unknown';
-            document.getElementById('attnLocHeading').textContent = t(unknown ? 'loc_unknown_heading' : 'too_far_heading');
-            document.getElementById('attnLocBody').textContent = t(unknown ? 'loc_unknown_body' : 'too_far_body');
-            document.getElementById('attnLocRetryBtn').textContent = t('retry_location');
-        }
+<!-- PHOTO CROP MODAL -->
+<div id="memberCropModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.85); z-index:310; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--surface); border-radius:var(--radius-lg); overflow:hidden; max-width:340px; width:100%; box-shadow:var(--shadow-lg);">
+        <div style="padding:14px 16px 0; font-weight:800; font-size:1em;">Adjust Photo</div>
+        <div id="memberCropViewport" style="position:relative; width:280px; height:280px; margin:14px auto; overflow:hidden; background:#111; border-radius:var(--radius-sm); touch-action:none; cursor:grab;">
+            <img id="memberCropImage" draggable="false" style="position:absolute; left:0; top:0; user-select:none; -webkit-user-drag:none; pointer-events:none;">
+            <div id="memberCropMaskCircle" style="position:absolute; inset:0; pointer-events:none; box-shadow:0 0 0 2000px rgba(0,0,0,0.5); border-radius:50%; display:none;"></div>
+        </div>
+        <div style="padding:0 16px; display:flex; align-items:center; gap:10px;">
+            <span class="icon" id="memberZoomIcon" style="color:var(--ink-faint);"></span>
+            <input type="range" id="memberCropZoomSlider" min="100" max="250" value="100" style="flex:1;" oninput="onMemberCropZoomChange(this.value)">
+        </div>
+        <div style="display:flex; gap:8px; padding:12px 16px 0;">
+            <button type="button" onclick="setMemberCropShape('square')" id="memberCropShapeSquareBtn" class="btn" style="flex:1;">Square</button>
+            <button type="button" onclick="setMemberCropShape('circle')" id="memberCropShapeCircleBtn" class="btn btn-outline" style="flex:1;">Circle</button>
+        </div>
+        <div style="display:flex; gap:10px; padding:14px 16px;">
+            <button type="button" onclick="closeMemberPhotoCrop()" class="btn btn-outline" style="flex:1;">Cancel</button>
+            <button type="button" onclick="confirmMemberPhotoCrop()" class="btn btn-success" style="flex:1;">Save</button>
+        </div>
+    </div>
+</div>
+<canvas id="memberCropOutputCanvas" style="display:none;"></canvas>
 
-        // Checks the check-in window + location and shows the right sub-state.
-        // Re-run after a failed confirm, or when the retry link is tapped.
-        async function initAttendance() {
-            showAttn('attnLoading');
-            document.getElementById('branchLine').textContent = t('checking_in_pending');
-            document.getElementById('branchLine').classList.add('pending');
+<script>
+const SUPABASE_URL = 'https://geeqcyfnkgamcjclulay.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const CUTOVER_DATE = '2026-09-02';
 
-            const { data: settings, error: settingsError } = await supabaseClient
-                .from('checkin_settings')
-                .select('*')
-                .eq('id', 1)
-                .single();
+const ICONS = {
+    'check-circle': '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.6 2.6L16 9.4"/>',
+    warning: '<path d="M12 4l9.2 16H2.8L12 4z"/><path d="M12 10v4.2"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/>',
+    'credit-card': '<rect x="2.5" y="5.5" width="19" height="13" rx="2.2"/><path d="M2.5 10h19"/>',
+    camera: '<path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2l1-1.6c.27-.44.75-.7 1.27-.7h4.02c.52 0 1 .26 1.27.7l1 1.6h2.24A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9z"/><circle cx="12" cy="13" r="3.4"/>',
+    upload: '<path d="M12 15.5V4M7.5 8.5L12 4l4.5 4.5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/>',
+    'file-text': '<path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7 3.5z"/><path d="M14 3.5V8h4.2"/><path d="M9 12.5h6M9 15.8h6"/>',
+    'log-out': '<path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5v-13A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15.5 16l4-4-4-4"/><path d="M19 12H9"/>',
+    trash: '<path d="M4 7h16M9 7V4.6c0-.6.4-1 1-1h4c.6 0 1 .4 1 1V7M6 7l1 12.4c.05.9.8 1.6 1.7 1.6h6.6c.9 0 1.65-.7 1.7-1.6L18 7"/>',
+    'zoom-in': '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3M10.5 7.5v6M7.5 10.5h6"/>',
+    'move-right': '<path d="M4 12h16M14 6l6 6-6 6"/>',
+    users: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 8.2a2.6 2.6 0 1 0 0-5.2"/><path d="M21 20c0-2.6-1.8-4.6-4.2-5.3"/>',
+    'users-group': '<circle cx="12" cy="7" r="3"/><path d="M6 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="5" cy="9" r="2.2"/><path d="M2 19c0-2.2 1.3-3.9 2.9-4.6"/><circle cx="19" cy="9" r="2.2"/><path d="M22 19c0-2.2-1.3-3.9-2.9-4.6"/>',
+    stethoscope: '<path d="M6 3v5.5a3 3 0 0 0 6 0V3"/><path d="M9 11.5v2a5 5 0 0 0 10 0v-3"/><circle cx="19" cy="8" r="2.3"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>'
+};
+function icon(name, size, color) {
+    size = size || 18;
+    const body = ICONS[name] || '';
+    return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color || 'currentColor'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+}
+function iconLabel(name, text, size) {
+    return `${icon(name, size)}<span>${text}</span>`;
+}
+function chipLabel(name, text, colorClass) {
+    return `<span class="icon-chip ${colorClass || 'icon-chip-accent'}">${icon(name, 17)}</span>${text}`;
+}
+function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function maskName(name) {
+    const parts = String(name || '').trim().split(/\s+/);
+    if (parts.length <= 1) return parts[0] || '';
+    return parts[0] + ' ' + parts.slice(1).map((p) => (p[0] ? p[0].toUpperCase() + '.' : '')).join(' ');
+}
+function formatShortDate(dateStr) {
+    const dt = new Date(String(dateStr).slice(0, 10) + 'T00:00:00');
+    if (Number.isNaN(dt.getTime())) return dateStr;
+    return `${dt.getDate()} ${dt.toLocaleDateString('en-GB', { month: 'short' })} ${dt.getFullYear()}`;
+}
 
-            if (settingsError || !settings) {
-                attnClosedMsg = { key: 'not_setup', vars: null };
-                renderAttnClosedMessage();
-                showAttn('attnClosed');
-                return;
-            }
+// ===== Global state =====
+let enteredPhone = '';
+let enteredPasscode = null;
+let selectedMember = null;
+let passcodeMode = 'enter';
+let householdMembers = [];
+let openPerformance = null;
+let lastReport = null;
 
-            const now = new Date();
-            const day = now.getDay();
-            const hhmmss = now.toTimeString().slice(0, 8);
-            const activeDays = settings.active_days || [];
-            const inWindow = settings.start_time <= settings.end_time
-                ? (hhmmss >= settings.start_time && hhmmss <= settings.end_time)
-                : (hhmmss >= settings.start_time || hhmmss <= settings.end_time);
-            const isOpen = activeDays.includes(day) && inWindow;
+function show(id) {
+    ['loadingState', 'phoneState', 'pickState', 'passcodeState'].forEach((s) => {
+        const el = document.getElementById(s);
+        el.classList.toggle('hidden', s !== id);
+    });
+    document.getElementById('authShell').classList.toggle('hidden', id === 'dashboard');
+    document.getElementById('dashboardState').classList.toggle('hidden', id !== 'dashboard');
 
-            if (!isOpen) {
-                attnClosedMsg = { key: 'closed_msg', days: activeDays, start: settings.start_time, end: settings.end_time };
-                renderAttnClosedMessage();
-                showAttn('attnClosed');
-                return;
-            }
+    // #langPicker is one shared element (i18n.js finds it by id and builds
+    // the dropdown into it once) — relocated rather than duplicated: next
+    // to Home on the auth screens, inline with Settings/Logout once the
+    // dashboard is showing.
+    const picker = document.getElementById('langPicker');
+    const targetSlot = document.getElementById(id === 'dashboard' ? 'dashLangSlot' : 'authLangSlot');
+    if (picker && targetSlot && picker.parentElement !== targetSlot) targetSlot.appendChild(picker);
+}
 
-            const locationStatus = await confirmBranchSilently();
-            if (locationStatus !== 'confirmed') {
-                attnLocStatus = locationStatus;
-                renderAttnLocBlock();
-                showAttn('attnTooFar');
-                return;
-            }
+// ===== Auth flow =====
+async function handlePhoneContinue() {
+    const phoneError = document.getElementById('phoneError');
+    phoneError.textContent = '';
+    const raw = document.getElementById('phoneInput').value;
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length < 9) { phoneError.textContent = 'Enter your full mobile number (at least 9 digits).'; return; }
 
-            showAttn('attnReady');
-        }
+    const btn = document.getElementById('phoneContinueBtn');
+    btn.disabled = true; btn.textContent = 'Searching…';
+    const { data: result, error } = await supabaseClient.rpc('find_members_by_phone', { p_phone: raw });
+    btn.disabled = false; btn.textContent = 'Continue';
 
-        // Identity is already established for the whole dashboard, so unlike
-        // checkin.html this skips a second "confirm your name" step.
-        async function handleAttnConfirm() {
-            const btn = document.getElementById('attnConfirmBtn');
-            btn.disabled = true;
-            btn.textContent = t('checking_in_btn');
+    if (error) { phoneError.textContent = 'Something went wrong. Please try again.'; return; }
+    if (result?.status !== 'ok' || !Array.isArray(result.members) || result.members.length === 0) {
+        phoneError.textContent = "We couldn't find that number. Double-check it, or ask your instructor.";
+        return;
+    }
 
-            const { data: status, error } = await supabaseClient
-                .rpc('checkin_self_by_phone', {
-                    p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
-                });
+    enteredPhone = raw;
+    householdMembers = result.members;
+    if (result.members.length === 1) { pickMember(result.members[0]); }
+    else { renderMemberList(result.members); show('pickState'); }
+}
+function renderMemberList(members) {
+    const list = document.getElementById('memberList');
+    list.innerHTML = '';
+    members.forEach((m) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'member-pick-row';
+        row.textContent = maskName(m.name);
+        row.addEventListener('click', () => pickMember(m));
+        list.appendChild(row);
+    });
+}
+function backToPhoneEntry(message) {
+    document.getElementById('phoneInput').value = '';
+    document.getElementById('phoneError').textContent = message || '';
+    selectedMember = null; enteredPhone = ''; enteredPasscode = null; householdMembers = []; openPerformance = null; lastReport = null;
+    show('phoneState');
+    document.getElementById('phoneInput').focus();
+}
 
-            btn.disabled = false;
-            btn.textContent = t('confirm_checkin');
-
-            if (error) {
-                document.getElementById('attnError').textContent = t('something_wrong') + ' (' + (error.message || error) + ')';
-                return;
-            }
-
-            if (status === 'checked_in') {
-                showAttnResult('✓', t('checked_in_title'), t('see_you_in_class', { name: maskName(selectedMember.name) }));
-            } else if (status === 'already') {
-                showAttnResult('✓', t('already_title'), t('already_sub', { name: maskName(selectedMember.name) }));
-            } else if (status === 'closed') {
-                initAttendance();
-            } else {
-                document.getElementById('attnError').textContent = t('something_wrong');
-            }
-        }
-
-        async function submitAttnNotify(reason) {
-            const { data: status, error } = await supabaseClient
-                .rpc('request_manual_checkin_by_phone', {
-                    p_student_id: selectedMember.id,
-                    p_phone: enteredPhone,
-                    p_reason: reason,
-                    p_passcode: enteredPasscode
-                });
-
-            if (error) {
-                showAttnResult('⚠️', t('notify_failed'), t('try_again_or_ask') + ' (' + (error.message || error) + ')');
-                return;
-            }
-            if (status === 'already') {
-                showAttnResult('✓', t('already_title'), t('already_marked_sub', { name: maskName(selectedMember.name) }));
-                return;
-            }
-            if (status !== 'sent') {
-                showAttnResult('⚠️', t('notify_failed'), t('try_again_or_ask'));
-                return;
-            }
-            showAttnResult('📨', t('instructor_notified'), t('will_mark_manually', { name: maskName(selectedMember.name) }));
-        }
-
-        function showAttnResult(icon, title, sub) {
-            document.getElementById('attnResultIcon').textContent = icon;
-            document.getElementById('attnResultTitle').textContent = title;
-            document.getElementById('attnResultSub').textContent = sub;
-            showAttn('attnResult');
-        }
-
-        // ===== Perform tab (ported from perform.html) =====
-        // Identity (phone + passcode) is already established for the whole
-        // dashboard, so unlike perform.html this never re-asks for either --
-        // join/see-spot go straight to the join_performance_by_phone /
-        // get_my_spot_by_phone RPCs with what's already in page state.
-        function showPerf(id) {
-            ['perfLoading', 'perfAction', 'perfJoinResult', 'perfSpotResult'].forEach((s) => {
-                document.getElementById(s).classList.toggle('hidden', s !== id);
-            });
-        }
-
-        async function initPerform() {
-            showPerf('perfLoading');
-            document.getElementById('perfError').textContent = '';
-
-            const { data, error } = await supabaseClient
-                .from('performances')
-                .select('id, title, event_date, status')
-                .eq('status', 'open')
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-            openPerformance = (!error && data && data[0]) || null;
-
-            const callBox = document.getElementById('perfCallBox');
-            const joinBtn = document.getElementById('perfJoinBtn');
-            if (openPerformance) {
-                callBox.classList.remove('hidden');
-                document.getElementById('perfCallTitle').textContent = openPerformance.title;
-                document.getElementById('perfCallDate').textContent = openPerformance.event_date || '';
-                joinBtn.classList.remove('hidden');
-            } else {
-                callBox.classList.add('hidden');
-                joinBtn.classList.add('hidden');
-            }
-            showPerf('perfAction');
-        }
-
-        async function handlePerfJoin() {
-            if (!openPerformance || !selectedMember) return;
-            const perfError = document.getElementById('perfError');
-            perfError.textContent = '';
-
-            const btn = document.getElementById('perfJoinBtn');
-            btn.disabled = true;
-            btn.textContent = t('perf_joining');
-
-            const { data: status, error } = await supabaseClient.rpc('join_performance_by_phone', {
-                p_performance_id: openPerformance.id,
-                p_student_id: selectedMember.id,
-                p_phone: enteredPhone,
-                p_passcode: enteredPasscode
-            });
-
-            btn.disabled = false;
-            btn.textContent = t('perf_join_btn');
-
-            if (status === 'bad_passcode') {
-                passcodeMode = 'enter';
-                renderPasscodeTexts();
-                document.getElementById('passcodeError').textContent = t('passcode_wrong');
-                clearPasscodeBoxes();
-                show('passcodeState');
-                shakePasscodeBoxes();
-                document.querySelector('.passcode-box').focus();
-                return;
-            }
-
-            if (error || status === 'bad_phone' || status === 'not_found') {
-                perfError.textContent = t('something_wrong') + (error ? ' (' + error.message + ')' : '');
-                return;
-            }
-
-            if (status === 'closed') {
-                document.getElementById('perfJoinTitle').textContent = t('perf_closed_title');
-                document.getElementById('perfJoinSub').textContent = t('perf_closed_sub');
-                document.getElementById('perfJoinedCount').textContent = '';
-                showPerf('perfJoinResult');
-                return;
-            }
-
-            const { data: count } = await supabaseClient.rpc('get_performance_signup_count', {
-                p_performance_id: openPerformance.id
-            });
-
-            document.getElementById('perfJoinTitle').textContent = t('perf_joined_title');
-            document.getElementById('perfJoinSub').textContent = `"${openPerformance.title}"`;
-            document.getElementById('perfJoinedCount').textContent = count ?? '';
-            showPerf('perfJoinResult');
-        }
-
-        async function handlePerfSeeSpot() {
-            if (!selectedMember) return;
-            const { data: result, error } = await supabaseClient.rpc('get_my_spot_by_phone', {
-                p_student_id: selectedMember.id,
-                p_phone: enteredPhone,
-                p_passcode: enteredPasscode
-            });
-
-            if (result?.status === 'bad_passcode') {
-                passcodeMode = 'enter';
-                renderPasscodeTexts();
-                document.getElementById('passcodeError').textContent = t('passcode_wrong');
-                clearPasscodeBoxes();
-                show('passcodeState');
-                shakePasscodeBoxes();
-                document.querySelector('.passcode-box').focus();
-                return;
-            }
-
-            if (error) {
-                document.getElementById('perfError').textContent = t('something_wrong') + ' (' + error.message + ')';
-                return;
-            }
-
-            const swatch = document.getElementById('perfSpotSwatch');
-            const emptyNote = document.getElementById('perfSpotEmptyNote');
-            const posText = document.getElementById('perfSpotPositionText');
-            const movementLabel = document.getElementById('perfSpotMovementLabel');
-
-            if (result?.status === 'ok') {
-                movementLabel.textContent = result.movement_label || '';
-                posText.textContent = result.position_text || '';
-                emptyNote.textContent = '';
-                swatch.style.display = 'block';
-                swatch.style.background = result.dress_color ? (DRESS_COLOR_HEX[result.dress_color] || '#ccc') : '#ccc';
-            } else {
-                movementLabel.textContent = '';
-                posText.textContent = '';
-                swatch.style.display = 'none';
-                emptyNote.textContent = result?.status === 'not_joined'
-                    ? t('perf_not_joined')
-                    : t('perf_no_positions');
-            }
-            showPerf('perfSpotResult');
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('phoneContinueBtn').addEventListener('click', handlePhoneContinue);
-            document.getElementById('phoneInput').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') handlePhoneContinue();
-            });
-            document.getElementById('pickBackBtn').addEventListener('click', () => backToPhoneEntry(''));
-
-            setupDigitBoxGroup('.passcode-box', handlePasscodeSubmit);
-            document.getElementById('passcodeSubmitBtn').addEventListener('click', handlePasscodeSubmit);
-            document.getElementById('passcodeSkipBtn').addEventListener('click', handlePasscodeSkip);
-            document.getElementById('passcodeForgotBtn').addEventListener('click', handlePasscodeForgot);
-            document.getElementById('passcodeBackBtn').addEventListener('click', () => backToPhoneEntry(''));
-
-            initTabs();
-            document.getElementById('attnConfirmBtn').addEventListener('click', handleAttnConfirm);
-            document.getElementById('attnNotifyFromClosedBtn').addEventListener('click', () =>
-                submitAttnNotify('Check-in window closed on their device')
-            );
-            document.getElementById('attnNotifyFromTooFarBtn').addEventListener('click', () =>
-                submitAttnNotify(attnLocStatus === 'unknown'
-                    ? 'Device did not share its location'
-                    : 'Device location was far from the studio')
-            );
-            document.getElementById('attnLocRetryBtn').addEventListener('click', initAttendance);
-
-            document.getElementById('perfJoinBtn').addEventListener('click', handlePerfJoin);
-            document.getElementById('perfSpotBtn').addEventListener('click', handlePerfSeeSpot);
-            document.getElementById('perfJoinBackBtn').addEventListener('click', () => showPerf('perfAction'));
-            document.getElementById('perfSpotBackBtn').addEventListener('click', () => showPerf('perfAction'));
-
-            document.getElementById('dashStartOverBtn').addEventListener('click', () => {
-                selectedMember = null;
-                enteredPhone = '';
-                enteredPasscode = null;
-                householdMembers = [];
-                openPerformance = null;
-                lastReport = null;
-                backToPhoneEntry('');
-            });
-
-            setupDigitBoxGroup('.pw-box', handlePwSave);
-            document.getElementById('passwordManageToggleBtn').addEventListener('click', togglePasswordManageForm);
-            document.getElementById('pwCancelBtn').addEventListener('click', () => {
-                document.getElementById('passwordManageForm').classList.add('hidden');
-            });
-            document.getElementById('pwSaveBtn').addEventListener('click', handlePwSave);
-
-            window.addEventListener('resize', () => {
-                const activeBtn = document.querySelector('.tab-btn.active');
-                if (activeBtn) moveTabIndicator(activeBtn);
-            });
-
-            // Language switch: statics are re-applied by i18n.js; re-render every
-            // dynamic (state-dependent) text currently on screen.
-            window.onLangChange = () => {
-                if (!document.getElementById('passcodeState').classList.contains('hidden')) {
-                    renderPasscodeTexts();
-                }
-                if (lastReport && !document.getElementById('dashboardState').classList.contains('hidden')) {
-                    renderReport(lastReport);
-                    document.getElementById('branchLine').textContent = t(branchKey);
-                    renderAttnClosedMessage();
-                    renderAttnLocBlock();
-                    document.getElementById('passwordManageToggleBtn').textContent = enteredPasscode === null
-                        ? t('create_password_btn')
-                        : t('change_password_btn');
-                }
-            };
-
-            backToPhoneEntry('');
+function getDigitBoxValue(selector) { return Array.from(document.querySelectorAll(selector)).map((b) => b.value).join(''); }
+function clearDigitBoxes(selector) { document.querySelectorAll(selector).forEach((b) => { b.value = ''; }); }
+function shakeBoxWrapper(id) {
+    const wrap = document.getElementById(id);
+    wrap.classList.remove('shake'); void wrap.offsetWidth; wrap.classList.add('shake');
+}
+function setupDigitBoxGroup(selector, onComplete) {
+    const boxes = Array.from(document.querySelectorAll(selector));
+    boxes.forEach((box, i) => {
+        box.addEventListener('input', () => {
+            box.value = box.value.replace(/\D/g, '').slice(0, 1);
+            if (box.value && boxes[i + 1]) boxes[i + 1].focus();
+            if (boxes.every((b) => b.value)) onComplete();
         });
-    </script>
+        box.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !box.value && boxes[i - 1]) boxes[i - 1].focus();
+            if (e.key === 'Enter') onComplete();
+        });
+    });
+}
+function getPasscodeValue() { return getDigitBoxValue('.passcode-box'); }
+function clearPasscodeBoxes() { clearDigitBoxes('.passcode-box'); }
+function shakePasscodeBoxes() { shakeBoxWrapper('passcodeBoxes'); }
+
+function pickMember(member) {
+    selectedMember = member;
+    enteredPasscode = null;
+    clearPasscodeBoxes();
+    document.getElementById('passcodeError').textContent = '';
+    document.getElementById('passcodeForm').classList.remove('hidden');
+    document.getElementById('passcodeForgotSent').classList.add('hidden');
+    passcodeMode = member.has_passcode ? 'enter' : 'setup';
+    renderPasscodeTexts();
+    show('passcodeState');
+    document.querySelector('.passcode-box').focus();
+}
+function renderPasscodeTexts() {
+    const skipBtn = document.getElementById('passcodeSkipBtn');
+    const forgotBtn = document.getElementById('passcodeForgotBtn');
+    if (passcodeMode === 'setup') {
+        document.getElementById('passcodeHeading').textContent = t('mv2_passcode_create_title');
+        document.getElementById('passcodeBody').textContent = t('mv2_passcode_create_body');
+        document.getElementById('passcodeSubmitBtn').textContent = t('mv2_set_passcode_btn');
+        skipBtn.classList.remove('hidden'); forgotBtn.classList.add('hidden');
+    } else {
+        document.getElementById('passcodeHeading').textContent = t('mv2_passcode_enter_title');
+        document.getElementById('passcodeBody').textContent = '';
+        document.getElementById('passcodeSubmitBtn').textContent = t('mv2_continue');
+        skipBtn.classList.add('hidden'); forgotBtn.classList.remove('hidden');
+    }
+}
+async function handlePasscodeSubmit() {
+    const passcodeError = document.getElementById('passcodeError');
+    passcodeError.textContent = '';
+    const code = getPasscodeValue();
+    if (!/^\d{4}$/.test(code)) { passcodeError.textContent = t('mv2_enter_4digit'); shakePasscodeBoxes(); return; }
+
+    const btn = document.getElementById('passcodeSubmitBtn');
+    btn.disabled = true;
+
+    if (passcodeMode === 'setup') {
+        const { data: status, error } = await supabaseClient.rpc('set_student_passcode_by_phone', {
+            p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: code
+        });
+        btn.disabled = false;
+        if (error) { passcodeError.textContent = t('mv2_something_wrong'); return; }
+        if (status === 'bad_phone') { backToPhoneEntry(t('mv2_verification_failed')); return; }
+        if (status === 'invalid_format') { passcodeError.textContent = t('mv2_enter_4digit'); shakePasscodeBoxes(); return; }
+        enteredPasscode = status === 'ok' ? code : null;
+        loadDashboard(selectedMember);
+        return;
+    }
+
+    enteredPasscode = code;
+    btn.disabled = false;
+    loadDashboard(selectedMember);
+}
+function handlePasscodeSkip() { enteredPasscode = null; loadDashboard(selectedMember); }
+
+const STUDIO_WA_PHONE = '393445667033';
+async function handlePasscodeForgot() {
+    const { error } = await supabaseClient.rpc('request_passcode_reset_by_phone', { p_student_id: selectedMember.id, p_phone: enteredPhone });
+    if (error) { document.getElementById('passcodeError').textContent = t('mv2_something_wrong'); return; }
+    const name = selectedMember?.name || '';
+    const message = `hello I am ${name}, i forgot my login passcode of bhangra sway, i have sent the request for reset, please accept the request.`;
+    document.getElementById('passcodeWaMessageBox').value = message;
+    document.getElementById('passcodeWaBtn').href = `https://api.whatsapp.com/send?phone=${STUDIO_WA_PHONE}&text=${encodeURIComponent(message)}`;
+    document.getElementById('passcodeCopyBtn').onclick = () => { navigator.clipboard?.writeText(message); };
+    document.getElementById('passcodeForm').classList.add('hidden');
+    document.getElementById('passcodeForgotSent').classList.remove('hidden');
+}
+
+// ===== Settings screen (My Profile + in-session passcode reset request) =====
+// A full-screen overlay on top of the dashboard, not a fourth tab — it's
+// account-level, not day-to-day content, so it gets its own explicit close
+// rather than living in the same row as Report/Attendance/Perform.
+function openSettingsScreen() {
+    document.getElementById('resetPasscodeDefault').classList.remove('hidden');
+    document.getElementById('resetPasscodeSent').classList.add('hidden');
+    renderProfilePhotoCard(selectedMember);
+    document.getElementById('settingsScreen').classList.remove('hidden');
+}
+function closeSettingsScreen() {
+    document.getElementById('settingsScreen').classList.add('hidden');
+}
+// Same request (request_passcode_reset_by_phone) and WhatsApp-confirmation
+// pattern as handlePasscodeForgot() above, just reachable from inside the
+// dashboard instead of only at the locked-out login screen — e.g. wanting
+// a reset without having actually forgotten it.
+async function handleSettingsPasscodeReset() {
+    const { error } = await supabaseClient.rpc('request_passcode_reset_by_phone', { p_student_id: selectedMember.id, p_phone: enteredPhone });
+    if (error) { alert(t('mv2_something_wrong')); return; }
+    const name = selectedMember?.name || '';
+    const message = `hello I am ${name}, i would like my login passcode reset for bhangra sway, i have sent the request, please accept the request.`;
+    document.getElementById('resetPasscodeWaMessageBox').value = message;
+    document.getElementById('resetPasscodeWaBtn').href = `https://api.whatsapp.com/send?phone=${STUDIO_WA_PHONE}&text=${encodeURIComponent(message)}`;
+    document.getElementById('resetPasscodeCopyBtn').onclick = () => { navigator.clipboard?.writeText(message); };
+    document.getElementById('resetPasscodeDefault').classList.add('hidden');
+    document.getElementById('resetPasscodeSent').classList.remove('hidden');
+}
+
+function renderSiblingRow() {
+    const row = document.getElementById('siblingRow');
+    if (householdMembers.length <= 1) { row.classList.add('hidden'); row.innerHTML = ''; return; }
+    row.classList.remove('hidden');
+    row.innerHTML = '';
+    householdMembers.forEach((m) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'sibling-chip' + (selectedMember && String(selectedMember.id) === String(m.id) ? ' active' : '');
+        const initial = String(m.name || '?').trim().charAt(0).toUpperCase();
+        chip.innerHTML = `<span class="sibling-avatar">${escapeHtml(initial)}</span><span>${escapeHtml(maskName(m.name))}</span>`;
+        chip.addEventListener('click', () => { if (!selectedMember || String(selectedMember.id) !== String(m.id)) pickMember(m); });
+        row.appendChild(chip);
+    });
+}
+
+async function loadDashboard(member) {
+    selectedMember = member;
+    show('loadingState');
+    const { data: report, error } = await supabaseClient.rpc('get_student_report_v2_by_phone', {
+        p_student_id: member.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error) { backToPhoneEntry('Could not load your account. Please try again.'); return; }
+    if (report?.status === 'bad_passcode') {
+        passcodeMode = 'enter'; renderPasscodeTexts();
+        document.getElementById('passcodeError').textContent = 'Wrong passcode.';
+        clearPasscodeBoxes(); show('passcodeState'); shakePasscodeBoxes();
+        document.querySelector('.passcode-box').focus();
+        return;
+    }
+    if (report?.status !== 'ok') { backToPhoneEntry('Verification failed.'); return; }
+
+    lastReport = report;
+    renderReport(report);
+    renderSiblingRow();
+    show('dashboard');
+    switchTab('report');
+    initAttendance();
+    initPerform();
+}
+
+document.getElementById('startOverBtn').addEventListener('click', () => backToPhoneEntry(''));
+
+// ===== Dashboard tabs =====
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-panel').forEach((el) => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach((el) => el.classList.remove('active'));
+    document.querySelector(`.tab-panel[data-panel="${tabName}"]`).classList.add('active');
+    document.querySelector(`.tab-btn[data-tab="${tabName}"]`).classList.add('active');
+}
+
+// ===== Report tab =====
+function renderReport(report) {
+    const s = report.student;
+    document.getElementById('dashStudentName').textContent = s.name;
+    const avatarEl = document.getElementById('dashAvatar');
+    if (s.photo_path) {
+        avatarEl.style.backgroundImage = `url('${supabaseClient.storage.from('student-photos').getPublicUrl(s.photo_path).data.publicUrl}')`;
+        avatarEl.textContent = '';
+    } else {
+        avatarEl.style.backgroundImage = 'none';
+        avatarEl.textContent = (s.name || '?').trim().charAt(0).toUpperCase();
+    }
+
+    const attendanceRows = report.attendance || [];
+    const totalClasses = attendanceRows.filter((r) => r.ispresent).length;
+
+    renderCreditStatus(s, totalClasses);
+    renderBatchBlock(s);
+    renderCertificateStatus(s);
+    renderInvoices(s);
+    renderProfilePhotoCard(s);
+    renderHistoricalRecord(s, report);
+}
+
+async function renderCreditStatus(student, totalClasses) {
+    const balance = student.v2_credit_balance;
+    const card = document.getElementById('creditBalanceCard');
+    const amountEl = document.getElementById('creditBalanceAmount');
+    const pillEl = document.getElementById('creditBalancePill');
+    const classesLeftEl = document.getElementById('creditClassesLeftLine');
+
+    amountEl.textContent = `€${balance}`;
+    if (balance > 0) {
+        card.style.background = 'linear-gradient(160deg, var(--success-soft), #ecfdf3)';
+        card.style.border = '1px solid #bbf0d1';
+        amountEl.style.color = 'var(--ink)';
+        pillEl.className = 'badge badge-success';
+        pillEl.innerHTML = iconLabel('check-circle', 'Ready', 13);
+        classesLeftEl.textContent = `${Math.floor(balance / 10)} class${Math.floor(balance / 10) === 1 ? '' : 'es'} left`;
+    } else {
+        card.style.background = 'linear-gradient(160deg, var(--warning-soft), #fff7ed)';
+        card.style.border = `1px solid ${balance < 0 ? '#f6d4ce' : '#fbdca0'}`;
+        amountEl.style.color = balance < 0 ? 'var(--danger)' : 'var(--ink)';
+        pillEl.className = balance < 0 ? 'badge badge-danger' : 'badge badge-warning';
+        pillEl.innerHTML = iconLabel('warning', 'Needs recharge', 13);
+        classesLeftEl.textContent = balance < 0 ? `${Math.ceil(Math.abs(balance) / 10)} class${Math.ceil(Math.abs(balance) / 10) === 1 ? '' : 'es'} on credit` : '0 classes left';
+    }
+    document.getElementById('creditTotalClassesLine').textContent = `${totalClasses} classes total`;
+
+    const { data: ledger, error } = await supabaseClient.rpc('get_my_credit_ledger_v2_by_phone', {
+        p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    const rows = (!error && ledger) ? ledger : [];
+    const lastRecharge = rows.find((r) => r.type === 'recharge');
+    document.getElementById('creditLastRechargeLine').textContent = lastRecharge
+        ? `Last recharge: ${String(lastRecharge.created_at).slice(0, 10)} (€${lastRecharge.amount})`
+        : 'No recharge yet';
+
+    renderPaymentHistoryCard(rows);
+}
+
+function renderPaymentHistoryCard(rows) {
+    const listEl = document.getElementById('creditLedgerList');
+    const hiddenEl = document.getElementById('creditLedgerHidden');
+    const toggleBtn = document.getElementById('creditLedgerToggleBtn');
+
+    if (!rows.length) {
+        listEl.innerHTML = `<span class="empty-note">No transactions yet.</span>`;
+        hiddenEl.innerHTML = ''; hiddenEl.classList.add('hidden'); toggleBtn.classList.add('hidden');
+        return;
+    }
+    const rowHtml = (tx) => {
+        const isRecharge = tx.type === 'recharge';
+        const isClass = tx.type === 'class_deduction';
+        const iconName = isRecharge ? 'credit-card' : (isClass ? 'calendar' : 'file-text');
+        const label = isRecharge ? 'Recharge' : (isClass ? 'Class attended' : 'Adjustment');
+        const amt = Number(tx.amount) || 0;
+        const amtText = amt > 0 ? `+€${amt}` : (amt < 0 ? `−€${Math.abs(amt)}` : '€0');
+        return `
+            <div class="ledger-row">
+                <div class="ledger-icon">${icon(iconName, 17)}</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:700; font-size:0.87em;">${label}</div>
+                    <div style="font-size:0.75em; color:var(--ink-faint);">${String(tx.created_at).slice(0, 10)}</div>
+                </div>
+                <div style="font-weight:700; font-size:0.87em; color:${amt > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${amtText}</div>
+            </div>`;
+    };
+    const visible = rows.slice(0, 4);
+    const rest = rows.slice(4);
+    listEl.innerHTML = visible.map(rowHtml).join('');
+    if (rest.length) {
+        hiddenEl.innerHTML = rest.map(rowHtml).join('');
+        hiddenEl.classList.add('hidden');
+        toggleBtn.classList.remove('hidden');
+        toggleBtn.textContent = 'Show all transactions';
+        toggleBtn.dataset.open = 'false';
+    } else {
+        hiddenEl.innerHTML = ''; hiddenEl.classList.add('hidden'); toggleBtn.classList.add('hidden');
+    }
+}
+function toggleCreditLedger() {
+    const hiddenEl = document.getElementById('creditLedgerHidden');
+    const toggleBtn = document.getElementById('creditLedgerToggleBtn');
+    const open = toggleBtn.dataset.open === 'true';
+    hiddenEl.classList.toggle('hidden', open);
+    toggleBtn.textContent = open ? 'Show all transactions' : 'Show less';
+    toggleBtn.dataset.open = open ? 'false' : 'true';
+}
+
+async function renderBatchBlock(student) {
+    document.getElementById('currentBatchLabel').textContent = student.batch || 'No batch assigned';
+    const { data: allBatches } = await supabaseClient.from('batches').select('name').eq('active', true).order('sort_order', { ascending: true });
+    const select = document.getElementById('batchRequestSelect');
+    select.innerHTML = '';
+    (allBatches || []).filter((b) => b.name !== student.batch).forEach((b) => {
+        const opt = document.createElement('option');
+        opt.value = b.name; opt.textContent = b.name;
+        select.appendChild(opt);
+    });
+
+    const { data: pendingBatch } = await supabaseClient.rpc('get_batch_request_status_by_phone', {
+        p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+
+    const form = document.getElementById('batchRequestForm');
+    const statusEl = document.getElementById('batchRequestStatus');
+    if (pendingBatch) {
+        form.classList.add('hidden');
+        statusEl.classList.remove('hidden');
+        statusEl.textContent = `Request pending: move to ${pendingBatch}`;
+    } else {
+        form.classList.remove('hidden');
+        statusEl.classList.add('hidden');
+    }
+}
+async function requestBatchMove() {
+    const select = document.getElementById('batchRequestSelect');
+    const target = select.value;
+    if (!target) return;
+    const { data: status, error } = await supabaseClient.rpc('request_batch_change_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_requested_batch: target, p_passcode: enteredPasscode
+    });
+    if (error || status !== 'sent') { alert('Something went wrong.'); return; }
+    renderBatchBlock({ id: selectedMember.id, batch: lastReport?.student?.batch });
+}
+
+async function renderCertificateStatus(student) {
+    const { data: status, error } = await supabaseClient.rpc('get_medical_certificate_status_by_phone', {
+        p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    const label = document.getElementById('certificateStatusLabel');
+    const uploadLabel = document.getElementById('certificateUploadLabel');
+    const approvedActions = document.getElementById('certificateApprovedActions');
+    if (error || !status || status === 'bad_phone' || status === 'bad_passcode' || status === 'none') {
+        label.textContent = 'No certificate on file.';
+        uploadLabel.classList.remove('hidden'); approvedActions.classList.add('hidden');
+        document.getElementById('certificateUploadBtnText').textContent = 'Upload PDF';
+        return;
+    }
+    if (status === 'approved') {
+        label.textContent = 'Certificate on file.';
+        uploadLabel.classList.add('hidden'); approvedActions.classList.remove('hidden');
+    } else if (status === 'pending') {
+        label.textContent = 'Submitted, waiting for review.';
+        uploadLabel.classList.remove('hidden'); approvedActions.classList.add('hidden');
+        document.getElementById('certificateUploadBtnText').textContent = 'Re-upload PDF';
+    }
+}
+async function uploadMedicalCertificate(fileList) {
+    const file = fileList && fileList[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') { alert('PDF files only.'); return; }
+    const path = `pending/${selectedMember.id}_${Date.now()}.pdf`;
+    const { error: uploadError } = await supabaseClient.storage.from('medical-cert-uploads').upload(path, file, { contentType: 'application/pdf' });
+    if (uploadError) { alert('Something went wrong.'); return; }
+    const { data: status, error } = await supabaseClient.rpc('submit_medical_certificate_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_file_path: path, p_passcode: enteredPasscode
+    });
+    document.getElementById('certificateUploadInput').value = '';
+    if (error || status !== 'sent') { alert('Something went wrong.'); return; }
+    renderCertificateStatus({ id: selectedMember.id });
+}
+async function viewMedicalCertificate() {
+    const { data: token, error } = await supabaseClient.rpc('get_medical_certificate_download_url_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error || !token) { alert('Something went wrong.'); return; }
+    window.open(supabaseClient.storage.from('member-docs').getPublicUrl(`${token}.pdf`).data.publicUrl, '_blank');
+}
+async function deleteMedicalCertificate() {
+    if (!confirm('Delete your medical certificate?')) return;
+    const { data: status, error } = await supabaseClient.rpc('delete_medical_certificate_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error || status !== 'ok') { alert('Something went wrong.'); return; }
+    renderCertificateStatus({ id: selectedMember.id });
+}
+
+async function renderInvoices(student) {
+    const list = document.getElementById('invoicesList');
+    const { data: payments, error } = await supabaseClient.rpc('get_my_fatture_by_phone', {
+        p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error || !payments || payments.length === 0) { list.innerHTML = `<span class="empty-note">No invoices yet.</span>`; return; }
+    list.innerHTML = payments.map((p) => {
+        const url = supabaseClient.storage.from('member-docs').getPublicUrl(`${p.publicToken}.pdf`).data.publicUrl;
+        const label = [p.date, p.taxFileNo].filter(Boolean).join(' · ');
+        return `<div class="ledger-row"><span>${escapeHtml(label)}</span><a href="${url}" target="_blank" rel="noopener" class="link-btn" style="padding:0;">Download</a></div>`;
+    }).join('');
+}
+
+async function renderProfilePhotoCard(student) {
+    const el = document.getElementById('profilePhotoContent');
+    const { data: status, error } = await supabaseClient.rpc('get_student_photo_status_by_phone', {
+        p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error || !status || status.status === 'bad_phone') { el.innerHTML = `<span class="empty-note">Something went wrong.</span>`; return; }
+    if (!status.has_passcode) { renderPhotoState1a(el); return; }
+    if (status.status !== 'ok') { renderPhotoState1b(el); return; }
+    renderPhotoState23(el, status.photo_path);
+}
+function renderPhotoState1a(el) {
+    el.innerHTML = `
+        <p class="empty-note" style="margin:0 0 12px;">Set a 4-digit passcode to add or view your profile photo.</p>
+        <input type="text" inputmode="numeric" maxlength="4" id="photoPasscodeInput" placeholder="0000" style="width:120px; text-align:center; letter-spacing:.3em; padding:9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:1.1em; margin-bottom:10px;">
+        <div><button class="btn btn-primary" onclick="submitPhotoPasscodeSetup()">Set Passcode</button></div>`;
+}
+function renderPhotoState1b(el) {
+    el.innerHTML = `
+        <p class="empty-note" style="margin:0 0 12px;">Enter your passcode to manage your profile photo.</p>
+        <input type="text" inputmode="numeric" maxlength="4" id="photoPasscodeInput" placeholder="0000" style="width:120px; text-align:center; letter-spacing:.3em; padding:9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:1.1em; margin-bottom:10px;">
+        <div><button class="btn btn-primary" onclick="submitPhotoPasscodeVerify()">Unlock</button></div>`;
+}
+function renderPhotoState23(el, photoPath) {
+    const url = photoPath ? supabaseClient.storage.from('student-photos').getPublicUrl(photoPath).data.publicUrl : '';
+    const initials = (selectedMember.name || '?').trim().charAt(0).toUpperCase();
+    el.innerHTML = `
+        <div style="width:88px; height:88px; border-radius:50%; ${url ? `background-image:url('${url}'); background-size:cover; background-position:center;` : 'background:var(--accent);'} display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:1.7em; margin-bottom:14px;">${url ? '' : initials}</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <button class="btn btn-outline btn-sm" onclick="openMemberCameraCapture(uploadMemberPhotoBlob)">${iconLabel('camera', 'Camera', 14)}</button>
+            <label class="btn btn-outline btn-sm" style="cursor:pointer;">${iconLabel('upload', 'Upload', 14)}<input type="file" accept="image/*" style="display:none;" onchange="handleMemberPhotoUpload(this)"></label>
+            ${url ? `<button class="btn btn-danger btn-sm" onclick="handleMemberPhotoRemove()">${iconLabel('trash', 'Remove', 14)}</button>` : ''}
+        </div>`;
+}
+async function submitPhotoPasscodeSetup() {
+    const code = (document.getElementById('photoPasscodeInput')?.value || '').trim();
+    if (!/^\d{4}$/.test(code)) { alert('Enter a 4-digit code.'); return; }
+    const { data: result, error } = await supabaseClient.rpc('set_student_passcode_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: code
+    });
+    if (error || (result !== 'ok' && result !== 'already_set')) { alert('Something went wrong.'); return; }
+    enteredPasscode = code;
+    renderProfilePhotoCard(selectedMember);
+}
+async function submitPhotoPasscodeVerify() {
+    const code = (document.getElementById('photoPasscodeInput')?.value || '').trim();
+    if (!/^\d{4}$/.test(code)) { alert('Enter a 4-digit code.'); return; }
+    const { data: status, error } = await supabaseClient.rpc('get_student_photo_status_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: code
+    });
+    if (error || !status || status.status !== 'ok') { alert('Wrong passcode.'); return; }
+    enteredPasscode = code;
+    renderProfilePhotoCard(selectedMember);
+}
+function handleMemberPhotoUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    openMemberPhotoCrop(file, uploadMemberPhotoBlob);
+    input.value = '';
+}
+async function uploadMemberPhotoBlob(blob) {
+    const ext = blob.type === 'image/png' ? 'png' : 'jpg';
+    const path = `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: uploadError } = await supabaseClient.storage.from('student-photos').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+    if (uploadError) { alert('Something went wrong.'); return; }
+    const { data: result, error } = await supabaseClient.rpc('set_student_photo_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode, p_photo_path: path
+    });
+    if (error || result !== 'ok') { alert('Something went wrong.'); return; }
+    renderProfilePhotoCard(selectedMember);
+}
+async function handleMemberPhotoRemove() {
+    const { data: result, error } = await supabaseClient.rpc('remove_student_photo_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error || result !== 'ok') { alert('Something went wrong.'); return; }
+    const avatarEl = document.getElementById('dashAvatar');
+    avatarEl.style.backgroundImage = 'none';
+    avatarEl.textContent = (selectedMember.name || '?').trim().charAt(0).toUpperCase();
+    renderProfilePhotoCard(selectedMember);
+}
+
+function renderHistoricalRecord(student, report) {
+    const balanceRow = document.getElementById('histBalanceRow');
+    if (student.pre_cutover_balance_snapshot !== null && student.pre_cutover_balance_snapshot !== undefined) {
+        balanceRow.classList.remove('hidden');
+        document.getElementById('histBalanceValue').textContent = `€${student.pre_cutover_balance_snapshot}`;
+    } else {
+        balanceRow.classList.add('hidden');
+    }
+
+    const oldPayments = (report.oldPayments || []).map((p) => ({
+        date: String(p.paiddate || '').slice(0, 10),
+        amount: Number(p.amount ?? student.monthlyfees ?? 0)
+    })).filter((p) => p.date).sort((a, b) => b.date.localeCompare(a.date));
+    const paymentsList = document.getElementById('histPaymentsList');
+    paymentsList.innerHTML = oldPayments.length
+        ? oldPayments.map((p) => `<div class="ledger-row"><span>${formatShortDate(p.date)}</span><strong style="color:var(--success);">€${p.amount}</strong></div>`).join('')
+        : `<span class="empty-note">No earlier payments recorded.</span>`;
+
+    const oldDates = (report.attendance || [])
+        .filter((a) => a.ispresent && String(a.attendancedate).slice(0, 10) < CUTOVER_DATE)
+        .map((a) => String(a.attendancedate).slice(0, 10))
+        .sort().reverse();
+    const attendanceList = document.getElementById('histAttendanceList');
+    attendanceList.innerHTML = oldDates.length
+        ? oldDates.map((d) => `<span class="badge hist-date-badge">${formatShortDate(d)}</span>`).join('')
+        : `<span class="empty-note">No earlier attendance recorded.</span>`;
+}
+
+// ===== Attendance tab (self check-in) =====
+const STUDIO_LAT = 45.1395108;
+const STUDIO_LNG = 10.0288616;
+const STUDIO_RADIUS_METERS = 500;
+let attnLocStatus = 'too-far';
+let attnClosedMsg = null;
+
+function showAttn(id) {
+    ['attnLoading', 'attnClosed', 'attnTooFar', 'attnReady', 'attnResult'].forEach((s) => {
+        document.getElementById(s).classList.toggle('hidden', s !== id);
+    });
+    document.getElementById('attnError').textContent = '';
+}
+function haversineMeters(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+}
+async function checkLocationStatus() {
+    if (!navigator.geolocation) return 'unknown';
+    return await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => resolve(haversineMeters(pos.coords.latitude, pos.coords.longitude, STUDIO_LAT, STUDIO_LNG) <= STUDIO_RADIUS_METERS ? 'confirmed' : 'too-far'),
+            () => resolve('unknown'),
+            { timeout: 8000, maximumAge: 60000 }
+        );
+    });
+}
+async function confirmBranchSilently() {
+    const status = await checkLocationStatus();
+    const branchLine = document.getElementById('branchLine');
+    branchLine.textContent = status === 'confirmed' ? 'You are at the studio' : 'Checking in at Bhangra Sway';
+    return status;
+}
+async function initAttendance() {
+    showAttn('attnLoading');
+    document.getElementById('branchLine').textContent = 'Checking in…';
+
+    const { data: settings, error: settingsError } = await supabaseClient.from('checkin_settings').select('*').eq('id', 1).single();
+    if (settingsError || !settings) {
+        attnClosedMsg = 'Check-in is not set up yet. Please ask your instructor.';
+        document.getElementById('attnClosedMessage').textContent = attnClosedMsg;
+        showAttn('attnClosed');
+        return;
+    }
+    const now = new Date();
+    const day = now.getDay();
+    const hhmmss = now.toTimeString().slice(0, 8);
+    const activeDays = settings.active_days || [];
+    const inWindow = settings.start_time <= settings.end_time
+        ? (hhmmss >= settings.start_time && hhmmss <= settings.end_time)
+        : (hhmmss >= settings.start_time || hhmmss <= settings.end_time);
+    const isOpen = activeDays.includes(day) && inWindow;
+    if (!isOpen) {
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayList = activeDays.map((d) => dayNames[d]).join(' & ');
+        attnClosedMsg = `Check-in is open ${dayList}, ${String(settings.start_time).slice(0, 5)}–${String(settings.end_time).slice(0, 5)}. Come back then.`;
+        document.getElementById('attnClosedMessage').textContent = attnClosedMsg;
+        showAttn('attnClosed');
+        return;
+    }
+    const locationStatus = await confirmBranchSilently();
+    if (locationStatus !== 'confirmed') {
+        attnLocStatus = locationStatus;
+        renderAttnLocBlock();
+        showAttn('attnTooFar');
+        return;
+    }
+    showAttn('attnReady');
+}
+function renderAttnLocBlock() {
+    const unknown = attnLocStatus === 'unknown';
+    document.getElementById('attnLocHeading').textContent = unknown ? "We couldn't verify your location" : 'You seem far from the studio';
+    document.getElementById('attnLocBody').textContent = unknown
+        ? "Self check-in needs your phone's location to confirm you're at the studio. Allow location access and try again, or send a request instead."
+        : "Your phone's location says you're more than 500m from the studio. Maybe location wasn't shared correctly, you can notify your instructor instead.";
+    document.getElementById('attnLocRetryBtn').textContent = "I've enabled location, try again";
+}
+async function handleAttnConfirm() {
+    const btn = document.getElementById('attnConfirmBtnLabel');
+    btn.disabled = true; btn.textContent = 'Checking in…';
+    const { data: status, error } = await supabaseClient.rpc('checkin_self_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    btn.disabled = false; btn.textContent = 'Confirm Check-In';
+    if (error) { document.getElementById('attnError').textContent = 'Something went wrong.'; return; }
+    if (status === 'checked_in') {
+        showAttnResult('✓', 'Checked in!', `See you in class, ${maskName(selectedMember.name)}.`);
+    } else if (status === 'already') {
+        showAttnResult('✓', 'Already checked in', `You're all set, ${maskName(selectedMember.name)}.`);
+    } else if (status === 'closed') {
+        initAttendance();
+    } else {
+        document.getElementById('attnError').textContent = 'Something went wrong.';
+    }
+}
+async function submitAttnNotify(reason) {
+    const { data: status, error } = await supabaseClient.rpc('request_manual_checkin_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_reason: reason, p_passcode: enteredPasscode
+    });
+    if (error) { showAttnResult('!', 'Could not send', 'Please try again or ask your instructor.'); return; }
+    if (status === 'already') { showAttnResult('✓', 'Already marked', `You're already marked present, ${maskName(selectedMember.name)}.`); return; }
+    if (status !== 'sent') { showAttnResult('!', 'Could not send', 'Please try again or ask your instructor.'); return; }
+    showAttnResult('✉', 'Instructor notified', `We'll mark you present manually, ${maskName(selectedMember.name)}.`);
+}
+function showAttnResult(iconChar, title, sub) {
+    document.getElementById('attnResultIcon').textContent = iconChar;
+    document.getElementById('attnResultTitle').textContent = title;
+    document.getElementById('attnResultSub').textContent = sub;
+    showAttn('attnResult');
+}
+document.getElementById('attnNotifyFromClosedBtnLabel').addEventListener('click', () => submitAttnNotify('Check-in window closed on their device'));
+document.getElementById('attnNotifyFromTooFarBtnLabel').addEventListener('click', () => submitAttnNotify(attnLocStatus === 'unknown' ? 'Device did not share its location' : 'Device location was far from the studio'));
+document.getElementById('attnLocRetryBtn').addEventListener('click', initAttendance);
+
+// ===== Perform tab =====
+const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#1a237e' };
+function showPerf(id) {
+    ['perfLoading', 'perfAction', 'perfJoinResult', 'perfSpotResult'].forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
+}
+async function initPerform() {
+    showPerf('perfLoading');
+    document.getElementById('perfError').textContent = '';
+    const { data, error } = await supabaseClient.from('performances').select('id, title, event_date, status').eq('status', 'open').order('created_at', { ascending: false }).limit(1);
+    openPerformance = (!error && data && data[0]) || null;
+    const callBox = document.getElementById('perfCallBox');
+    const joinBtn = document.getElementById('perfJoinBtnLabel');
+    if (openPerformance) {
+        callBox.classList.remove('hidden');
+        document.getElementById('perfCallTitle').textContent = openPerformance.title;
+        document.getElementById('perfCallDate').textContent = openPerformance.event_date || '';
+        joinBtn.classList.remove('hidden'); joinBtn.textContent = "I'm In!";
+    } else {
+        callBox.classList.add('hidden'); joinBtn.classList.add('hidden');
+    }
+    document.getElementById('perfSpotBtnLabel').textContent = 'See My Spot';
+    showPerf('perfAction');
+}
+async function handlePerfJoin() {
+    if (!openPerformance || !selectedMember) return;
+    const perfError = document.getElementById('perfError');
+    perfError.textContent = '';
+    const btn = document.getElementById('perfJoinBtnLabel');
+    btn.disabled = true; btn.textContent = 'Joining…';
+    const { data: status, error } = await supabaseClient.rpc('join_performance_by_phone', {
+        p_performance_id: openPerformance.id, p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    btn.disabled = false; btn.textContent = "I'm In!";
+    if (status === 'bad_passcode') {
+        passcodeMode = 'enter'; renderPasscodeTexts();
+        document.getElementById('passcodeError').textContent = 'Wrong passcode.';
+        clearPasscodeBoxes(); show('passcodeState'); shakePasscodeBoxes();
+        document.querySelector('.passcode-box').focus();
+        return;
+    }
+    if (error || status === 'bad_phone' || status === 'not_found') { perfError.textContent = 'Something went wrong.'; return; }
+    if (status === 'closed') {
+        document.getElementById('perfJoinTitle').textContent = 'Sign-ups closed';
+        document.getElementById('perfJoinSub').textContent = 'This call is no longer accepting sign-ups.';
+        document.getElementById('perfJoinedCount').textContent = '';
+        showPerf('perfJoinResult');
+        return;
+    }
+    const { data: count } = await supabaseClient.rpc('get_performance_signup_count', { p_performance_id: openPerformance.id });
+    document.getElementById('perfJoinTitle').textContent = "You're in!";
+    document.getElementById('perfJoinSub').textContent = `"${openPerformance.title}"`;
+    document.getElementById('perfJoinedCount').textContent = count ?? '';
+    showPerf('perfJoinResult');
+}
+async function handlePerfSeeSpot() {
+    if (!selectedMember) return;
+    const { data: result, error } = await supabaseClient.rpc('get_my_spot_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (result?.status === 'bad_passcode') {
+        passcodeMode = 'enter'; renderPasscodeTexts();
+        document.getElementById('passcodeError').textContent = 'Wrong passcode.';
+        clearPasscodeBoxes(); show('passcodeState'); shakePasscodeBoxes();
+        document.querySelector('.passcode-box').focus();
+        return;
+    }
+    if (error) { document.getElementById('perfError').textContent = 'Something went wrong.'; return; }
+    const swatch = document.getElementById('perfSpotSwatch');
+    const emptyNote = document.getElementById('perfSpotEmptyNote');
+    const posText = document.getElementById('perfSpotPositionText');
+    const movementLabel = document.getElementById('perfSpotMovementLabel');
+    if (result?.status === 'ok') {
+        movementLabel.textContent = result.movement_label || '';
+        posText.textContent = result.position_text || '';
+        emptyNote.textContent = '';
+        swatch.style.display = 'block';
+        swatch.style.background = result.dress_color ? (DRESS_COLOR_HEX[result.dress_color] || '#ccc') : '#ccc';
+    } else {
+        movementLabel.textContent = ''; posText.textContent = ''; swatch.style.display = 'none';
+        emptyNote.textContent = result?.status === 'not_joined' ? "You haven't joined this call yet." : 'Positions have not been set yet.';
+    }
+    showPerf('perfSpotResult');
+}
+
+// ===== Camera / crop (member-side) =====
+let memberCameraStream = null;
+let memberCameraCallback = null;
+async function openMemberCameraCapture(callback) {
+    memberCameraCallback = callback;
+    try { memberCameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+    catch (e) { alert('Could not access the camera. Use Upload instead.'); return; }
+    document.getElementById('memberCameraVideo').srcObject = memberCameraStream;
+    document.getElementById('memberCameraModal').style.display = 'flex';
+}
+function closeMemberCameraCapture() {
+    document.getElementById('memberCameraModal').style.display = 'none';
+    if (memberCameraStream) { memberCameraStream.getTracks().forEach((t) => t.stop()); memberCameraStream = null; }
+}
+function captureMemberCameraPhoto() {
+    const video = document.getElementById('memberCameraVideo');
+    const canvas = document.getElementById('memberCameraCanvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+        const cb = memberCameraCallback;
+        closeMemberCameraCapture();
+        if (blob) openMemberPhotoCrop(blob, cb);
+    }, 'image/jpeg', 0.9);
+}
+const MEMBER_CROP_VIEWPORT = 280, MEMBER_CROP_OUTPUT = 400;
+let memberCropImg = null, memberCropShape = 'square', memberCropCallback = null;
+let memberCropScale = 1, memberCropBaseScale = 1, memberCropOffsetX = 0, memberCropOffsetY = 0;
+let memberCropDragging = false, memberCropDragStartX = 0, memberCropDragStartY = 0, memberCropStartOffsetX = 0, memberCropStartOffsetY = 0;
+function openMemberPhotoCrop(fileOrBlob, callback) {
+    memberCropCallback = callback;
+    const url = URL.createObjectURL(fileOrBlob);
+    const img = new Image();
+    img.onload = () => {
+        memberCropImg = img;
+        memberCropBaseScale = Math.max(MEMBER_CROP_VIEWPORT / img.naturalWidth, MEMBER_CROP_VIEWPORT / img.naturalHeight);
+        memberCropScale = memberCropBaseScale;
+        memberCropOffsetX = (MEMBER_CROP_VIEWPORT - img.naturalWidth * memberCropScale) / 2;
+        memberCropOffsetY = (MEMBER_CROP_VIEWPORT - img.naturalHeight * memberCropScale) / 2;
+        document.getElementById('memberCropZoomSlider').value = 100;
+        setMemberCropShape('square');
+        document.getElementById('memberCropImage').src = url;
+        applyMemberCropTransform();
+        document.getElementById('memberCropModal').style.display = 'flex';
+    };
+    img.src = url;
+}
+function applyMemberCropTransform() {
+    const el = document.getElementById('memberCropImage');
+    el.style.width = `${memberCropImg.naturalWidth * memberCropScale}px`;
+    el.style.height = `${memberCropImg.naturalHeight * memberCropScale}px`;
+    el.style.left = `${memberCropOffsetX}px`;
+    el.style.top = `${memberCropOffsetY}px`;
+}
+function clampMemberCropOffsets() {
+    const w = memberCropImg.naturalWidth * memberCropScale, h = memberCropImg.naturalHeight * memberCropScale;
+    memberCropOffsetX = Math.min(0, Math.max(MEMBER_CROP_VIEWPORT - w, memberCropOffsetX));
+    memberCropOffsetY = Math.min(0, Math.max(MEMBER_CROP_VIEWPORT - h, memberCropOffsetY));
+}
+function onMemberCropZoomChange(sliderValue) {
+    const factor = Number(sliderValue) / 100;
+    const cx = (MEMBER_CROP_VIEWPORT / 2 - memberCropOffsetX) / memberCropScale, cy = (MEMBER_CROP_VIEWPORT / 2 - memberCropOffsetY) / memberCropScale;
+    memberCropScale = memberCropBaseScale * factor;
+    memberCropOffsetX = MEMBER_CROP_VIEWPORT / 2 - cx * memberCropScale;
+    memberCropOffsetY = MEMBER_CROP_VIEWPORT / 2 - cy * memberCropScale;
+    clampMemberCropOffsets(); applyMemberCropTransform();
+}
+function setMemberCropShape(shape) {
+    memberCropShape = shape;
+    document.getElementById('memberCropMaskCircle').style.display = shape === 'circle' ? 'block' : 'none';
+    const sq = document.getElementById('memberCropShapeSquareBtn'), ci = document.getElementById('memberCropShapeCircleBtn');
+    sq.className = 'btn ' + (shape === 'square' ? '' : 'btn-outline');
+    ci.className = 'btn ' + (shape === 'circle' ? '' : 'btn-outline');
+}
+function closeMemberPhotoCrop() { document.getElementById('memberCropModal').style.display = 'none'; memberCropImg = null; memberCropCallback = null; }
+function confirmMemberPhotoCrop() {
+    if (!memberCropImg) return;
+    const canvas = document.getElementById('memberCropOutputCanvas');
+    canvas.width = MEMBER_CROP_OUTPUT; canvas.height = MEMBER_CROP_OUTPUT;
+    const ctx = canvas.getContext('2d');
+    const outputScale = MEMBER_CROP_OUTPUT / MEMBER_CROP_VIEWPORT;
+    if (memberCropShape === 'circle') { ctx.save(); ctx.beginPath(); ctx.arc(MEMBER_CROP_OUTPUT / 2, MEMBER_CROP_OUTPUT / 2, MEMBER_CROP_OUTPUT / 2, 0, Math.PI * 2); ctx.closePath(); ctx.clip(); }
+    ctx.drawImage(memberCropImg, memberCropOffsetX * outputScale, memberCropOffsetY * outputScale, memberCropImg.naturalWidth * memberCropScale * outputScale, memberCropImg.naturalHeight * memberCropScale * outputScale);
+    if (memberCropShape === 'circle') ctx.restore();
+    const cb = memberCropCallback;
+    const mime = memberCropShape === 'circle' ? 'image/png' : 'image/jpeg';
+    canvas.toBlob((blob) => { closeMemberPhotoCrop(); if (blob && cb) cb(blob); }, mime, 0.92);
+}
+(function initMemberCropDrag() {
+    document.addEventListener('DOMContentLoaded', () => {
+        const vp = document.getElementById('memberCropViewport');
+        vp.addEventListener('pointerdown', (e) => {
+            if (!memberCropImg) return;
+            memberCropDragging = true; memberCropDragStartX = e.clientX; memberCropDragStartY = e.clientY;
+            memberCropStartOffsetX = memberCropOffsetX; memberCropStartOffsetY = memberCropOffsetY;
+            vp.setPointerCapture(e.pointerId); vp.style.cursor = 'grabbing';
+        });
+        vp.addEventListener('pointermove', (e) => {
+            if (!memberCropDragging) return;
+            memberCropOffsetX = memberCropStartOffsetX + (e.clientX - memberCropDragStartX);
+            memberCropOffsetY = memberCropStartOffsetY + (e.clientY - memberCropDragStartY);
+            clampMemberCropOffsets(); applyMemberCropTransform();
+        });
+        const end = () => { memberCropDragging = false; vp.style.cursor = 'grab'; };
+        vp.addEventListener('pointerup', end);
+        vp.addEventListener('pointerleave', end);
+    });
+})();
+
+// ===== Static labels/icons + init =====
+function applyStaticLabels() {
+    document.getElementById('startOverBtn').innerHTML = iconLabel('log-out', t('mv2_logout'), 15);
+    document.getElementById('settingsBtn').innerHTML = icon('settings', 18);
+    document.getElementById('tabBtnReport').innerHTML = iconLabel('file-text', t('mv2_tab_report'), 16);
+    document.getElementById('tabBtnAttendance').innerHTML = iconLabel('calendar', t('mv2_tab_attendance'), 16);
+    document.getElementById('tabBtnPerform').innerHTML = iconLabel('users', t('mv2_tab_perform'), 16);
+    document.getElementById('creditHeadingLabel').innerHTML = chipLabel('credit-card', t('mv2_credit_heading'), 'icon-chip-success');
+    document.getElementById('ledgerHeadingLabel').innerHTML = chipLabel('file-text', t('mv2_ledger_heading'), 'icon-chip-accent');
+    document.getElementById('batchHeadingLabel').innerHTML = chipLabel('users-group', t('mv2_batch_heading'), 'icon-chip-purple');
+    document.getElementById('certHeadingLabel').innerHTML = chipLabel('stethoscope', t('mv2_cert_heading'), 'icon-chip-warning');
+    document.getElementById('invoicesHeadingLabel').innerHTML = chipLabel('file-text', t('mv2_invoices_heading'), 'icon-chip-accent');
+    document.getElementById('profileHeadingLabel').innerHTML = chipLabel('camera', t('mv2_profile_heading'), 'icon-chip-purple');
+    document.getElementById('resetPasscodeHeadingLabel').innerHTML = chipLabel('log-out', t('mv2_reset_passcode_heading'), 'icon-chip-warning');
+    document.getElementById('resetPasscodeBtnLabel').textContent = t('mv2_reset_passcode_btn');
+    document.getElementById('settingsCloseBtn').innerHTML = icon('x', 18);
+    document.getElementById('histLabel').innerHTML = iconLabel('clock', t('mv2_hist_heading'), 13);
+    document.getElementById('batchRequestBtnLabel').textContent = t('mv2_batch_request_btn');
+    document.getElementById('certViewBtnLabel').textContent = t('mv2_cert_view_btn');
+    document.getElementById('certDeleteBtnLabel').textContent = t('mv2_cert_delete_btn');
+    document.getElementById('certificateUploadBtnText').textContent = t('mv2_cert_upload_btn');
+    document.getElementById('attnNotifyFromClosedBtnLabel').textContent = t('mv2_attn_notify_closed');
+    document.getElementById('attnNotifyFromTooFarBtnLabel').textContent = t('mv2_attn_request');
+    document.getElementById('attnConfirmBtnLabel').textContent = t('mv2_attn_confirm');
+    document.getElementById('memberZoomIcon').innerHTML = icon('zoom-in', 15);
+}
+
+// Re-applies every JS-rendered label (not just the data-i18n-tagged static
+// HTML, which i18n.js's own applyI18n() already handles) whenever the
+// language changes, so switching mid-session updates text immediately
+// instead of only on next page load.
+window.onLangChange = () => { applyStaticLabels(); renderPasscodeTexts(); };
+
+document.addEventListener('DOMContentLoaded', () => {
+    applyStaticLabels();
+    setupDigitBoxGroup('.passcode-box', handlePasscodeSubmit);
+    show('loadingState');
+    backToPhoneEntry('');
+});
+</script>
 </body>
 </html>

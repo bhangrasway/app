@@ -1,8 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /admin.html
+Disallow: /adminv1.html
 Disallow: /home.html
-Disallow: /checkin.html
-Disallow: /report.html
 
 Sitemap: https://bhangrasway.com/sitemap.xml

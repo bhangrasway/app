@@ -334,7 +334,8 @@ begin
                 'parentname', s.parentname,
                 'joindate', s.joindate,
                 'nextpaymentdate', s.nextpaymentdate,
-                'monthlyfees', s.monthlyfees
+                'monthlyfees', s.monthlyfees,
+                'batch', s.batch
             )
             from public.students s
             where s.id = p_student_id
@@ -450,9 +451,13 @@ begin
 
     select name, batch into v_name, v_batch from public.students where id = p_student_id;
 
+    -- Batches are now a real table (batches_and_requests.sql) instead of a
+    -- fixed 4-value list; look the tier up by category instead of hardcoding
+    -- batch names here, so renaming/adding a batch never requires this to change.
+    select category into v_tier from public.batches where name = v_batch;
     v_tier := case
-        when v_batch in ('Advanced', 'Professional') then 'advanced'
-        when v_batch = 'Intermediate' then 'intermediate'
+        when v_tier = 'advance' then 'advanced'
+        when v_tier = 'intermediate' then 'intermediate'
         else 'beginner'
     end;
 
