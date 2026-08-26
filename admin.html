@@ -4289,6 +4289,7 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach((el) => el.classList.remove('active'));
     document.querySelector(`.tab-panel[data-panel="${tabName}"]`).classList.add('active');
     document.querySelector(`.tab-btn[data-tab="${tabName}"]`).classList.add('active');
+    window.scrollTo(0, 0);
 }
 
 // ===== Static icon labels (buttons whose text is fixed, set once) =====
