@@ -715,7 +715,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 </div>
             </div>
             <div style="display:flex; gap:18px; align-items:center; flex-shrink:0;">
-                <button class="icon-btn-close" style="color:var(--danger);" onclick="handleDeleteFromStudentModal()" id="svmDeleteBtn" title="Delete student"></button>
+                <button class="icon-btn-close" style="color:var(--danger);" onclick="deleteStudent(currentViewingStudentId)" id="svmDeleteBtn" title="Delete student"></button>
                 <button class="btn btn-outline btn-sm" onclick="closeStudentViewModal()" id="svmCloseBtn"></button>
             </div>
         </div>
@@ -831,6 +831,40 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;" id="securityStatusHint"></p>
         </div>
         <div class="modal-footer" id="securityModalFooter"></div>
+    </div>
+</div>
+
+<!-- DELETE STUDENT — STEP 1: WARNING -->
+<div id="deleteWarnModal" class="modal-backdrop" onclick="if(event.target===this) closeDeleteWarnModal()">
+    <div class="modal-box" style="max-width:380px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;">Delete this student?</h3>
+            <button class="icon-btn-close" onclick="closeDeleteWarnModal()" id="deleteWarnCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.88em; color:var(--ink-soft); margin-top:0;">You're about to delete <strong id="deleteWarnName"></strong>. This removes their profile, balance, and history — it can't be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeDeleteWarnModal()">No, cancel</button>
+            <button class="btn btn-danger" onclick="proceedToDeleteConfirm()">Yes, continue</button>
+        </div>
+    </div>
+</div>
+
+<!-- DELETE STUDENT — STEP 2: FINAL CONFIRMATION -->
+<div id="deleteConfirmModal" class="modal-backdrop" onclick="if(event.target===this) closeDeleteConfirmModal()">
+    <div class="modal-box" style="max-width:380px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em; color:var(--danger);">This cannot be undone</h3>
+            <button class="icon-btn-close" onclick="closeDeleteConfirmModal()" id="deleteConfirmCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.88em; color:var(--ink-soft); margin-top:0;">Permanently delete <strong id="deleteConfirmName"></strong>? All their data is gone the moment you confirm — there is no recovery.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeDeleteConfirmModal()">Cancel</button>
+            <button class="btn btn-danger" onclick="confirmPermanentDelete()" id="deleteConfirmBtn">Delete permanently</button>
+        </div>
     </div>
 </div>
 
@@ -3698,11 +3732,43 @@ function resetStudentForm() {
     studentPhotoDirty = false;
 }
 
-async function deleteStudent(studentId) {
+// Two-step delete: this only opens the first warning. The actual delete
+// happens in confirmPermanentDelete, after a second, more explicit modal —
+// replacing the old single browser confirm() with something harder to
+// click through by accident.
+let deletePendingStudentId = null;
+function deleteStudent(studentId) {
     const s = students.find((x) => x.id === studentId);
     if (!s) return;
-    if (!confirm(`Delete ${s.name}? This cannot be undone.`)) return;
-    await supabaseClient.from('students').delete().eq('id', studentId);
+    deletePendingStudentId = studentId;
+    document.getElementById('deleteWarnName').textContent = s.name;
+    document.getElementById('deleteWarnModal').style.display = 'flex';
+}
+function closeDeleteWarnModal() {
+    document.getElementById('deleteWarnModal').style.display = 'none';
+    deletePendingStudentId = null;
+}
+function proceedToDeleteConfirm() {
+    document.getElementById('deleteWarnModal').style.display = 'none';
+    const s = students.find((x) => x.id === deletePendingStudentId);
+    if (!s) { deletePendingStudentId = null; return; }
+    document.getElementById('deleteConfirmName').textContent = s.name;
+    document.getElementById('deleteConfirmModal').style.display = 'flex';
+}
+function closeDeleteConfirmModal() {
+    document.getElementById('deleteConfirmModal').style.display = 'none';
+    deletePendingStudentId = null;
+}
+async function confirmPermanentDelete() {
+    const studentId = deletePendingStudentId;
+    if (!studentId) { closeDeleteConfirmModal(); return; }
+    const btn = document.getElementById('deleteConfirmBtn');
+    btn.disabled = true; btn.textContent = 'Deleting…';
+    const { error } = await supabaseClient.from('students').delete().eq('id', studentId);
+    btn.disabled = false; btn.textContent = 'Delete permanently';
+    if (error) { alert('Could not delete: ' + error.message); return; }
+    closeDeleteConfirmModal();
+    closeStudentViewModal();
     await loadAllData();
 }
 
@@ -3917,11 +3983,6 @@ function renderStudentViewModal(s) {
         ${renderWaActionsMenu(s, `waMenu-view-${s.id}`, true, true)}
     `;
 }
-function handleDeleteFromStudentModal() {
-    deleteStudent(currentViewingStudentId);
-    closeStudentViewModal();
-}
-
 // ===== Recharge / adjustment =====
 let rechargeStudentId = null;
 let rechargeEditingId = null;
@@ -4242,6 +4303,8 @@ function applyIcons() {
     document.getElementById('cameraBtnLabel').innerHTML = iconLabel('camera', 'Camera', 15);
     document.getElementById('uploadBtnLabel').innerHTML = iconLabel('upload', 'Upload', 15);
     document.getElementById('svmDeleteBtn').innerHTML = icon('trash', 16);
+    document.getElementById('deleteWarnCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('deleteConfirmCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('svmCloseBtn').innerHTML = iconLabel('x', 'Close', 14);
     document.getElementById('svmRateEditBtn').innerHTML = iconLabel('edit', 'Edit', 14);
     document.getElementById('rateCloseBtn').innerHTML = icon('x', 16);
