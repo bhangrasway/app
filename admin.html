@@ -69,7 +69,8 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     display:flex; align-items:center; justify-content:space-between; height:60px; position:sticky; top:0; z-index:40;
 }
 .app-brand{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:1.02em; }
-.app-brand .badge-v2{ background:var(--accent-soft); color:var(--accent-ink); font-size:0.68em; font-weight:800; letter-spacing:.04em; padding:3px 8px; border-radius:999px; }
+@keyframes spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+.spinning svg{ animation:spin 0.7s linear infinite; }
 .tab-row{ display:flex; gap:2px; padding:0 24px; background:var(--surface); border-bottom:1px solid var(--border); overflow-x:auto; }
 .tab-btn{
     display:flex; align-items:center; gap:7px; padding:12px 14px; border:none; background:none; cursor:pointer;
@@ -208,13 +209,38 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     </form>
 </div>
 
+<!-- ===================== EMAIL LINK CHALLENGE (unrecognized browser) ===================== -->
+<div id="otpChallengePage" style="display:none; min-height:100vh; align-items:center; justify-content:center; background:linear-gradient(160deg,#0f172a,#1e293b); padding:20px;">
+    <div class="login-card">
+        <img src="logo.png" alt="Bhangra Sway" style="height:56px; width:auto; border-radius:10px; box-shadow:var(--shadow-md); margin-bottom:16px;">
+        <h1>Check your email</h1>
+        <p>This browser isn't recognized. We sent a sign-in link to your email — open it <u>in this same browser</u> to continue.</p>
+        <div id="otpChallengeError" class="login-error"></div>
+        <button type="button" class="btn btn-outline" style="width:100%;" onclick="handleOtpResend()">Resend link</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="width:100%; margin-top:10px;" onclick="handleOtpChallengeCancel()">Not you? Sign out</button>
+    </div>
+</div>
+
+<!-- ===================== TRUST CONFIRM (after a verified email link) ===================== -->
+<div id="trustConfirmPage" style="display:none; min-height:100vh; align-items:center; justify-content:center; background:linear-gradient(160deg,#0f172a,#1e293b); padding:20px;">
+    <div class="login-card">
+        <img src="logo.png" alt="Bhangra Sway" style="height:56px; width:auto; border-radius:10px; box-shadow:var(--shadow-md); margin-bottom:16px;">
+        <h1>You're verified</h1>
+        <p>Remember this browser? If not, you'll get an emailed link to open again next time you sign in here.</p>
+        <button type="button" class="btn btn-primary" style="width:100%;" onclick="handleTrustConfirm(true)">Yes, trust this browser</button>
+        <button type="button" class="btn btn-outline" style="width:100%; margin-top:10px;" onclick="handleTrustConfirm(false)">No, ask again next time</button>
+    </div>
+</div>
+
 <!-- ============================== APP ============================== -->
 <div id="appPage" style="display:none;">
     <div class="app-header">
         <div class="app-brand">
             <img src="logo.png" alt="" style="height:28px; width:28px; border-radius:6px; object-fit:cover;">
-            Bhangra Sway <span class="badge-v2">V2</span>
+            Bhangra Sway
+            <button class="btn btn-ghost btn-sm" onclick="handleRefreshData()" id="refreshDataBtn" title="Reload data"></button>
         </div>
+        <button class="btn btn-ghost btn-sm" onclick="openSecurityModal()" id="securityBtnIcon"></button>
         <button class="btn btn-ghost btn-sm" onclick="handleLogout()" id="logoutBtnIcon"></button>
     </div>
     <div class="tab-row" id="tabRow">
@@ -427,6 +453,15 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div id="unmatchedBatchList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
 
+        <div class="card hidden" id="noBatchCard" style="padding:18px 20px; margin-bottom:20px; border-color:var(--border);">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <h3 style="font-size:0.95em;">Not in a Batch</h3>
+                <span class="badge badge-neutral" id="noBatchCountBadge"></span>
+            </div>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">No batch assigned at all — new joins waiting to be placed, or students deliberately moved outside a group. Pick a batch to bring them back in.</p>
+            <div id="noBatchList" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+
         <div id="batchRosterList" style="display:flex; flex-direction:column; gap:14px; margin-bottom:26px;"></div>
 
         <div class="card" style="padding:18px 20px;">
@@ -486,7 +521,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div id="expensesList" style="margin-bottom:26px;"></div>
 
         <div class="card" style="padding:18px 20px;">
-            <h3 style="font-size:0.95em; margin-bottom:10px;">Recharge History</h3>
+            <h3 style="font-size:0.95em; margin-bottom:10px;">Transaction History</h3>
             <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
                 <div class="field" style="margin-bottom:0;"><label>From</label><input type="date" id="payHistFrom" onchange="renderPaymentHistory()"></div>
                 <div class="field" style="margin-bottom:0;"><label>To</label><input type="date" id="payHistTo" onchange="renderPaymentHistory()"></div>
@@ -667,7 +702,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 </div>
 
 <!-- STUDENT VIEW MODAL -->
-<div id="studentViewModal" class="modal-backdrop" onclick="if(event.target===this) closeStudentViewModal()">
+<div id="studentViewModal" class="modal-backdrop">
     <div class="modal-box" style="max-width:460px; max-height:calc(100vh - 48px);">
         <div class="modal-header">
             <div style="display:flex; gap:12px; align-items:center; min-width:0;">
@@ -679,7 +714,10 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <div id="svmMeta" style="font-size:0.8em; color:var(--ink-soft); margin-top:2px;"></div>
                 </div>
             </div>
-            <button class="icon-btn-close" onclick="closeStudentViewModal()" id="svmCloseBtn"></button>
+            <div style="display:flex; gap:18px; align-items:center; flex-shrink:0;">
+                <button class="icon-btn-close" style="color:var(--danger);" onclick="handleDeleteFromStudentModal()" id="svmDeleteBtn" title="Delete student"></button>
+                <button class="btn btn-outline btn-sm" onclick="closeStudentViewModal()" id="svmCloseBtn"></button>
+            </div>
         </div>
         <div class="modal-body" style="flex:1;">
             <div id="svmBalanceCard" style="border-radius:var(--radius-md); padding:16px; margin-bottom:14px;">
@@ -692,24 +730,24 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 </div>
             </div>
 
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:14px;">
+            <div id="svmStatusCard" style="display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:var(--radius-sm); padding:6px 10px; margin-bottom:8px;">
                 <div>
-                    <div style="font-size:0.68em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">Status</div>
-                    <div id="svmActiveStatusReason" style="font-size:0.95em; font-weight:700; color:var(--ink-soft); margin-top:2px;"></div>
+                    <div style="font-size:0.62em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">Status</div>
+                    <div id="svmActiveStatusReason" style="font-size:0.8em; font-weight:700; color:var(--ink-soft); margin-top:1px;"></div>
                 </div>
-                <select id="svmActiveStatusSelect" onchange="setStudentActiveOverride(currentViewingStudentId, this.value === 'auto' ? null : this.value === 'active')" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
+                <select id="svmActiveStatusSelect" onchange="setStudentActiveOverride(currentViewingStudentId, this.value === 'auto' ? null : this.value === 'active')" style="padding:4px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.78em;">
                     <option value="auto">Auto</option>
                     <option value="active">Force Active</option>
                     <option value="inactive">Force Inactive</option>
                 </select>
             </div>
 
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:14px;">
+            <div id="svmRateCard" style="display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:var(--radius-sm); padding:6px 10px; margin-bottom:8px;">
                 <div>
-                    <div style="font-size:0.68em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">Rate per class</div>
-                    <div id="svmRateValue" style="font-size:0.95em; font-weight:700; color:var(--ink-soft); margin-top:2px;"></div>
+                    <div style="font-size:0.62em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">Rate per class</div>
+                    <div id="svmRateValue" style="font-size:0.8em; font-weight:700; color:var(--ink-soft); margin-top:1px;"></div>
                 </div>
-                <button class="btn btn-outline btn-sm" onclick="openRateEdit()" id="svmRateEditBtn"></button>
+                <button class="btn btn-outline btn-sm" onclick="openRateEdit()" id="svmRateEditBtn" style="height:26px; padding:0 8px; font-size:0.76em;"></button>
             </div>
 
             <div class="section-label" id="svmOverviewLabel"></div>
@@ -772,6 +810,27 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <button class="btn btn-outline" onclick="closeRateEdit()">Cancel</button>
             <button class="btn btn-primary" onclick="confirmRateEdit()" id="rateSaveBtn">Save</button>
         </div>
+    </div>
+</div>
+
+<!-- SECURITY (TRUSTED BROWSER) MODAL -->
+<div id="securityModal" class="modal-backdrop" onclick="if(event.target===this) closeSecurityModal()">
+    <div class="modal-box" style="max-width:400px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;">Security</h3>
+            <button class="icon-btn-close" onclick="closeSecurityModal()" id="securityCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:14px;">
+                <div>
+                    <div style="font-size:0.68em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint);">This browser</div>
+                    <div id="securityStatusValue" style="font-size:0.95em; font-weight:700; color:var(--ink-soft); margin-top:2px;"></div>
+                </div>
+                <span id="securityStatusPill"></span>
+            </div>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;" id="securityStatusHint"></p>
+        </div>
+        <div class="modal-footer" id="securityModalFooter"></div>
     </div>
 </div>
 
@@ -915,7 +974,9 @@ const ICONS = {
     filter: '<path d="M4 5h16l-6 7.5V19l-4 2v-8.5z"/>',
     'zoom-in': '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3M10.5 7.5v6M7.5 10.5h6"/>',
     message: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H9l-4 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"/>',
-    'move-right': '<path d="M4 12h16M14 6l6 6-6 6"/>'
+    'move-right': '<path d="M4 12h16M14 6l6 6-6 6"/>',
+    shield: '<path d="M12 21s7-3.5 7-9V6l-7-3-7 3v6c0 5.5 7 9 7 9z"/>',
+    refresh: '<path d="M20 11A8 8 0 0 0 6.3 6.3L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="M4 13a8 8 0 0 0 13.7 4.7L20 15.4"/><path d="M20 20v-4.6h-4.6"/>'
 };
 function icon(name, size, color) {
     size = size || 18;
@@ -957,21 +1018,141 @@ async function handleLogin(event) {
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     btn.disabled = false; btn.textContent = 'Sign In';
     if (error) { errorMsg.textContent = 'Invalid email or password.'; errorMsg.classList.add('show'); return; }
-    showApp();
+    await proceedPastLogin();
 }
 async function handleLogout() {
     await supabaseClient.auth.signOut();
+    document.getElementById('otpChallengePage').style.display = 'none';
+    document.getElementById('trustConfirmPage').style.display = 'none';
     document.getElementById('appPage').style.display = 'none';
     document.getElementById('loginPage').style.display = 'flex';
 }
 function showApp() {
+    document.getElementById('otpChallengePage').style.display = 'none';
+    document.getElementById('trustConfirmPage').style.display = 'none';
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('appPage').style.display = 'block';
     loadAllData();
 }
+// This browser proved it's really the admin once before (localStorage still
+// has the trust marker) -> straight into the app, same as always. Any other
+// browser/device — a new phone, someone else's computer, this same browser
+// after clearing site data — has the right password but is NOT yet trusted,
+// so it emails a sign-in link and won't open the app until that link is
+// opened in this same browser. Trust is never automatic even after a
+// verified link click — opening the link only proves email ownership; the
+// "trust this browser" screen right after is the deliberate, separate step
+// that actually sets the marker, so a one-off login (a friend's laptop, a
+// shared computer) doesn't silently start skipping verification later. The
+// marker's value is never checked against anything server-side; its mere
+// presence is the signal, so clearing it (or "Forget this browser" in the
+// Security modal) is what forces the email step again.
+const ADMIN_EMAIL = 'bhangrasway@gmail.com';
+const TRUSTED_DEVICE_KEY = 'bs_admin_trusted_device';
+function isDeviceTrusted() {
+    try { return !!localStorage.getItem(TRUSTED_DEVICE_KEY); } catch { return false; }
+}
+function markDeviceTrusted() {
+    try { localStorage.setItem(TRUSTED_DEVICE_KEY, crypto.randomUUID()); } catch {}
+}
+function forgetThisDevice() {
+    try { localStorage.removeItem(TRUSTED_DEVICE_KEY); } catch {}
+}
+// True only on the exact page load that just landed here from clicking the
+// emailed link — Supabase appends the fresh session as #access_token=...
+// to the redirect URL, which a normal password login or a restored old
+// session never has. That's the proof of "opened the email on THIS browser",
+// standing in for the code-entry step the earlier design used.
+function arrivedViaEmailLink() {
+    return window.location.hash.includes('access_token');
+}
+async function proceedPastLogin() {
+    if (isDeviceTrusted()) { showApp(); return; }
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('otpChallengePage').style.display = 'flex';
+    const errorEl = document.getElementById('otpChallengeError');
+    errorEl.classList.remove('show');
+    const { error } = await supabaseClient.auth.signInWithOtp({ email: ADMIN_EMAIL, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname } });
+    if (error) { errorEl.textContent = 'Could not send the link by email. Try "Resend link" in a moment.'; errorEl.classList.add('show'); }
+}
+async function handleOtpResend() {
+    const errorEl = document.getElementById('otpChallengeError');
+    errorEl.classList.remove('show');
+    const { error } = await supabaseClient.auth.signInWithOtp({ email: ADMIN_EMAIL, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname } });
+    errorEl.style.color = error ? 'var(--danger)' : 'var(--success)';
+    errorEl.style.background = error ? 'var(--danger-soft)' : 'var(--success-soft)';
+    errorEl.textContent = error ? 'Could not resend. Try again shortly.' : 'A new link has been sent.';
+    errorEl.classList.add('show');
+}
+async function handleOtpChallengeCancel() {
+    await supabaseClient.auth.signOut();
+    document.getElementById('otpChallengePage').style.display = 'none';
+    document.getElementById('loginPage').style.display = 'flex';
+}
+function handleTrustConfirm(shouldTrust) {
+    if (shouldTrust) markDeviceTrusted();
+    showApp();
+}
+async function handleRefreshData() {
+    const btn = document.getElementById('refreshDataBtn');
+    btn.disabled = true;
+    btn.classList.add('spinning');
+    try {
+        await loadAllData();
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('spinning');
+    }
+}
 async function checkAuthentication() {
+    const viaEmailLink = arrivedViaEmailLink();
     const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) showApp(); else document.getElementById('loginPage').style.display = 'flex';
+    if (session && viaEmailLink) {
+        history.replaceState(null, '', window.location.pathname);
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('otpChallengePage').style.display = 'none';
+        document.getElementById('trustConfirmPage').style.display = 'flex';
+    } else if (session) {
+        await proceedPastLogin();
+    } else {
+        document.getElementById('loginPage').style.display = 'flex';
+    }
+}
+
+// ===== Security modal (trusted-browser status) =====
+function openSecurityModal() {
+    renderSecurityStatusView();
+    document.getElementById('securityModal').style.display = 'flex';
+}
+function closeSecurityModal() {
+    document.getElementById('securityModal').style.display = 'none';
+}
+function renderSecurityStatusView() {
+    const trusted = isDeviceTrusted();
+    const valueEl = document.getElementById('securityStatusValue');
+    const pillEl = document.getElementById('securityStatusPill');
+    const hintEl = document.getElementById('securityStatusHint');
+    const footerEl = document.getElementById('securityModalFooter');
+    valueEl.textContent = trusted ? 'Trusted' : 'Not verified';
+    pillEl.innerHTML = trusted
+        ? `<span class="badge badge-success">${iconLabel('check-circle', 'Trusted', 13)}</span>`
+        : `<span class="badge badge-neutral">New</span>`;
+    hintEl.textContent = trusted
+        ? `Signing in from any browser other than this one always emails a sign-in link to ${ADMIN_EMAIL} first — the password alone isn't enough there.`
+        : `You chose not to remember this browser. Every sign-in here needs a fresh emailed link, unless you trust it below.`;
+    footerEl.innerHTML = trusted
+        ? `<button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);" onclick="handleForgetDevice()">Forget this browser</button>`
+        : `<button class="btn btn-primary" onclick="handleTrustThisDeviceNow()">Trust this browser</button>`;
+}
+function handleTrustThisDeviceNow() {
+    markDeviceTrusted();
+    renderSecurityStatusView();
+}
+function handleForgetDevice() {
+    const ok = confirm('Forget this browser? Your next sign-in here will need an emailed link again.');
+    if (!ok) return;
+    forgetThisDevice();
+    renderSecurityStatusView();
 }
 
 // ===== Pagination-safe fetch (PostgREST caps unpaginated selects at 1000) =====
@@ -1085,6 +1266,19 @@ function getPostCutoverClassesAttended(studentId) {
     let count = 0;
     Object.entries(attendance).forEach(([date, day]) => { if (date >= CUTOVER_DATE && day && day[studentId]) count += 1; });
     return count;
+}
+function getClassesAttendedInLastDays(studentId, days) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    let count = 0;
+    Object.entries(attendance).forEach(([date, day]) => { if (date >= cutoffStr && day && day[studentId]) count += 1; });
+    return count;
+}
+function getTotalPaymentReceived(studentId) {
+    return v2CreditTransactions
+        .filter((t) => t.student_id === studentId && t.type === 'recharge' && !t.deleted_at)
+        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 }
 function isDemoClass(studentId, dateKey) {
     return !!(demoAttendance[dateKey] && demoAttendance[dateKey][studentId]);
@@ -1311,7 +1505,7 @@ function renderPaymentsList() {
         const balanceColor = balance > 0 ? 'var(--success)' : balance === 0 ? 'var(--warning)' : 'var(--danger)';
         const totalClasses = getTotalClassesAttended(s.id);
         const lastRecharge = v2CreditTransactions
-            .filter((t) => t.student_id === s.id && t.type === 'recharge')
+            .filter((t) => t.student_id === s.id && t.type === 'recharge' && !t.deleted_at)
             .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
         const lastRechargeLabel = lastRecharge ? String(lastRecharge.created_at).slice(0, 10) : 'Never';
         const inactiveBadge = isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`;
@@ -1400,7 +1594,7 @@ function populateStudentBatchDropdown(selected) {
     const select = document.getElementById('studentBatch');
     if (!select) return;
     const current = selected !== undefined ? selected : select.value;
-    const options = ['<option value="">— No batch —</option>']
+    const options = ['<option value="">— Batch to be selected —</option>']
         .concat(batchList.filter((b) => b.active !== false).map((b) => `<option value="${escapeHtml(b.name)}">${escapeHtml(getBatchDisplayLabel(b.name))}</option>`));
     if (current && !batchList.some((b) => b.name === current)) {
         options.push(`<option value="${escapeHtml(current)}">${escapeHtml(current)} (not currently configured)</option>`);
@@ -1433,6 +1627,7 @@ function renderBatchRoster() {
                     </div>
                     <select data-move-student="${s.id}" style="padding:5px 8px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; flex-shrink:0;">
                         ${activeBatches.map((x) => `<option value="${escapeHtml(x.name)}" ${x.name === b.name ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}
+                        <option value="">— Batch to be selected —</option>
                     </select>
                 </div>`).join('')
             : `<div style="color:var(--ink-faint); font-size:0.85em; padding:6px 0;">No students in this batch yet.</div>`;
@@ -1466,6 +1661,43 @@ function renderBatchRoster() {
     });
 
     renderUnmatchedBatchList(activeBatches);
+    renderNoBatchList(activeBatches);
+}
+
+// Students with no batch at all — either a brand-new join never placed yet,
+// or someone deliberately moved here via "Batch to be selected" on a roster
+// card above. Distinct from renderUnmatchedBatchList, which is for a batch
+// NAME that no longer exists (a real string, just an unrecognized one) — an
+// empty batch is falsy, so it was silently excluded from that list entirely
+// and had nowhere to surface until this card existed.
+function renderNoBatchList(activeBatches) {
+    const card = document.getElementById('noBatchCard');
+    const container = document.getElementById('noBatchList');
+    if (!card || !container) return;
+    const unassigned = students.filter((s) => !s.batch && isStudentActive(s));
+    card.classList.toggle('hidden', unassigned.length === 0);
+    if (unassigned.length === 0) return;
+    document.getElementById('noBatchCountBadge').textContent = unassigned.length;
+    container.innerHTML = unassigned.map((s) => `
+        <div class="student-row">
+            <div class="student-info">
+                ${renderAvatarHtml(s)}
+                <div>
+                    <div class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</div>
+                    <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Age ${s.age ?? '—'}</div>
+                </div>
+            </div>
+            <select data-move-student="${s.id}" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
+                <option value="" disabled selected>Move to…</option>
+                ${activeBatches.map((x) => `<option value="${escapeHtml(x.name)}">${escapeHtml(getBatchDisplayLabel(x.name))}</option>`).join('')}
+            </select>
+        </div>`).join('');
+    container.querySelectorAll('[data-move-student]').forEach((sel) => {
+        sel.addEventListener('change', (e) => {
+            const studentId = Number(e.target.getAttribute('data-move-student'));
+            moveStudentToBatch(studentId, e.target.value);
+        });
+    });
 }
 
 // Students whose batch (often an old naming pattern, e.g. "Advance" /
@@ -1496,12 +1728,14 @@ function renderUnmatchedBatchList(activeBatches) {
             <select data-move-student="${s.id}" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
                 <option value="" disabled selected>Move to…</option>
                 ${activeBatches.map((x) => `<option value="${escapeHtml(x.name)}">${escapeHtml(getBatchDisplayLabel(x.name))}</option>`).join('')}
+                <option value="__no_batch__">— Batch to be selected —</option>
             </select>
         </div>`).join('');
     container.querySelectorAll('[data-move-student]').forEach((sel) => {
         sel.addEventListener('change', (e) => {
             const studentId = Number(e.target.getAttribute('data-move-student'));
-            moveStudentToBatch(studentId, e.target.value);
+            const value = e.target.value === '__no_batch__' ? '' : e.target.value;
+            moveStudentToBatch(studentId, value);
         });
     });
 }
@@ -1798,7 +2032,7 @@ function displayFeesTab() {
     // active-only totals, same as Payments — "All" brings them back.
     const incomeIdsInScope = incomeActiveFilter === 'all' ? null
         : new Set(students.filter((s) => incomeActiveFilter === 'inactive' ? !isStudentActive(s) : isStudentActive(s)).map((s) => s.id));
-    const rechargeInScope = (t) => t.type === 'recharge' && (incomeIdsInScope === null || incomeIdsInScope.has(t.student_id));
+    const rechargeInScope = (t) => t.type === 'recharge' && !t.deleted_at && (incomeIdsInScope === null || incomeIdsInScope.has(t.student_id));
 
     const grid = document.getElementById('feesStatsGrid');
     if (grid) {
@@ -1889,8 +2123,12 @@ function renderPaymentHistory() {
     const from = document.getElementById('payHistFrom')?.value || '';
     const to = document.getElementById('payHistTo')?.value || '';
 
+    // Both manual-entry types from the same Recharge/Adjustment modal — not
+    // class_deduction, which belongs to the per-student Transaction Ledger
+    // instead, since surfacing every class charge here would bury the
+    // income-tracking purpose of this card under routine attendance entries.
     const records = v2CreditTransactions.filter((t) => {
-        if (t.type !== 'recharge') return false;
+        if (t.type !== 'recharge' && t.type !== 'adjustment') return false;
         const d = String(t.created_at).slice(0, 10);
         if (!d) return false;
         if (from && d < from) return false;
@@ -1899,7 +2137,7 @@ function renderPaymentHistory() {
     });
 
     if (records.length === 0) {
-        container.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em; padding:12px 0;">No recharges found for this period.</div>`;
+        container.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em; padding:12px 0;">No transactions found for this period.</div>`;
         return;
     }
 
@@ -1913,18 +2151,28 @@ function renderPaymentHistory() {
     const dateKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
     container.innerHTML = dateKeys.map((date) => {
         const dayRecs = grouped[date];
-        const dayTotal = dayRecs.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+        // Deleted entries stay visible (struck through, labeled) as a record
+        // of what happened, but never count toward the day's total.
+        const activeDayRecs = dayRecs.filter((r) => !r.deleted_at);
+        const dayTotal = activeDayRecs.reduce((sum, r) => sum + Number(r.amount || 0), 0);
         const rows = dayRecs.map((r) => {
             const s = students.find((x) => x.id === r.student_id);
             const name = s ? escapeHtml(s.name) : `Student #${r.student_id}`;
-            const clickable = s ? `onclick="openStudentViewModal(${s.id})" style="font-weight:700; color:var(--accent-ink); cursor:pointer;"` : `style="font-weight:700;"`;
+            const isDeleted = !!r.deleted_at;
+            const nameStyle = isDeleted
+                ? 'font-weight:700; text-decoration:line-through; color:var(--ink-faint);'
+                : (s ? 'font-weight:700; color:var(--accent-ink); cursor:pointer;' : 'font-weight:700;');
+            const nameClick = (s && !isDeleted) ? ` onclick="openStudentViewModal(${s.id})"` : '';
+            const typeLabel = r.type === 'adjustment' ? ' (adjustment)' : '';
+            const amountColor = isDeleted ? 'var(--ink-faint)' : (Number(r.amount) > 0 ? 'var(--success)' : 'var(--ink-soft)');
             return `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--bg); border:1px solid var(--border-soft); border-left:3px solid var(--success); border-radius:var(--radius-sm); margin-bottom:6px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--bg); border:1px solid var(--border-soft); border-left:3px solid ${isDeleted ? 'var(--border)' : 'var(--success)'}; border-radius:var(--radius-sm); margin-bottom:6px;${isDeleted ? ' opacity:0.65;' : ''}">
                     <div>
-                        <div ${clickable}>${name}</div>
+                        <div style="${nameStyle}"${nameClick}>${name}${typeLabel}</div>
                         ${s?.parentName ? `<div style="font-size:0.82em; color:var(--ink-soft);">${escapeHtml(s.parentName)}</div>` : ''}
+                        ${isDeleted ? `<div style="font-size:0.78em; color:var(--danger); font-weight:700;">Deleted</div>` : ''}
                     </div>
-                    <div style="font-weight:800; color:var(--success); font-size:1.02em;">€${r.amount}</div>
+                    <div style="font-weight:800; color:${amountColor}; font-size:1.02em;${isDeleted ? ' text-decoration:line-through;' : ''}">€${r.amount}</div>
                 </div>`;
         }).join('');
         return `
@@ -1932,7 +2180,7 @@ function renderPaymentHistory() {
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid var(--border-soft);">
                     <span style="font-weight:700;">${formatShortDate(date)}</span>
                     <span class="badge badge-success">€${Math.round(dayTotal)} collected</span>
-                    <span style="color:var(--ink-faint); font-size:0.82em;">${dayRecs.length} recharge${dayRecs.length !== 1 ? 's' : ''}</span>
+                    <span style="color:var(--ink-faint); font-size:0.82em;">${activeDayRecs.length} transaction${activeDayRecs.length !== 1 ? 's' : ''}</span>
                 </div>
                 ${rows}
             </div>`;
@@ -2010,7 +2258,7 @@ function displayReports() {
     const reportAttendance = Object.entries(attendance).filter(([date]) => date >= fromDate && date <= toDate);
     const reportExpenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= fromDate && e.expenseDate <= toDate);
     const reportRecharges = v2CreditTransactions.filter((t) => {
-        if (t.type !== 'recharge') return false;
+        if (t.type !== 'recharge' || t.deleted_at) return false;
         const d = String(t.created_at).slice(0, 10);
         return d >= fromDate && d <= toDate;
     });
@@ -3042,12 +3290,13 @@ async function deductV2CreditForAttendance(studentIds, attendanceDate) {
 async function refundV2CreditForAttendance(studentIds, attendanceDate) {
     for (const id of studentIds) {
         const row = v2CreditTransactions.find((t) =>
-            t.student_id === id && t.type === 'class_deduction' && String(t.attendance_date).slice(0, 10) === attendanceDate
+            t.student_id === id && t.type === 'class_deduction' && !t.deleted_at && String(t.attendance_date).slice(0, 10) === attendanceDate
         );
         if (!row) continue; // nothing charged for this date (e.g. predates this feature)
-        const { error } = await supabaseClient.from('v2_credit_transactions').delete().eq('id', row.id);
+        const deletedAt = new Date().toISOString();
+        const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', row.id);
         if (error) { console.error('Error refunding v2 credit for student', id, error); continue; }
-        v2CreditTransactions = v2CreditTransactions.filter((t) => t.id !== row.id);
+        row.deleted_at = deletedAt;
         await recomputeV2Balance(id);
     }
 }
@@ -3226,7 +3475,7 @@ function generateWhatsAppReportMessage(s) {
         });
     const attendanceLine = recentAttendanceDates.length > 0 ? recentAttendanceDates.join(', ') : 'Nessuna presenza';
     const lastTx = v2CreditTransactions
-        .filter((t) => t.student_id === s.id && t.type === 'recharge')
+        .filter((t) => t.student_id === s.id && t.type === 'recharge' && !t.deleted_at)
         .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
     const balanceEmoji = s.v2CreditBalance > 0 ? '🟢' : (s.v2CreditBalance === 0 ? '🟡' : '🔴');
     let message = `👋 Ciao ${s.name}!\n\n`;
@@ -3272,14 +3521,16 @@ function sendStudentWelcomeMessage(studentId) {
 // One shared dropdown per student — Send Report / Open Empty Chat / Welcome
 // Message. openUpward: pass true when the button sits at the bottom of a
 // container that clips overflow (the Student View Modal footer).
-function renderWaActionsMenu(student, menuId, openUpward) {
+function renderWaActionsMenu(student, menuId, openUpward, fullWidth) {
+    const wrapperStyle = fullWidth ? 'position:relative;' : 'position:relative; display:inline-block;';
+    const btnWidthStyle = fullWidth ? ' style="width:100%;"' : '';
     if (!student.phone) {
-        return `<button class="btn btn-outline btn-sm" disabled title="No phone number on file">${icon('message', 15)}</button>`;
+        return `<button class="btn btn-outline btn-sm" disabled title="No phone number on file"${btnWidthStyle}>${icon('message', 15)}</button>`;
     }
     const menuPosition = openUpward ? 'bottom:100%; margin-bottom:4px;' : 'top:100%; margin-top:4px;';
     return `
-        <div style="position:relative; display:inline-block;">
-            <button class="btn btn-outline btn-sm" onclick="toggleWaMenu('${menuId}', event)">${icon('message', 15)}</button>
+        <div style="${wrapperStyle}">
+            <button class="btn btn-outline btn-sm" onclick="toggleWaMenu('${menuId}', event)"${btnWidthStyle}>${icon('message', 15)}</button>
             <div class="wa-menu" id="${menuId}" style="display:none; position:absolute; ${menuPosition} right:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); z-index:60; min-width:190px; overflow:hidden;">
                 <button onclick="sendStudentWhatsAppReport(${student.id}); toggleWaMenu('${menuId}');" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em;">${icon('file-text', 15)} Send Report</button>
                 <button onclick="openEmptyWhatsAppChat('${student.phone}'); toggleWaMenu('${menuId}');" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em; border-top:1px solid var(--border-soft);">${icon('message', 15)} Open Chat</button>
@@ -3534,7 +3785,7 @@ function renderStudentViewModal(s) {
         avatarEl.textContent = initials;
     }
     document.getElementById('svmName').textContent = s.name;
-    document.getElementById('svmMeta').textContent = [s.parentName, s.phone].filter(Boolean).join(' · ') || '—';
+    document.getElementById('svmMeta').textContent = [s.parentName, s.phone, s.age ? `Age ${s.age}` : null].filter(Boolean).join(' · ') || '—';
 
     const balance = s.v2CreditBalance;
     const card = document.getElementById('svmBalanceCard');
@@ -3557,24 +3808,47 @@ function renderStudentViewModal(s) {
 
     const isActiveNow = isStudentActive(s);
     const statusSelectEl = document.getElementById('svmActiveStatusSelect');
+    const statusCardEl = document.getElementById('svmStatusCard');
     document.getElementById('svmActiveStatusReason').textContent = getActiveStatusReason(s);
-    document.getElementById('svmActiveStatusReason').style.color = isActiveNow ? 'var(--ink-soft)' : 'var(--danger)';
+    document.getElementById('svmActiveStatusReason').style.color = isActiveNow ? 'var(--success)' : 'var(--danger)';
     statusSelectEl.value = s.activeOverride === null || s.activeOverride === undefined ? 'auto' : (s.activeOverride ? 'active' : 'inactive');
     statusSelectEl.style.color = isActiveNow ? '' : 'var(--danger)';
     statusSelectEl.style.borderColor = isActiveNow ? '' : 'var(--danger)';
+    statusCardEl.style.background = 'var(--bg)';
+    statusCardEl.style.border = '1px solid var(--border-soft)';
 
     const rateEl = document.getElementById('svmRateValue');
+    const rateCardEl = document.getElementById('svmRateCard');
     const customRate = hasCustomPerClassRate(s);
     rateEl.textContent = customRate ? `€${getPerClassRate(s)} (custom)` : `€${DEFAULT_CLASS_RATE} (standard)`;
     rateEl.style.color = customRate ? 'var(--accent)' : 'var(--ink-soft)';
+    rateCardEl.style.background = 'var(--bg)';
+    rateCardEl.style.border = '1px solid var(--border-soft)';
 
     const totalClasses = getTotalClassesAttended(s.id);
+    const recentClasses = getClassesAttendedInLastDays(s.id, 30);
+    const totalPaid = getTotalPaymentReceived(s.id);
     document.getElementById('svmOverviewLabel').innerHTML = iconLabel('calendar', 'Overview', 13);
     document.getElementById('svmOverviewGrid').innerHTML = `
-        <div class="stat-tile"><div class="label">Classes Attended (all-time)</div><div class="value">${totalClasses}</div></div>
-        <div class="stat-tile"><div class="label">Batch</div><div class="value">${escapeHtml(getBatchDisplayLabel(s.batch))}</div></div>
-        <div class="stat-tile"><div class="label">Member Since</div><div class="value">${s.joinDate ? String(s.joinDate).slice(0,10) : '—'}</div></div>
-        <div class="stat-tile"><div class="label">Age</div><div class="value">${s.age ?? '—'}</div></div>
+        <div class="stat-tile">
+            <div class="label">Classes Attended</div>
+            <div style="display:flex; gap:16px; margin-top:2px;">
+                <div><div class="value">${recentClasses}</div><div style="font-size:0.62em; font-weight:700; color:var(--ink-faint); margin-top:1px;">Last 30 days</div></div>
+                <div><div class="value">${totalClasses}</div><div style="font-size:0.62em; font-weight:700; color:var(--ink-faint); margin-top:1px;">All-time</div></div>
+            </div>
+        </div>
+        <div class="stat-tile">
+            <div class="label">Total Payment Received</div>
+            <div class="value">€${Math.round(totalPaid)}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="label">Batch</div>
+            <div class="value">${escapeHtml(s.batch || '—')}</div>
+        </div>
+        <div class="stat-tile">
+            <div class="label">Member Since</div>
+            <div class="value">${s.joinDate ? String(s.joinDate).slice(0,10) : '—'}</div>
+        </div>
     `;
 
     // Pre-cutover attendance never creates a v2_credit_transactions row (no
@@ -3587,7 +3861,7 @@ function renderStudentViewModal(s) {
         .sort()
         .reverse();
     document.getElementById('svmPreCutoverAttendanceList').innerHTML = preCutoverDates.length
-        ? `<div style="display:flex; flex-wrap:wrap; gap:6px;">${preCutoverDates.map((d) => `<span class="badge badge-neutral">${formatShortDate(d)}</span>`).join('')}</div>`
+        ? `<div style="display:flex; flex-wrap:wrap; gap:6px;">${preCutoverDates.map((d) => `<span class="badge" style="background:var(--accent-soft); color:var(--accent-ink);">${formatShortDate(d)}</span>`).join('')}</div>`
         : `<div style="color:var(--ink-faint); font-size:0.85em;">No earlier attendance recorded.</div>`;
 
     // Old payments — same reference-only treatment: real dates/amounts from
@@ -3603,7 +3877,12 @@ function renderStudentViewModal(s) {
         : `<div style="color:var(--ink-faint); font-size:0.85em;">No earlier payments recorded.</div>`;
 
     document.getElementById('svmDocsLabel').innerHTML = iconLabel('file-text', 'Transaction Ledger', 13);
-    const txAscending = v2CreditTransactions.filter((t) => t.student_id === s.id).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    // This modal is the screen you'd have open in front of a parent — a
+    // struck-through "Deleted €50" here would raise awkward questions.
+    // Deleted rows still exist for the record, they're just never shown on
+    // this particular screen; the Income & Expense tab's Transaction History
+    // is the one place that surfaces them.
+    const txAscending = v2CreditTransactions.filter((t) => t.student_id === s.id && !t.deleted_at).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     let runningBalance = 0;
     const withRunningBalance = txAscending.map((t) => { runningBalance += Number(t.amount || 0); return { ...t, _runningBalance: runningBalance }; });
     const rows = withRunningBalance.slice().reverse();
@@ -3622,12 +3901,25 @@ function renderStudentViewModal(s) {
         }).join('')
         : `<div style="color:var(--ink-faint); font-size:0.85em;">No transactions yet.</div>`;
 
-    document.getElementById('svmFooter').innerHTML = `
-        <button class="btn btn-outline" onclick="editStudent(${s.id})" style="flex:1;">${iconLabel('edit', 'Edit', 15)}</button>
+    // Grid, not flex: three flex items with mixed text/icon content never end
+    // up equal-width (each claims at least its own content's min size before
+    // flex-grow distributes what's left) — a grid's columns are equal by
+    // definition regardless of what's inside them.
+    const svmFooterEl = document.getElementById('svmFooter');
+    svmFooterEl.style.display = 'grid';
+    // minmax(0, 1fr), not plain 1fr — a bare 1fr track still won't shrink
+    // below its content's natural width, which is the exact same trap as
+    // flex-basis:0 without min-width:0.
+    svmFooterEl.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)';
+    svmFooterEl.innerHTML = `
+        <button class="btn btn-outline" onclick="editStudent(${s.id})">${iconLabel('edit', 'Edit', 15)}</button>
         <button class="btn btn-outline" onclick="openFreeClassModal(${s.id})">${iconLabel('check-circle', 'Free Class', 15)}</button>
-        ${renderWaActionsMenu(s, `waMenu-view-${s.id}`, true)}
-        <button class="btn btn-danger" onclick="deleteStudent(${s.id}); closeStudentViewModal();" style="flex:1;">${iconLabel('trash', 'Delete', 15)}</button>
+        ${renderWaActionsMenu(s, `waMenu-view-${s.id}`, true, true)}
     `;
+}
+function handleDeleteFromStudentModal() {
+    deleteStudent(currentViewingStudentId);
+    closeStudentViewModal();
 }
 
 // ===== Recharge / adjustment =====
@@ -3701,8 +3993,11 @@ async function deleteRechargeTransaction() {
     if (!rechargeEditingId) return;
     if (!confirm('Delete this entry?')) return;
     const sid = rechargeStudentId;
-    await supabaseClient.from('v2_credit_transactions').delete().eq('id', rechargeEditingId);
-    v2CreditTransactions = v2CreditTransactions.filter((t) => t.id !== rechargeEditingId);
+    const deletedAt = new Date().toISOString();
+    const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', rechargeEditingId);
+    if (error) { alert('Could not delete: ' + error.message); return; }
+    const tx = v2CreditTransactions.find((t) => t.id === rechargeEditingId);
+    if (tx) tx.deleted_at = deletedAt;
     await recomputeV2Balance(sid);
     closeRechargeModal();
     renderStudentsList();
@@ -3710,7 +4005,7 @@ async function deleteRechargeTransaction() {
     if (currentViewingStudentId === sid) renderStudentViewModal(students.find((x) => x.id === sid));
 }
 async function recomputeV2Balance(studentId) {
-    const total = v2CreditTransactions.filter((t) => t.student_id === studentId).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const total = v2CreditTransactions.filter((t) => t.student_id === studentId && !t.deleted_at).reduce((sum, t) => sum + Number(t.amount || 0), 0);
     await supabaseClient.from('students').update({ v2_credit_balance: total }).eq('id', studentId);
     const s = students.find((x) => x.id === studentId);
     if (s) s.v2CreditBalance = total;
@@ -3940,10 +4235,14 @@ function applyIcons() {
     document.getElementById('studentsTotalBalanceBtn').innerHTML = icon('credit-card', 14);
     document.getElementById('paymentsTotalBalanceBtn').innerHTML = icon('credit-card', 14);
     document.getElementById('downloadBatchesPdfBtnLabel').innerHTML = iconLabel('download', 'Download PDF', 15);
+    document.getElementById('refreshDataBtn').innerHTML = icon('refresh', 16);
+    document.getElementById('securityBtnIcon').innerHTML = iconLabel('shield', 'Security', 16);
+    document.getElementById('securityCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('logoutBtnIcon').innerHTML = iconLabel('log-out', 'Sign Out', 16);
     document.getElementById('cameraBtnLabel').innerHTML = iconLabel('camera', 'Camera', 15);
     document.getElementById('uploadBtnLabel').innerHTML = iconLabel('upload', 'Upload', 15);
-    document.getElementById('svmCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('svmDeleteBtn').innerHTML = icon('trash', 16);
+    document.getElementById('svmCloseBtn').innerHTML = iconLabel('x', 'Close', 14);
     document.getElementById('svmRateEditBtn').innerHTML = iconLabel('edit', 'Edit', 14);
     document.getElementById('rateCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('rechargeCloseBtn').innerHTML = icon('x', 16);
