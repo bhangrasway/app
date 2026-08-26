@@ -362,7 +362,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
                 <div class="field" style="margin-bottom:0; min-width:170px;">
                     <label>Date</label>
-                    <input type="date" id="attendanceDate" onchange="onAttendanceDateChange()">
+                    <input type="date" id="attendanceDate" onchange="onAttendanceDateChange()" max="">
                 </div>
                 <div class="field" style="margin-bottom:0; min-width:200px; flex:1;">
                     <label>Search</label>
@@ -1066,6 +1066,12 @@ function showApp() {
     document.getElementById('trustConfirmPage').style.display = 'none';
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('appPage').style.display = 'block';
+    document.getElementById('joinDate').valueAsDate = new Date();
+    // Classes only ever happen on or before today — capping the picker
+    // stops a future date from being pickable at all, on top of the
+    // save-time guard in saveAttendance() for anything that slips past it
+    // (typed in directly, or an older cached page).
+    document.getElementById('attendanceDate').max = new Date().toISOString().slice(0, 10);
     loadAllData();
 }
 // This browser proved it's really the admin once before (localStorage still
@@ -1656,8 +1662,8 @@ function renderBatchRoster() {
             ? roster.map((s) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.88em; gap:10px;">
                     <div style="min-width:0;">
-                        <div>${escapeHtml(s.name)}</div>
-                        <div style="font-size:0.85em; color:var(--ink-soft);">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Age ${s.age ?? '—'}</div>
+                        <div style="color:var(--accent-ink);">${escapeHtml(s.name)}</div>
+                        <div style="font-size:0.85em; color:var(--ink-soft);">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Age ${s.age == null ? '<span>—</span>' : `<span style="color:${s.age < 12 ? 'var(--danger)' : 'var(--success)'}; font-weight:700;">${s.age}</span>`}</div>
                     </div>
                     <select data-move-student="${s.id}" style="padding:5px 8px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; flex-shrink:0;">
                         ${activeBatches.map((x) => `<option value="${escapeHtml(x.name)}" ${x.name === b.name ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}
@@ -2405,16 +2411,42 @@ async function loadTaxRecords() {
     });
 }
 async function _upsertTaxRecord(studentId, record) {
-    try {
-        await supabaseClient.from('tax_records').upsert({
-            student_id: Number(studentId),
-            payments: record.payments || [],
-            has_doctor: record.hasDoctor || false,
-            doctor_pdf_path: record.doctorPdfPath || '',
-            doctor_pdf_name: record.doctorPdfName || '',
-            doctor_cert_expires_at: record.doctorCertExpiresAt || null
-        }, { onConflict: 'student_id' });
-    } catch (e) { console.error('Could not save tax record:', e); }
+    // Supabase's upsert() resolves with { data, error } — it does not throw
+    // on a rejected write (an RLS denial included), so the old bare
+    // try/catch here never actually caught anything and every failed save
+    // vanished with zero feedback.
+    //
+    // doctor_cert_expires_at turned out not to be this table's real column
+    // name (unlike students.codiceFiscale, nothing elsewhere in this file
+    // hints at the actual one) — rather than guess blindly again, self-heal:
+    // on a "missing column" error, drop just that one field and retry, so
+    // everything else in the record still saves. Whatever got dropped is
+    // reported by name so it's obvious what silently isn't persisting.
+    let payload = {
+        student_id: Number(studentId),
+        payments: record.payments || [],
+        has_doctor: record.hasDoctor || false,
+        doctor_pdf_path: record.doctorPdfPath || '',
+        doctor_pdf_name: record.doctorPdfName || '',
+        doctor_cert_expires_at: record.doctorCertExpiresAt || null
+    };
+    const droppedColumns = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+        const { error } = await supabaseClient.from('tax_records').upsert(payload, { onConflict: 'student_id' });
+        if (!error) {
+            if (droppedColumns.length > 0) {
+                alert(`Saved, but this field couldn't be stored — the database is missing the column for it: ${droppedColumns.join(', ')}. Everything else on this record was saved.`);
+            }
+            return;
+        }
+        if (!isMissingColumnError(error)) { alert('Could not save the tax record: ' + error.message); console.error('Could not save tax record:', error); return; }
+        const missingColumn = getMissingColumnName(error);
+        if (!missingColumn || !(missingColumn in payload)) { alert('Could not save the tax record: ' + error.message); console.error('Could not save tax record:', error); return; }
+        droppedColumns.push(missingColumn);
+        const { [missingColumn]: _omit, ...rest } = payload;
+        payload = rest;
+    }
+    alert('Could not save the tax record after several attempts — too many unrecognized columns.');
 }
 function getTaxRecord(studentId) {
     const r = taxRecordsCache[String(studentId)];
@@ -3309,6 +3341,45 @@ async function insertAttendanceWithSchemaFallback(recordsToInsert) {
     throw lastError;
 }
 
+// students.parentName/codiceFiscale/joinDate had the same unverified-casing
+// problem attendance already had a fallback for (see insertAttendanceWith
+// SchemaFallback above) — the live schema turned out not to be camelCase,
+// so a plain insert/update silently failed the whole write (one bad column
+// name poisons the entire payload) with zero visible error on the update
+// path, since it never checked its result at all. Reusing the same
+// isMissingColumnError/getMissingColumnName helpers, this renames only the
+// specific field Postgres just rejected and retries, instead of guessing
+// the whole schema up front.
+const STUDENT_FIELD_CASINGS = {
+    parentName: ['parentName', 'parent_name', 'parentname'],
+    codiceFiscale: ['codiceFiscale', 'codice_fiscale', 'codicefiscale'],
+    joinDate: ['joinDate', 'join_date', 'joindate'],
+    monthlyFees: ['monthlyFees', 'monthly_fees', 'monthlyfees']
+};
+async function writeStudentWithSchemaFallback(payload, studentId) {
+    let attemptPayload = { ...payload };
+    const keyMap = {};
+    Object.keys(STUDENT_FIELD_CASINGS).forEach((f) => { keyMap[f] = f; });
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+        const { data, error } = studentId
+            ? await supabaseClient.from('students').update(attemptPayload).eq('id', studentId)
+            : await supabaseClient.from('students').insert(attemptPayload).select('id').single();
+        if (!error) return { data };
+        if (!isMissingColumnError(error)) return { error };
+        const badColumn = getMissingColumnName(error);
+        const originalField = badColumn && Object.keys(keyMap).find((f) => keyMap[f] === badColumn);
+        if (!originalField) return { error };
+        const candidates = STUDENT_FIELD_CASINGS[originalField];
+        const nextCandidate = candidates[candidates.indexOf(badColumn) + 1];
+        if (!nextCandidate) return { error };
+        attemptPayload[nextCandidate] = attemptPayload[badColumn];
+        delete attemptPayload[badColumn];
+        keyMap[originalField] = nextCandidate;
+    }
+    return { error: { message: 'Could not determine the correct column names after several attempts.' } };
+}
+
 async function deductV2CreditForAttendance(studentIds, attendanceDate) {
     for (const id of studentIds) {
         const rate = getPerClassRateById(id);
@@ -3323,22 +3394,37 @@ async function deductV2CreditForAttendance(studentIds, attendanceDate) {
 }
 async function refundV2CreditForAttendance(studentIds, attendanceDate) {
     for (const id of studentIds) {
-        const row = v2CreditTransactions.find((t) =>
+        // .filter, not .find — a double-submitted save (Save clicked twice
+        // before the first click's data refresh lands) can leave more than
+        // one active class_deduction row for the same student+date. Refund
+        // every one of them, not just whichever comes first, or a duplicate
+        // charge silently survives an otherwise-correct unmark.
+        const rows = v2CreditTransactions.filter((t) =>
             t.student_id === id && t.type === 'class_deduction' && !t.deleted_at && String(t.attendance_date).slice(0, 10) === attendanceDate
         );
-        if (!row) continue; // nothing charged for this date (e.g. predates this feature)
+        if (rows.length === 0) continue; // nothing charged for this date (e.g. predates this feature)
         const deletedAt = new Date().toISOString();
-        const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', row.id);
-        if (error) { console.error('Error refunding v2 credit for student', id, error); continue; }
-        row.deleted_at = deletedAt;
+        for (const row of rows) {
+            const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', row.id);
+            if (error) { console.error('Error refunding v2 credit for student', id, error); continue; }
+            row.deleted_at = deletedAt;
+        }
         await recomputeV2Balance(id);
     }
 }
 
+// Re-entrancy guard: without it, a second click (double-click, or clicking
+// again before the first save's loadAllData() refresh lands) starts a
+// second saveAttendance() that reads the same still-stale dbPresent
+// snapshot, treats the same students as "newly present" a second time, and
+// deducts credit for the same class twice.
+let attendanceSaveInProgress = false;
 async function saveAttendance() {
+    if (attendanceSaveInProgress) return;
     const attendanceDate = document.getElementById('attendanceDate').value;
     if (!attendanceDate) { alert('Please select an attendance date.'); return; }
     if (attendanceDate < CUTOVER_DATE) { alert('This date is before the cutover and is read-only.'); return; }
+    if (attendanceDate > new Date().toISOString().slice(0, 10)) { alert("Can't mark attendance for a future date."); return; }
 
     const pendingForDate = pendingAttendanceChanges[attendanceDate] || {};
     const dbPresent = attendance[attendanceDate] || {};
@@ -3365,6 +3451,9 @@ async function saveAttendance() {
         isDemo: !!dateDemo[id]
     }));
 
+    attendanceSaveInProgress = true;
+    const saveBtn = document.getElementById('saveAttendanceBtnLabel');
+    if (saveBtn) saveBtn.disabled = true;
     try {
         await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
         if (records.length > 0) await insertAttendanceWithSchemaFallback(records);
@@ -3382,6 +3471,9 @@ async function saveAttendance() {
     } catch (error) {
         console.error('Error saving attendance:', error);
         alert('Error saving attendance: ' + error.message);
+    } finally {
+        attendanceSaveInProgress = false;
+        if (saveBtn) saveBtn.disabled = false;
     }
 }
 
@@ -3601,7 +3693,12 @@ async function saveStudent(event) {
         batch: document.getElementById('studentBatch').value.trim(),
         codiceFiscale: document.getElementById('codiceFiscale').value.trim(),
         joinDate: document.getElementById('joinDate').value || null,
-        address: addressParts.filter(Boolean).join('|')
+        address: addressParts.filter(Boolean).join('|'),
+        // Legacy pre-v2 column, not used for anything real anymore (v2
+        // billing runs entirely on credit balance) — the table still has a
+        // not-null constraint on it though, so a bare 0 satisfies that
+        // without resurrecting the old monthly-fee billing concept.
+        monthlyFees: 0
     };
     if (!payload.name) { alert('Name is required.'); return; }
 
@@ -3615,9 +3712,10 @@ async function saveStudent(event) {
     try {
         let studentId = currentEditingStudentId;
         if (studentId) {
-            await supabaseClient.from('students').update(payload).eq('id', studentId);
+            const { error } = await writeStudentWithSchemaFallback(payload, studentId);
+            if (error) throw error;
         } else {
-            const { data, error } = await supabaseClient.from('students').insert(payload).select('id').single();
+            const { data, error } = await writeStudentWithSchemaFallback(payload, null);
             if (error) throw error;
             studentId = data.id;
         }
@@ -3715,7 +3813,7 @@ function resetStudentForm() {
     document.getElementById('studentGender').value = '';
     populateStudentBatchDropdown('');
     document.getElementById('codiceFiscale').value = '';
-    document.getElementById('joinDate').value = '';
+    document.getElementById('joinDate').valueAsDate = new Date();
     document.getElementById('addrIndirizzo').value = '';
     document.getElementById('addrHouse').value = '';
     document.getElementById('addrCap').value = '';
