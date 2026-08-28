@@ -192,6 +192,13 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     .modal-box{ max-width:100% !important; }
     .modal-backdrop{ padding:10px; }
 }
+/* Dancers glide to their next formation instead of jump-cutting — switching
+   which formation is shown (by hand or auto-following the song) updates the
+   SAME chip elements' left/top rather than recreating them, so this
+   transition actually has something to animate between. Dragging a chip
+   turns this off (set inline to 'none') so the drag tracks the pointer
+   exactly, with no lag. */
+.dancer-chip, .dancer-chip-label{ transition:left 0.45s cubic-bezier(0.4,0,0.2,1), top 0.45s cubic-bezier(0.4,0,0.2,1); }
 </style>
 </head>
 <body>
@@ -698,7 +705,90 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             </div>
         </div>
     </div>
-    <div class="tab-panel" data-panel="performances"><div class="placeholder-card"><h3>Performances</h3><p>Ported from the existing system, restyled.</p></div></div>
+    <!-- PERFORMANCES TAB -->
+    <div class="tab-panel" data-panel="performances">
+        <div class="page-head">
+            <h2>Performances</h2>
+        </div>
+        <p style="color:var(--ink-soft); font-size:0.88em; margin:-8px 0 18px;">Open a call so dancers can join from member.html's "Perform" tab. Click a call below to manage its roster and choreography.</p>
+
+        <div class="card" style="padding:18px 20px; margin-bottom:20px;">
+            <div id="performanceCallsExpanded">
+                <h3 style="font-size:0.95em; margin-bottom:4px;" id="perfCallsHeading"></h3>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:16px; margin-top:12px;">
+                    <div class="field" style="margin-bottom:0;"><label>Title</label><input type="text" id="newPerformanceTitle" placeholder="e.g. Vaisakhi Mela 2026"></div>
+                    <div class="field" style="margin-bottom:0;"><label>Date</label><input type="date" id="newPerformanceDate"></div>
+                    <button class="btn btn-primary" onclick="createPerformance()" id="createPerformanceBtnLabel"></button>
+                </div>
+                <div id="performancesList"></div>
+            </div>
+            <div id="performanceCallsCollapsed" class="hidden" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                <div style="font-weight:800; font-size:1em;" id="performanceCallsCollapsedText"></div>
+                <button class="btn btn-outline btn-sm" onclick="expandPerformanceCallsCard()" id="changeCallBtnLabel"></button>
+            </div>
+        </div>
+
+        <div id="performanceWorkspace" class="hidden">
+            <div class="card" style="padding:18px 20px; margin-bottom:20px;">
+                <h3 style="font-size:0.95em; margin-bottom:4px;" id="rosterHeading"></h3>
+                <p style="color:var(--ink-soft); font-size:0.85em; margin:2px 0 12px;">Tier, team, and dress color for everyone who joined this call.</p>
+                <div id="rosterCounts" style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:8px; font-size:0.85em; font-weight:700;"></div>
+                <div id="dressColorCounts" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:14px; font-size:0.85em; font-weight:700;"></div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;">
+                    <input type="text" id="rosterAddStudentSearch" placeholder="Search name or parent…" oninput="populateRosterAddStudentDropdown()" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em; min-width:180px;">
+                    <select id="rosterAddStudentSelect" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em; min-width:260px;"></select>
+                    <button class="btn btn-outline btn-sm" onclick="addStudentToRoster()" id="rosterAddStudentBtnLabel"></button>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+                    <button class="btn btn-outline btn-sm" onclick="autoSplitTeams()" id="autoSplitTeamsBtnLabel"></button>
+                    <button class="btn btn-outline btn-sm" onclick="clearAllTeams()" id="clearAllTeamsBtnLabel"></button>
+                    <button class="btn btn-outline btn-sm" onclick="autoAssignDressColors()" id="autoAssignDressColorsBtnLabel"></button>
+                </div>
+                <div id="rosterList" style="display:flex; flex-direction:column; gap:6px;"></div>
+                <div class="section-label" id="attendanceFlagsLabel" style="margin-top:16px;"></div>
+                <div id="attendanceFlagsList" style="font-size:0.85em; color:var(--ink-soft);"></div>
+            </div>
+
+            <div class="card" style="padding:18px 20px; margin-bottom:20px;">
+                <h3 style="font-size:0.95em; margin-bottom:4px;" id="choreoHeading"></h3>
+                <p style="color:var(--ink-soft); font-size:0.85em; margin:2px 0 12px;">Drag a dancer to set their spot for the selected formation — drag on empty stage to box-select several at once (shift-click, or on touch a long-press, to add/remove just one), then drag any of them to move the whole group together. The gold star in the roster marks the captain — they can adjust these same positions from their own phone in member.html.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px; padding:10px 12px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm);">
+                    <label class="btn btn-outline btn-sm" style="margin:0; cursor:pointer;">
+                        <span id="performanceSongUploadLabel"></span>
+                        <input type="file" id="performanceSongInput" accept="audio/*" onchange="uploadPerformanceSong(event)" style="display:none;">
+                    </label>
+                    <span id="performanceSongName" style="color:var(--ink-faint); font-size:0.85em;"></span>
+                    <a id="performanceSongDownloadBtn" href="#" target="_blank" download class="btn btn-outline btn-sm hidden" style="margin:0;"><span id="performanceSongDownloadLabel"></span></a>
+                    <button type="button" id="performancePlayPauseBtn" onclick="togglePerformanceAudioPlayback()" class="hidden" style="border:none; background:var(--accent); color:#fff; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;"></button>
+                    <span id="performanceSongTimeLabel" style="color:var(--ink-faint); font-size:0.85em; font-variant-numeric:tabular-nums;"></span>
+                    <audio id="performanceAudio" style="display:none;"></audio>
+                </div>
+                <div id="songWaveformWrap" style="display:none; margin-bottom:12px;">
+                    <div style="position:relative;">
+                        <canvas id="songWaveformCanvas" onclick="handleTimelineClick(event)" style="display:block; width:100%; height:64px; border-radius:var(--radius-sm); cursor:pointer;"></canvas>
+                        <div id="timelineMarkersLayer" style="position:absolute; inset:0; pointer-events:none;"></div>
+                        <div id="timelineActionMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:5;">
+                            <button class="btn btn-primary btn-sm" onclick="addMovementAtTimelineClick()" style="white-space:nowrap;">+ Formation here</button>
+                            <button class="btn btn-outline btn-sm" onclick="addCommentAtTimelineClick()" style="white-space:nowrap;">+ Comment here</button>
+                        </div>
+                        <div id="movementFlagMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
+                            <button class="btn btn-outline btn-sm" onclick="renameMovementFromFlagMenu()" style="white-space:nowrap;">Rename</button>
+                            <button class="btn btn-outline btn-sm" onclick="duplicateMovementFromFlagMenu()" style="white-space:nowrap;">Duplicate</button>
+                            <button class="btn btn-outline btn-sm" onclick="deleteMovementFromFlagMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
+                        </div>
+                    </div>
+                    <p style="color:var(--ink-faint); font-size:0.78em; margin-top:4px;">Everything happens on the wave: click empty space to add a formation or comment there; click a flag to select it (and rename/duplicate/delete); drag a flag left or right to retime it. Playback auto-follows the flags as the song plays.</p>
+                </div>
+                <div id="stageCanvas" style="position:relative; width:100%; aspect-ratio:16/9; max-height:420px; background:linear-gradient(180deg, #1b2432, #0f141c); border-radius:var(--radius-sm); border:1px solid var(--border-soft); overflow:visible; touch-action:none;">
+                    <div style="position:absolute; top:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.72em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Back of stage</div>
+                    <div style="position:absolute; bottom:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.72em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Front of stage (audience)</div>
+                    <div id="stageMarqueeBox" style="position:absolute; border:1.5px dashed var(--accent); background:rgba(37,99,235,0.15); display:none; pointer-events:none; z-index:4;"></div>
+                </div>
+                <p id="stageCanvasEmptyHint" style="color:var(--ink-faint); font-size:0.85em; margin-top:10px;"></p>
+                <p id="stageSelectionInfo" style="color:var(--accent-ink); font-size:0.82em; margin-top:6px; display:none;"></p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- STUDENT VIEW MODAL -->
@@ -1010,7 +1100,12 @@ const ICONS = {
     message: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H9l-4 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"/>',
     'move-right': '<path d="M4 12h16M14 6l6 6-6 6"/>',
     shield: '<path d="M12 21s7-3.5 7-9V6l-7-3-7 3v6c0 5.5 7 9 7 9z"/>',
-    refresh: '<path d="M20 11A8 8 0 0 0 6.3 6.3L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="M4 13a8 8 0 0 0 13.7 4.7L20 15.4"/><path d="M20 20v-4.6h-4.6"/>'
+    refresh: '<path d="M20 11A8 8 0 0 0 6.3 6.3L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="M4 13a8 8 0 0 0 13.7 4.7L20 15.4"/><path d="M20 20v-4.6h-4.6"/>',
+    star: '<path d="M12 3.5l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.2-5.4 3.2 1.3-6-4.6-4.1 6.1-.6z"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="1.8"/><path d="M16 8V5.8A1.8 1.8 0 0 0 14.2 4H5.8A1.8 1.8 0 0 0 4 5.8v8.4A1.8 1.8 0 0 0 5.8 16H8"/>',
+    'music-note': '<path d="M9 18V5.5l10-2v12.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
+    play: '<path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor" stroke="none"/>',
+    pause: '<rect x="7" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/>'
 };
 function icon(name, size, color) {
     size = size || 18;
@@ -1026,6 +1121,26 @@ let students = [];
 let attendance = {}; // { 'YYYY-MM-DD': { [studentId]: true } } — shared table with admin.html
 let demoAttendance = {}; // { 'YYYY-MM-DD': { [studentId]: true } } — free/demo classes, same shared table's isDemo column
 let v2CreditTransactions = [];
+let performancesCache = [];
+let currentPerformanceId = null;
+let performanceSignupsCache = [];
+let performanceMovementsCache = [];
+let performancePositionsCache = {}; // { movementId: { studentId: {x,y} } }
+let currentMovementId = null;
+let draggingStudentId = null;
+let draggingMovementFlagId = null;
+let performanceCommentsCache = [];
+let replacingSignupId = null; // roster row currently showing the "pick a replacement" select
+let waveformPeaks = null;
+let waveformCacheUrl = null;
+const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#2563eb', olive: '#6b8e23', pink: '#ec4899', red_boys: '#e74c3c', sky_blue_boys: '#3498db', yellow_boys: '#f1c40f', yellow_boy_kid: '#f1c40f', green_boy_kid: '#27ae60' };
+const DRESS_COLOR_ORDER = ['red', 'green', 'purple', 'orange', 'sky_blue', 'royal_blue', 'olive', 'pink', 'red_boys', 'sky_blue_boys', 'yellow_boys', 'yellow_boy_kid', 'green_boy_kid'];
+// How many of each dress exist in the studio's actual costume stock. Colors
+// default to 2 (the usual pair); anything different is listed explicitly —
+// currently just the single green boy-kid outfit.
+const DRESS_COLOR_QUANTITY = { green_boy_kid: 1 };
+function dressColorQuantity(color) { return DRESS_COLOR_QUANTITY[color] ?? 2; }
+const ROSTER_TIER_LABELS = { advanced: 'Advanced', intermediate: 'Intermediate', beginner: 'Beginner', spare: 'Spare' };
 let currentViewingStudentId = null;
 let currentEditingStudentId = null;
 let pendingAttendanceChanges = {}; // { 'YYYY-MM-DD': { [studentId]: boolean } } — unsaved checkbox edits
@@ -1271,6 +1386,7 @@ async function loadAllData() {
         displayAttendanceTab();
         renderPaymentsList();
         await loadBatchesData();
+        await loadPerformancesTab();
         displayFeesTab();
         const reportFromInput = document.getElementById('reportFrom');
         const reportToInput = document.getElementById('reportTo');
@@ -1800,6 +1916,1196 @@ async function saveBatchSchedule(batchId) {
     const { error } = await supabaseClient.from('batches').update({ day, start_time: start, end_time: end }).eq('id', batchId);
     if (error) { alert('Could not save schedule: ' + error.message); return; }
     await loadBatchesData();
+}
+
+// ===== Performances tab — Performance Calls =====
+async function loadPerformancesTab() {
+    const { data, error } = await supabaseClient.from('performances').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('Performances tab load failed:', error); return; }
+    performancesCache = data || [];
+    renderPerformancesList();
+    if (currentPerformanceId && performancesCache.some((p) => p.id === currentPerformanceId)) {
+        await selectPerformance(currentPerformanceId);
+    }
+}
+function renderPerformancesList() {
+    const list = document.getElementById('performancesList');
+    if (!list) return;
+    if (!performancesCache.length) {
+        list.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em; padding:6px 0;">No performance calls yet.</div>`;
+        return;
+    }
+    list.innerHTML = performancesCache.map((p) => {
+        const selected = currentPerformanceId === p.id;
+        return `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; margin-bottom:6px; border-radius:var(--radius-sm); cursor:pointer; background:${selected ? 'var(--accent-soft)' : 'var(--bg)'}; border:1px solid ${selected ? '#c7d9fb' : 'var(--border-soft)'};" onclick="selectPerformance(${p.id})">
+            <div style="min-width:0;">
+                <span style="font-weight:700;">${escapeHtml(p.title)}</span>
+                <span style="color:var(--ink-faint); font-size:0.85em; margin-left:8px;">${p.event_date || 'no date'}</span>
+                <span class="badge ${p.status === 'open' ? 'badge-success' : 'badge-neutral'}" style="margin-left:10px;">${p.status === 'open' ? 'Open' : 'Closed'}</span>
+            </div>
+            <div style="display:flex; gap:6px; flex-shrink:0;" onclick="event.stopPropagation()">
+                ${p.status === 'open'
+                    ? `<button class="btn btn-outline btn-sm" onclick="setPerformanceStatus(${p.id}, 'closed')">Close</button>`
+                    : `<button class="btn btn-outline btn-sm" onclick="setPerformanceStatus(${p.id}, 'open')">Reopen</button>`}
+                <button class="btn btn-danger btn-sm" onclick="deletePerformance(${p.id})">${icon('trash', 14)}</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+async function createPerformance() {
+    const title = document.getElementById('newPerformanceTitle').value.trim();
+    const date = document.getElementById('newPerformanceDate').value || null;
+    if (!title) { alert('Enter a title for the performance call.'); return; }
+    const { data, error } = await supabaseClient.from('performances').insert([{ title, event_date: date, status: 'open' }]).select('id');
+    if (error) { alert('Could not create performance: ' + error.message); return; }
+    document.getElementById('newPerformanceTitle').value = '';
+    document.getElementById('newPerformanceDate').value = '';
+    await loadPerformancesTab();
+    if (data?.[0]?.id) await selectPerformance(data[0].id);
+}
+async function setPerformanceStatus(id, status) {
+    const { error } = await supabaseClient.from('performances').update({ status }).eq('id', id);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    await loadPerformancesTab();
+}
+async function deletePerformance(id) {
+    if (!confirm('Delete this performance call and everything in it (roster, movements, positions)?')) return;
+    const songUrl = performancesCache.find((x) => x.id === id)?.song_url;
+    const { error } = await supabaseClient.from('performances').delete().eq('id', id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    // Deleting the row cascades the roster/movements/positions/comments, but
+    // the song file lives in storage, not the DB — clean it up too, same
+    // reasoning as the replace-song cleanup below.
+    const songPath = extractStoragePathFromPublicUrl(songUrl, 'performance-songs');
+    if (songPath) {
+        const { error: removeError } = await supabaseClient.storage.from('performance-songs').remove([songPath]);
+        if (removeError) console.error('Could not delete song file:', removeError);
+    }
+    if (currentPerformanceId === id) {
+        currentPerformanceId = null;
+        document.getElementById('performanceWorkspace').classList.add('hidden');
+    }
+    await loadPerformancesTab();
+}
+async function selectPerformance(id) {
+    currentPerformanceId = id;
+    const p = performancesCache.find((x) => x.id === id);
+    if (!p) return;
+    renderPerformancesList();
+    document.getElementById('performanceWorkspace').classList.remove('hidden');
+    // Collapse the call-picker down to one line while managing a call — the
+    // create-form and full list only matter before/between calls, and
+    // reclaiming that space is what gets the Choreography canvas closer to
+    // the top of the screen.
+    document.getElementById('performanceCallsExpanded').classList.add('hidden');
+    document.getElementById('performanceCallsCollapsed').classList.remove('hidden');
+    document.getElementById('performanceCallsCollapsedText').textContent = `Managing: ${p.title}${p.event_date ? ' · ' + p.event_date : ''}`;
+    renderPerformanceSongUI(p);
+    await loadRoster();
+    await loadMovements();
+    await loadPerformanceComments();
+}
+function expandPerformanceCallsCard() {
+    document.getElementById('performanceCallsExpanded').classList.remove('hidden');
+    document.getElementById('performanceCallsCollapsed').classList.add('hidden');
+}
+function renderPerformanceSongUI(p) {
+    const audio = document.getElementById('performanceAudio');
+    const nameEl = document.getElementById('performanceSongName');
+    const waveWrap = document.getElementById('songWaveformWrap');
+    const playBtn = document.getElementById('performancePlayPauseBtn');
+    const timeLabel = document.getElementById('performanceSongTimeLabel');
+    const uploadLabel = document.getElementById('performanceSongUploadLabel');
+    const downloadBtn = document.getElementById('performanceSongDownloadBtn');
+    if (p.song_url) {
+        audio.src = p.song_url;
+        nameEl.textContent = 'Song uploaded';
+        uploadLabel.innerHTML = iconLabel('music-note', 'Change Song', 14);
+        downloadBtn.href = p.song_url;
+        downloadBtn.classList.remove('hidden');
+        waveWrap.style.display = 'block';
+        playBtn.classList.remove('hidden');
+        timeLabel.textContent = '0:00 / 0:00';
+        updatePlayPauseButton();
+        loadWaveform(p.song_url);
+    } else {
+        audio.removeAttribute('src');
+        nameEl.textContent = 'No song yet';
+        uploadLabel.innerHTML = iconLabel('music-note', 'Upload Song', 14);
+        downloadBtn.classList.add('hidden');
+        downloadBtn.removeAttribute('href');
+        waveWrap.style.display = 'none';
+        playBtn.classList.add('hidden');
+        timeLabel.textContent = '';
+        waveformPeaks = null;
+        waveformCacheUrl = null;
+    }
+}
+function togglePerformanceAudioPlayback() {
+    const audio = document.getElementById('performanceAudio');
+    if (!audio.src) return;
+    if (audio.paused) audio.play(); else audio.pause();
+}
+function updatePlayPauseButton() {
+    const audio = document.getElementById('performanceAudio');
+    const btn = document.getElementById('performancePlayPauseBtn');
+    if (!btn) return;
+    btn.innerHTML = audio.paused ? icon('play', 15) : icon('pause', 15);
+}
+function updateSongTimeLabel() {
+    const audio = document.getElementById('performanceAudio');
+    const label = document.getElementById('performanceSongTimeLabel');
+    if (!label) return;
+    label.textContent = audio.duration ? `${formatMMSS(audio.currentTime)} / ${formatMMSS(audio.duration)}` : '0:00 / 0:00';
+}
+async function uploadPerformanceSong(event) {
+    const file = event.target.files[0];
+    if (!file || !currentPerformanceId) return;
+    const existing = performancesCache.find((x) => x.id === currentPerformanceId);
+    const oldSongUrl = existing?.song_url; // captured now — `existing` gets mutated to the new URL below
+    // Replacing an already-uploaded song is the one case worth a pause —
+    // movements/comments keep their exact second-marks on purpose (nothing
+    // here rewrites performance_movements/performance_comments), so if the
+    // new file's timing doesn't match the old one those marks will land on
+    // the wrong moment in the new song. First upload needs no such warning.
+    if (existing?.song_url && !confirm("Replace the song? Movements and comments stay at their exact timestamps (e.g. 0:34) — if the new song's timing differs from the old one, double-check they still line up.")) {
+        event.target.value = '';
+        return;
+    }
+    const nameEl = document.getElementById('performanceSongName');
+    nameEl.textContent = 'Uploading…';
+    const path = `performance_${currentPerformanceId}_${Date.now()}_${file.name}`;
+    const { error: uploadError } = await supabaseClient.storage.from('performance-songs').upload(path, file, { upsert: true });
+    if (uploadError) { alert('Could not upload song: ' + uploadError.message); nameEl.textContent = 'No song yet'; return; }
+    const { data: urlData } = supabaseClient.storage.from('performance-songs').getPublicUrl(path);
+    const { error } = await supabaseClient.from('performances').update({ song_url: urlData.publicUrl }).eq('id', currentPerformanceId);
+    if (error) { alert('Could not save song: ' + error.message); return; }
+    const p = performancesCache.find((x) => x.id === currentPerformanceId);
+    if (p) p.song_url = urlData.publicUrl;
+    renderPerformanceSongUI(p || { song_url: urlData.publicUrl });
+    event.target.value = '';
+
+    // The old file is now unreferenced — remove it so replacing a song
+    // repeatedly doesn't quietly fill up Supabase storage with orphaned
+    // audio files. Only runs after the new one is confirmed saved, and never
+    // blocks/alerts on failure — a leftover old file is a minor cleanup
+    // miss, not worth interrupting an already-successful upload over.
+    const oldPath = extractStoragePathFromPublicUrl(oldSongUrl, 'performance-songs');
+    if (oldPath) {
+        const { error: removeError } = await supabaseClient.storage.from('performance-songs').remove([oldPath]);
+        if (removeError) console.error('Could not delete old song file:', removeError);
+    }
+}
+function extractStoragePathFromPublicUrl(url, bucket) {
+    if (!url) return null;
+    const marker = `/${bucket}/`;
+    const idx = url.indexOf(marker);
+    if (idx === -1) return null;
+    return decodeURIComponent(url.slice(idx + marker.length));
+}
+function formatMMSS(seconds) {
+    const s = Math.max(0, Math.round(seconds || 0));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+}
+// Decodes the song into a peak-per-bucket waveform once per URL (cached —
+// re-selecting the same call doesn't re-download/re-decode) and draws it as
+// bars, same visual idea as any audio editor's waveform track.
+async function loadWaveform(url) {
+    if (waveformCacheUrl === url && waveformPeaks) { drawWaveform(); return; }
+    waveformPeaks = null;
+    drawWaveform();
+    try {
+        const resp = await fetch(url);
+        const buf = await resp.arrayBuffer();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtx();
+        const decoded = await audioCtx.decodeAudioData(buf);
+        const raw = decoded.getChannelData(0);
+        const buckets = 320;
+        const blockSize = Math.max(1, Math.floor(raw.length / buckets));
+        const peaks = new Float32Array(buckets);
+        for (let i = 0; i < buckets; i += 1) {
+            let max = 0;
+            const start = i * blockSize;
+            for (let j = 0; j < blockSize; j += 1) {
+                const v = Math.abs(raw[start + j] || 0);
+                if (v > max) max = v;
+            }
+            peaks[i] = max;
+        }
+        waveformPeaks = peaks;
+        waveformCacheUrl = url;
+        audioCtx.close();
+    } catch (e) {
+        console.error('Waveform decode failed:', e);
+    }
+    drawWaveform();
+}
+function drawWaveform() {
+    const canvas = document.getElementById('songWaveformCanvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, rect.width * dpr);
+    canvas.height = Math.max(1, rect.height * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#0f141c';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    if (!waveformPeaks) {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Loading waveform…', 10, rect.height / 2 + 4);
+        return;
+    }
+    const mid = rect.height / 2;
+    const barWidth = rect.width / waveformPeaks.length;
+    ctx.fillStyle = '#5b7a9c';
+    for (let i = 0; i < waveformPeaks.length; i += 1) {
+        const h = Math.max(1, waveformPeaks[i] * mid * 0.95);
+        ctx.fillRect(i * barWidth, mid - h, Math.max(1, barWidth - 1), h * 2);
+    }
+}
+function handleTimelineClick(e) {
+    const audio = document.getElementById('performanceAudio');
+    if (!audio.duration || !currentPerformanceId) return;
+    const canvas = document.getElementById('songWaveformCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const seconds = frac * audio.duration;
+    audio.currentTime = seconds;
+    syncActiveMovementToPlayhead();
+    hideMovementFlagMenu();
+    const menu = document.getElementById('timelineActionMenu');
+    menu.dataset.seconds = String(seconds);
+    menu.style.left = (frac * 100) + '%';
+    menu.classList.remove('hidden');
+}
+function hideTimelineActionMenu() {
+    document.getElementById('timelineActionMenu').classList.add('hidden');
+}
+function hideMovementFlagMenu() {
+    document.getElementById('movementFlagMenu').classList.add('hidden');
+}
+document.addEventListener('click', (e) => {
+    const actionMenu = document.getElementById('timelineActionMenu');
+    if (actionMenu && !actionMenu.classList.contains('hidden') && !actionMenu.contains(e.target) && e.target.id !== 'songWaveformCanvas') {
+        hideTimelineActionMenu();
+    }
+    const flagMenu = document.getElementById('movementFlagMenu');
+    if (flagMenu && !flagMenu.classList.contains('hidden') && !flagMenu.contains(e.target) && !e.target.closest('.timeline-flag')) {
+        hideMovementFlagMenu();
+    }
+});
+async function addMovementAtTimelineClick() {
+    const menu = document.getElementById('timelineActionMenu');
+    const seconds = Number(menu.dataset.seconds);
+    hideTimelineActionMenu();
+    await addMovement(seconds);
+}
+async function addCommentAtTimelineClick() {
+    const menu = document.getElementById('timelineActionMenu');
+    const seconds = Number(menu.dataset.seconds);
+    hideTimelineActionMenu();
+    const text = prompt(`Comment at ${formatMMSS(seconds)}:`);
+    if (text === null || !text.trim()) return;
+    const { error } = await supabaseClient.from('performance_comments')
+        .insert({ performance_id: currentPerformanceId, timestamp_seconds: seconds, text: text.trim() });
+    if (error) { alert('Could not save comment: ' + error.message); return; }
+    await loadPerformanceComments();
+}
+async function loadPerformanceComments() {
+    if (!currentPerformanceId) { performanceCommentsCache = []; renderTimelineMarkers(); return; }
+    const { data, error } = await supabaseClient.from('performance_comments')
+        .select('*').eq('performance_id', currentPerformanceId).order('timestamp_seconds');
+    if (error) { console.error('Comments load failed:', error); return; }
+    performanceCommentsCache = data || [];
+    renderTimelineMarkers();
+}
+async function handleCommentMarkerClick(commentId) {
+    const c = performanceCommentsCache.find((x) => x.id === commentId);
+    if (!c) return;
+    if (!confirm(`"${c.text}" (${formatMMSS(c.timestamp_seconds)})\n\nDelete this comment?`)) return;
+    const { error } = await supabaseClient.from('performance_comments').delete().eq('id', commentId);
+    if (error) { alert('Could not delete comment: ' + error.message); return; }
+    await loadPerformanceComments();
+}
+// The flag popover (Rename/Duplicate/Delete) opened by clicking (not
+// dragging) an existing flag — see the pointerup handler in renderTimelineMarkers.
+function openMovementFlagMenu(movementId, xPercent) {
+    hideTimelineActionMenu();
+    const menu = document.getElementById('movementFlagMenu');
+    menu.dataset.movementId = String(movementId);
+    menu.style.left = xPercent + '%';
+    menu.classList.remove('hidden');
+}
+async function renameMovementFromFlagMenu() {
+    const id = Number(document.getElementById('movementFlagMenu').dataset.movementId);
+    hideMovementFlagMenu();
+    await renameMovement(id);
+}
+async function duplicateMovementFromFlagMenu() {
+    const id = Number(document.getElementById('movementFlagMenu').dataset.movementId);
+    hideMovementFlagMenu();
+    await duplicateMovement(id);
+}
+async function deleteMovementFromFlagMenu() {
+    const id = Number(document.getElementById('movementFlagMenu').dataset.movementId);
+    hideMovementFlagMenu();
+    await deleteMovement(id);
+}
+// Every formation's flag lives directly on the wave — click it (no drag) to
+// select that formation and open its Rename/Duplicate/Delete menu; drag it
+// left/right to retime it, matching the song. Built as real DOM nodes (not
+// innerHTML strings) so each flag can carry its own pointer-drag handlers,
+// the same pattern already used for the dancer chips on the stage canvas.
+function renderTimelineMarkers() {
+    const layer = document.getElementById('timelineMarkersLayer');
+    if (!layer) return;
+    const audio = document.getElementById('performanceAudio');
+    const duration = audio.duration || 0;
+    layer.innerHTML = '';
+    if (!duration) return;
+    // Timestamps are never rewritten when the song is replaced (see
+    // uploadPerformanceSong) — a mark past the new song's end still shows up
+    // here, clamped to the right edge and colored red, rather than
+    // disappearing or breaking the layout.
+    const clampPct = (seconds) => Math.max(0, Math.min(100, (seconds / duration) * 100));
+
+    performanceMovementsCache
+        .filter((m) => typeof m.start_seconds === 'number' && m.start_seconds !== null)
+        .forEach((m) => {
+            const pastEnd = m.start_seconds > duration;
+            const isActive = m.id === currentMovementId;
+            const color = pastEnd ? '#e74c3c' : (isActive ? 'var(--accent)' : '#f1c40f');
+            const flag = document.createElement('div');
+            flag.className = 'timeline-flag';
+            flag.title = (m.label || 'Movement ' + m.movement_order) + ' — ' + formatMMSS(m.start_seconds) + (pastEnd ? ' (past end of current song)' : '') + ' — click to select, drag to retime';
+            flag.style.cssText = `position:absolute; bottom:0; left:${clampPct(m.start_seconds)}%; transform:translateX(-50%); width:0; height:0; border-left:${isActive ? 7 : 6}px solid transparent; border-right:${isActive ? 7 : 6}px solid transparent; border-bottom:${isActive ? 11 : 9}px solid ${color}; cursor:grab; pointer-events:auto; touch-action:none;`;
+
+            let dragStartX = 0;
+            let didDrag = false;
+            flag.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                draggingMovementFlagId = m.id;
+                dragStartX = e.clientX;
+                didDrag = false;
+                try { flag.setPointerCapture(e.pointerId); } catch (err) { /* no-op */ }
+                flag.style.cursor = 'grabbing';
+            });
+            flag.addEventListener('pointermove', (e) => {
+                if (draggingMovementFlagId !== m.id) return;
+                if (Math.abs(e.clientX - dragStartX) > 3) didDrag = true;
+                if (!didDrag) return;
+                const canvas = document.getElementById('songWaveformCanvas');
+                const rect = canvas.getBoundingClientRect();
+                const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                flag.style.left = (frac * 100) + '%';
+            });
+            flag.addEventListener('pointerup', async (e) => {
+                if (draggingMovementFlagId !== m.id) return;
+                draggingMovementFlagId = null;
+                flag.style.cursor = 'grab';
+                if (didDrag) {
+                    const canvas = document.getElementById('songWaveformCanvas');
+                    const rect = canvas.getBoundingClientRect();
+                    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const newSeconds = frac * duration;
+                    const { error } = await supabaseClient.from('performance_movements').update({ start_seconds: newSeconds }).eq('id', m.id);
+                    if (error) { alert('Could not retime that formation: ' + error.message); renderTimelineMarkers(); return; }
+                    m.start_seconds = newSeconds;
+                    switchMovement(m.id);
+                } else {
+                    switchMovement(m.id);
+                    openMovementFlagMenu(m.id, clampPct(m.start_seconds));
+                }
+            });
+            layer.appendChild(flag);
+        });
+
+    performanceCommentsCache.forEach((c) => {
+        const pastEnd = c.timestamp_seconds > duration;
+        const dot = document.createElement('div');
+        dot.title = c.text + ' — ' + formatMMSS(c.timestamp_seconds) + (pastEnd ? ' (past end of current song)' : '');
+        dot.style.cssText = `position:absolute; top:2px; left:${clampPct(c.timestamp_seconds)}%; transform:translateX(-50%); width:9px; height:9px; border-radius:50%; background:${pastEnd ? '#e74c3c' : 'var(--accent)'}; border:1.5px solid #fff; cursor:pointer; pointer-events:auto;`;
+        dot.addEventListener('click', (e) => { e.stopPropagation(); hideTimelineActionMenu(); hideMovementFlagMenu(); handleCommentMarkerClick(c.id); });
+        layer.appendChild(dot);
+    });
+
+    const playhead = document.createElement('div');
+    playhead.id = 'songPlayhead';
+    playhead.style.cssText = `position:absolute; top:0; bottom:0; width:1px; background:#fff; opacity:0.65; pointer-events:none;`;
+    layer.appendChild(playhead);
+    updatePlayhead();
+}
+function updatePlayhead() {
+    const audio = document.getElementById('performanceAudio');
+    const playhead = document.getElementById('songPlayhead');
+    if (!playhead || !audio.duration) return;
+    playhead.style.left = ((audio.currentTime / audio.duration) * 100) + '%';
+}
+// Keeps the stage canvas showing whichever formation is "active" for the
+// current playhead — the formation whose flag is the latest one at or
+// before this moment, held constant across the gap until the next flag is
+// reached. Applies whether the song is actually playing OR the admin just
+// clicked/scrubbed to a random spot on the wave while paused — previewing a
+// point in the song should always show what the stage looks like there, not
+// only exactly on a flag.
+function syncActiveMovementToPlayhead() {
+    const audio = document.getElementById('performanceAudio');
+    if (!audio || !audio.duration) return;
+    const timed = performanceMovementsCache.filter((m) => typeof m.start_seconds === 'number' && m.start_seconds !== null);
+    if (!timed.length) return;
+    let active = null;
+    timed.forEach((m) => {
+        if (m.start_seconds <= audio.currentTime && (!active || m.start_seconds > active.start_seconds)) active = m;
+    });
+    if (active && active.id !== currentMovementId) {
+        currentMovementId = active.id;
+        renderTimelineMarkers();
+        if (Object.keys(stageChipRefs).length) moveStageToMovement(active.id);
+        else renderStageCanvas();
+    }
+}
+(function initPerformanceAudioListeners() {
+    document.addEventListener('DOMContentLoaded', () => {
+        const audio = document.getElementById('performanceAudio');
+        if (!audio) return;
+        audio.addEventListener('timeupdate', () => { updatePlayhead(); updateSongTimeLabel(); syncActiveMovementToPlayhead(); });
+        audio.addEventListener('loadedmetadata', () => { renderTimelineMarkers(); updateSongTimeLabel(); });
+        audio.addEventListener('play', updatePlayPauseButton);
+        audio.addEventListener('pause', updatePlayPauseButton);
+        audio.addEventListener('ended', updatePlayPauseButton);
+    });
+})();
+
+// ===== Performances tab — Roster & signups =====
+async function loadRoster() {
+    const { data, error } = await supabaseClient.from('performance_signups')
+        .select('*').eq('performance_id', currentPerformanceId).order('student_name');
+    if (error) { console.error('Roster load failed:', error); return; }
+    performanceSignupsCache = (data || []).map((row) => {
+        const student = students.find((s) => s.id === row.student_id) || {};
+        return { ...row, gender: student.gender || null, age: student.age || null, batch: student.batch || '' };
+    });
+    renderRoster();
+    renderStageCanvas();
+    populateRosterAddStudentDropdown();
+}
+// Mirrors join_performance_by_phone's own tier lookup (batches.category ->
+// advance/intermediate/else beginner) so a manually-added dancer starts on
+// the same tier a self-join would have given them.
+function computeRosterTierForStudent(student) {
+    const batch = batchList.find((b) => b.name === student.batch);
+    const category = batch ? batch.category : null;
+    if (category === 'advance') return 'advanced';
+    if (category === 'intermediate') return 'intermediate';
+    return 'beginner';
+}
+function populateRosterAddStudentDropdown() {
+    const select = document.getElementById('rosterAddStudentSelect');
+    if (!select) return;
+    const term = (document.getElementById('rosterAddStudentSearch')?.value || '').toLowerCase().trim();
+    const alreadyIn = new Set(performanceSignupsCache.map((s) => s.student_id));
+    const available = students
+        .filter((s) => isStudentActive(s) && !alreadyIn.has(s.id))
+        .filter((s) => !term || s.name.toLowerCase().includes(term) || (s.parentName || '').toLowerCase().includes(term))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    select.innerHTML = `<option value="">Add a student…</option>` +
+        available.map((s) => `<option value="${s.id}">${escapeHtml(s.name)} — ${escapeHtml(s.parentName || '—')}, Age ${s.age ?? '—'}</option>`).join('');
+}
+async function addStudentToRoster() {
+    const select = document.getElementById('rosterAddStudentSelect');
+    const studentId = Number(select.value);
+    if (!studentId) return;
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+    const tier = computeRosterTierForStudent(student);
+    const { error } = await supabaseClient.from('performance_signups')
+        .insert({ performance_id: currentPerformanceId, student_id: studentId, student_name: student.name, roster_status: tier });
+    if (error) { alert('Could not add student: ' + error.message); return; }
+    await loadRoster();
+}
+// ---- Replace a dancer who's dropped out, keeping their tier/team/dress
+// color and exact stage spot in every formation for whoever steps in. ----
+function replacementCandidateOptions() {
+    const alreadyIn = new Set(performanceSignupsCache.map((s) => s.student_id));
+    const available = students
+        .filter((s) => isStudentActive(s) && !alreadyIn.has(s.id))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    if (!available.length) return `<option value="">No available students</option>`;
+    return `<option value="">Choose replacement…</option>` +
+        available.map((s) => `<option value="${s.id}">${escapeHtml(s.name)} — ${escapeHtml(s.parentName || '—')}, Age ${s.age ?? '—'}</option>`).join('');
+}
+function startReplaceRosterStudent(signupId) {
+    replacingSignupId = signupId;
+    renderRoster();
+}
+function cancelReplaceRosterStudent() {
+    replacingSignupId = null;
+    renderRoster();
+}
+async function confirmReplaceRosterStudent(signupId) {
+    const select = document.getElementById(`replaceSelect_${signupId}`);
+    const newStudentId = Number(select.value);
+    if (!newStudentId) { alert('Pick a replacement dancer first.'); return; }
+    const outgoing = performanceSignupsCache.find((s) => s.id === signupId);
+    if (!outgoing) return;
+    const newStudent = students.find((s) => s.id === newStudentId);
+    if (!newStudent) return;
+
+    const { error: insertError } = await supabaseClient.from('performance_signups').insert({
+        performance_id: currentPerformanceId,
+        student_id: newStudentId,
+        student_name: newStudent.name,
+        roster_status: outgoing.roster_status,
+        team: outgoing.team,
+        dress_color: outgoing.dress_color,
+        is_captain: outgoing.is_captain
+    });
+    if (insertError) { alert('Could not add the replacement: ' + insertError.message); return; }
+
+    // Carry over the outgoing dancer's exact spot in every formation, so the
+    // replacement steps straight into their place instead of everyone
+    // needing to be re-dragged.
+    const newPositionRows = [];
+    performanceMovementsCache.forEach((m) => {
+        const pos = (performancePositionsCache[m.id] || {})[outgoing.student_id];
+        if (pos) newPositionRows.push({ movement_id: m.id, student_id: newStudentId, x: pos.x, y: pos.y });
+    });
+    if (newPositionRows.length) {
+        await supabaseClient.from('performance_positions').upsert(newPositionRows, { onConflict: 'movement_id,student_id' });
+    }
+
+    const { error: deleteError } = await supabaseClient.from('performance_signups').delete().eq('id', signupId);
+    if (deleteError) alert('Replacement added, but could not remove the outgoing dancer: ' + deleteError.message);
+
+    replacingSignupId = null;
+    await loadRoster();
+    await loadMovements();
+}
+// Flags a dancer whose regular class attendance (last 20 recorded class
+// days) is below 70% — a signal to consider moving them to Beginner or
+// Spare. Rehearsal attendance isn't tracked in this version, so this looks
+// at class attendance only (v1 also factored in rehearsal attendance —
+// deliberately out of scope here).
+function getClassAttendanceRate(studentId) {
+    const dates = Object.keys(attendance).sort().slice(-20);
+    if (!dates.length) return null;
+    let total = 0, present = 0;
+    dates.forEach((d) => {
+        if (attendance[d] && Object.prototype.hasOwnProperty.call(attendance[d], studentId)) {
+            total += 1;
+            if (attendance[d][studentId]) present += 1;
+        }
+    });
+    return total ? present / total : null;
+}
+function computeAttendanceFlags() {
+    const flags = {};
+    performanceSignupsCache.forEach((s) => {
+        const rate = getClassAttendanceRate(s.student_id);
+        if (rate !== null && rate < 0.7) flags[s.student_id] = true;
+    });
+    return flags;
+}
+function renderRoster() {
+    const counts = { advanced: 0, intermediate: 0, beginner: 0, spare: 0 };
+    const colorCounts = {};
+    performanceSignupsCache.forEach((s) => {
+        counts[s.roster_status] = (counts[s.roster_status] || 0) + 1;
+        if (s.dress_color) colorCounts[s.dress_color] = (colorCounts[s.dress_color] || 0) + 1;
+    });
+    document.getElementById('rosterCounts').innerHTML = `
+        <span style="color:var(--warning);">${counts.advanced} Advanced</span>
+        <span style="color:var(--purple);">${counts.intermediate} Intermediate</span>
+        <span style="color:var(--accent-ink);">${counts.beginner} Beginner</span>
+        <span style="color:var(--ink-faint);">${counts.spare} Spare</span>
+    `;
+    document.getElementById('dressColorCounts').innerHTML = DRESS_COLOR_ORDER.map((c) => {
+        const used = colorCounts[c] || 0;
+        const qty = dressColorQuantity(c);
+        return `<span style="color:${DRESS_COLOR_HEX[c]};">● ${used}/${qty}${used >= qty ? ' full' : ''}</span>`;
+    }).join(' ');
+
+    const flags = computeAttendanceFlags();
+    const list = document.getElementById('rosterList');
+    if (!performanceSignupsCache.length) {
+        list.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em;">Nobody has joined this call yet.</div>`;
+    } else {
+        list.innerHTML = performanceSignupsCache.map((s) => {
+            const color = s.dress_color ? DRESS_COLOR_HEX[s.dress_color] : 'var(--ink)';
+            const flagMark = flags[s.student_id] ? `<span style="color:var(--danger);">${icon('warning', 13)}</span> ` : '';
+            const captainMark = captainStarHtml(s);
+            return `
+            <div style="display:grid; grid-template-columns:1.6fr 0.5fr 1fr 1fr 1fr 1.2fr auto; gap:8px; align-items:center; padding:8px 10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm); font-size:0.86em;">
+                <span style="font-weight:700; color:${color}; display:flex; align-items:center; gap:4px;">${captainMark}${flagMark}${escapeHtml(s.student_name)}</span>
+                <span style="color:var(--ink-faint);">${s.age || ''}</span>
+                <span style="color:var(--ink-faint);">${escapeHtml(s.batch || '')}</span>
+                <select onchange="updateRosterField(${s.id}, 'roster_status', this.value)" style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em;">
+                    ${Object.entries(ROSTER_TIER_LABELS).map(([v, l]) => `<option value="${v}" ${s.roster_status === v ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+                <select onchange="updateRosterField(${s.id}, 'team', this.value || null)" ${s.roster_status === 'spare' ? 'disabled' : ''} style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em;">
+                    <option value="">—</option>
+                    <option value="A" ${s.team === 'A' ? 'selected' : ''}>Team A</option>
+                    <option value="B" ${s.team === 'B' ? 'selected' : ''}>Team B</option>
+                </select>
+                <select onchange="updateRosterField(${s.id}, 'dress_color', this.value || null)" style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em; color:${s.dress_color ? DRESS_COLOR_HEX[s.dress_color] : 'inherit'};">
+                    <option value="">No color</option>
+                    ${DRESS_COLOR_ORDER.map((c) => {
+                        const isCurrent = s.dress_color === c;
+                        const full = (colorCounts[c] || 0) >= dressColorQuantity(c) && !isCurrent;
+                        return `<option value="${c}" style="color:${DRESS_COLOR_HEX[c]};" ${isCurrent ? 'selected' : ''} ${full ? 'disabled' : ''}>● ${c.replace(/_/g, ' ')}${full ? ' — out of stock' : ''}</option>`;
+                    }).join('')}
+                </select>
+                <span style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
+                    ${replacingSignupId === s.id ? `
+                        <select id="replaceSelect_${s.id}" style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; max-width:170px;">
+                            ${replacementCandidateOptions()}
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="confirmReplaceRosterStudent(${s.id})">Confirm</button>
+                        <button class="btn btn-outline btn-sm" onclick="cancelReplaceRosterStudent()">Cancel</button>
+                    ` : `
+                        ${s.roster_status === 'spare'
+                            ? `<button class="btn btn-outline btn-sm" onclick="updateRosterField(${s.id}, 'roster_status', 'beginner')">Un-spare</button>`
+                            : `<button class="btn btn-outline btn-sm" onclick="updateRosterField(${s.id}, 'roster_status', 'spare')">Spare</button>`}
+                        <button class="btn btn-outline btn-sm" onclick="startReplaceRosterStudent(${s.id})" title="Replace this dancer with someone else, keeping their tier/team/dress color and stage spots">Replace</button>
+                    `}
+                </span>
+            </div>`;
+        }).join('');
+    }
+
+    document.getElementById('attendanceFlagsLabel').innerHTML = iconLabel('warning', 'Attendance Flags', 13);
+    const attFlagsList = document.getElementById('attendanceFlagsList');
+    const flagged = performanceSignupsCache.filter((s) => flags[s.student_id]);
+    attFlagsList.innerHTML = flagged.length
+        ? flagged.map((s) => `<div>${escapeHtml(s.student_name)} — low class attendance, currently tagged <strong>${ROSTER_TIER_LABELS[s.roster_status]}</strong></div>`).join('')
+        : `<div style="color:var(--ink-faint);">No attendance concerns.</div>`;
+}
+// Gold when this dancer is the captain, outline otherwise. Clicking toggles
+// captaincy — see toggleCaptain() for the "only one at a time" behavior.
+function captainStarHtml(s) {
+    const filled = !!s.is_captain;
+    return `<button type="button" onclick="event.stopPropagation(); toggleCaptain(${s.id})" title="${filled ? 'Captain — click to remove' : 'Make captain'}" style="background:none; border:none; cursor:pointer; padding:0; display:inline-flex; align-items:center; color:${filled ? '#f1c40f' : 'var(--ink-faint)'};">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS.star}</svg>
+    </button>`;
+}
+// The captain can drag & save choreography positions from their own phone
+// (member.html), verified by phone+passcode — see save_performance_position_by_phone
+// in performances_captain.sql. Only one captain per performance: making a new
+// one clears the previous, enforced here and again by a DB unique index.
+async function toggleCaptain(signupId) {
+    const row = performanceSignupsCache.find((s) => s.id === signupId);
+    if (!row) return;
+    const makeCaptain = !row.is_captain;
+    const currentCaptain = performanceSignupsCache.find((s) => s.is_captain && s.id !== signupId);
+    if (makeCaptain && currentCaptain) {
+        const { error: clearError } = await supabaseClient.from('performance_signups').update({ is_captain: false }).eq('id', currentCaptain.id);
+        if (clearError) { alert('Could not update captain: ' + clearError.message); return; }
+        currentCaptain.is_captain = false;
+    }
+    const { error } = await supabaseClient.from('performance_signups').update({ is_captain: makeCaptain }).eq('id', signupId);
+    if (error) { alert('Could not update captain: ' + error.message); return; }
+    row.is_captain = makeCaptain;
+    renderRoster();
+}
+async function updateRosterField(signupId, field, value) {
+    const row = performanceSignupsCache.find((s) => s.id === signupId);
+    if (!row) return;
+    if (field === 'dress_color' && value) {
+        const qty = dressColorQuantity(value);
+        const used = performanceSignupsCache.filter((s) => s.dress_color === value && s.id !== signupId).length;
+        if (used >= qty) {
+            alert(`Out of stock — only ${qty} "${value.replace(/_/g, ' ')}" dress${qty === 1 ? '' : 'es'} available.`);
+            renderRoster();
+            return;
+        }
+    }
+    const payload = { [field]: value };
+    if (field === 'roster_status' && value === 'spare') payload.team = null;
+    const { error } = await supabaseClient.from('performance_signups').update(payload).eq('id', signupId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    row[field] = value;
+    if (payload.team === null) row.team = null;
+    renderRoster();
+}
+async function autoSplitTeams() {
+    const tierOrder = { advanced: 0, intermediate: 1, beginner: 2 };
+    const eligible = performanceSignupsCache.filter((s) => s.roster_status !== 'spare');
+    const sorted = [...eligible].sort((a, b) => {
+        const t = (tierOrder[a.roster_status] ?? 3) - (tierOrder[b.roster_status] ?? 3);
+        if (t !== 0) return t;
+        return (a.gender || '').localeCompare(b.gender || '');
+    });
+    for (let i = 0; i < sorted.length; i += 1) {
+        await supabaseClient.from('performance_signups').update({ team: i % 2 === 0 ? 'A' : 'B' }).eq('id', sorted[i].id);
+    }
+    await loadRoster();
+}
+async function clearAllTeams() {
+    const eligible = performanceSignupsCache.filter((s) => s.roster_status !== 'spare');
+    for (const s of eligible) {
+        await supabaseClient.from('performance_signups').update({ team: null }).eq('id', s.id);
+    }
+    await loadRoster();
+}
+async function autoAssignDressColors() {
+    const eligible = performanceSignupsCache.filter((s) => s.roster_status !== 'spare');
+    // Flat pool of one entry per physical dress in stock, so a color with
+    // only 1 in stock (e.g. green_boy_kid) never gets handed to 2 dancers.
+    const pool = [];
+    DRESS_COLOR_ORDER.forEach((c) => {
+        for (let i = 0; i < dressColorQuantity(c); i += 1) pool.push(c);
+    });
+    let shortage = 0;
+    for (let i = 0; i < eligible.length; i += 1) {
+        const color = pool[i] || null;
+        if (!color) shortage += 1;
+        await supabaseClient.from('performance_signups').update({ dress_color: color }).eq('id', eligible[i].id);
+    }
+    await loadRoster();
+    if (shortage > 0) alert(`Ran out of dresses — ${shortage} dancer(s) left with no color assigned.`);
+}
+
+// ---- Choreography: formations (movements) & stage positions ----
+// Every formation lives on the song timeline now — no separate tab list.
+// stageChipRefs keeps the actual chip/label DOM nodes so switching which
+// formation is shown can animate the SAME elements to their new spot
+// (see moveStageToMovement) instead of destroying and recreating them.
+let stageChipRefs = {}; // { studentId: { chip, label } }
+let selectedStageStudentIds = new Set();
+let groupDragOrigin = null; // { studentId: {x,y} } snapshot at the start of a group drag
+let groupDragAnchorStart = null; // {x,y} pointer position (stage %) when the group drag began
+let marqueeStartPct = null; // {x,y} where a box-select drag on empty stage began
+let stageCanvasMarqueeInitialized = false;
+// Outlines whichever chips are currently selected — called after every
+// render and on every selection change (shift-click, box-select).
+function applyStageSelectionStyling() {
+    Object.entries(stageChipRefs).forEach(([sid, ref]) => {
+        const selected = selectedStageStudentIds.has(Number(sid));
+        ref.chip.style.outline = selected ? '3px solid var(--accent)' : 'none';
+        ref.chip.style.outlineOffset = selected ? '2px' : '0';
+    });
+    const info = document.getElementById('stageSelectionInfo');
+    if (selectedStageStudentIds.size > 1) {
+        info.textContent = `${selectedStageStudentIds.size} dancers selected — drag any of them to move the group together.`;
+        info.style.display = 'block';
+    } else {
+        info.style.display = 'none';
+    }
+}
+// Drag-select on empty stage (a "marquee" box, like Figma/PowerPoint) to
+// select several dancers at once; a plain click on empty stage clears the
+// selection. Attached once — renderStageCanvas() rebuilds the chips every
+// time it runs, but #stageCanvas itself is never recreated, so these
+// listeners must not be re-attached on every render (that would stack
+// duplicate handlers).
+function initStageCanvasMarquee() {
+    const canvas = document.getElementById('stageCanvas');
+    const marquee = document.getElementById('stageMarqueeBox');
+    canvas.addEventListener('pointerdown', (e) => {
+        if (e.target !== canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        marqueeStartPct = {
+            x: ((e.clientX - rect.left) / rect.width) * 100,
+            y: ((e.clientY - rect.top) / rect.height) * 100
+        };
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* no-op */ }
+        marquee.style.display = 'block';
+        marquee.style.left = marqueeStartPct.x + '%';
+        marquee.style.top = marqueeStartPct.y + '%';
+        marquee.style.width = '0%';
+        marquee.style.height = '0%';
+    });
+    canvas.addEventListener('pointermove', (e) => {
+        if (!marqueeStartPct) return;
+        const rect = canvas.getBoundingClientRect();
+        const curX = ((e.clientX - rect.left) / rect.width) * 100;
+        const curY = ((e.clientY - rect.top) / rect.height) * 100;
+        const left = Math.min(marqueeStartPct.x, curX);
+        const top = Math.min(marqueeStartPct.y, curY);
+        const width = Math.abs(curX - marqueeStartPct.x);
+        const height = Math.abs(curY - marqueeStartPct.y);
+        marquee.style.left = left + '%';
+        marquee.style.top = top + '%';
+        marquee.style.width = width + '%';
+        marquee.style.height = height + '%';
+
+        const positions = performancePositionsCache[currentMovementId] || {};
+        selectedStageStudentIds.clear();
+        performanceSignupsCache.filter((s) => s.roster_status !== 'spare').forEach((s) => {
+            const pos = positions[s.student_id] || { x: 50, y: 50 };
+            if (pos.x >= left && pos.x <= left + width && pos.y >= top && pos.y <= top + height) {
+                selectedStageStudentIds.add(s.student_id);
+            }
+        });
+        applyStageSelectionStyling();
+    });
+    canvas.addEventListener('pointerup', (e) => {
+        if (!marqueeStartPct) return;
+        const rect = canvas.getBoundingClientRect();
+        const curX = ((e.clientX - rect.left) / rect.width) * 100;
+        const curY = ((e.clientY - rect.top) / rect.height) * 100;
+        const movedEnough = Math.abs(curX - marqueeStartPct.x) > 1 || Math.abs(curY - marqueeStartPct.y) > 1;
+        marqueeStartPct = null;
+        marquee.style.display = 'none';
+        if (!movedEnough) {
+            selectedStageStudentIds.clear();
+            applyStageSelectionStyling();
+        }
+    });
+}
+async function loadMovements() {
+    const { data: movements, error } = await supabaseClient.from('performance_movements')
+        .select('*').eq('performance_id', currentPerformanceId).order('movement_order');
+    if (error) { console.error('Movements load failed:', error); return; }
+    performanceMovementsCache = movements || [];
+
+    performancePositionsCache = {};
+    if (performanceMovementsCache.length) {
+        const ids = performanceMovementsCache.map((m) => m.id);
+        const { data: positions } = await supabaseClient.from('performance_positions').select('*').in('movement_id', ids);
+        (positions || []).forEach((pos) => {
+            performancePositionsCache[pos.movement_id] = performancePositionsCache[pos.movement_id] || {};
+            performancePositionsCache[pos.movement_id][pos.student_id] = { x: pos.x, y: pos.y };
+        });
+    }
+
+    if (!performanceMovementsCache.some((m) => m.id === currentMovementId)) {
+        currentMovementId = performanceMovementsCache[0]?.id || null;
+    }
+    renderStageCanvas();
+    renderTimelineMarkers();
+}
+// startSeconds places the new formation's flag on the timeline immediately —
+// every formation is created by clicking the wave now (addMovementAtTimelineClick),
+// so this is always provided in practice.
+async function addMovement(startSeconds) {
+    if (!currentPerformanceId) return;
+    const nextOrder = performanceMovementsCache.length
+        ? Math.max(...performanceMovementsCache.map((m) => m.movement_order)) + 1 : 1;
+    const insertPayload = { performance_id: currentPerformanceId, movement_order: nextOrder };
+    if (typeof startSeconds === 'number' && !Number.isNaN(startSeconds)) insertPayload.start_seconds = startSeconds;
+    const { data, error } = await supabaseClient.from('performance_movements')
+        .insert([insertPayload]).select('id');
+    if (error) { alert('Could not add formation: ' + error.message); return; }
+    const newId = data[0].id;
+
+    // New formation starts from the previous one's positions (so the admin
+    // drags from a sensible starting point instead of everyone stacked at
+    // center) — falls back to an even spread along the front for the first.
+    const prevMovement = performanceMovementsCache[performanceMovementsCache.length - 1];
+    const eligible = performanceSignupsCache.filter((s) => s.roster_status !== 'spare');
+    const prevPositions = prevMovement ? (performancePositionsCache[prevMovement.id] || {}) : {};
+    const rows = eligible.map((s, i) => {
+        const prev = prevPositions[s.student_id];
+        return {
+            movement_id: newId,
+            student_id: s.student_id,
+            x: prev ? prev.x : 10 + (80 * i) / Math.max(1, eligible.length - 1),
+            y: prev ? prev.y : 80
+        };
+    });
+    if (rows.length) await supabaseClient.from('performance_positions').insert(rows);
+
+    currentMovementId = newId;
+    await loadMovements();
+}
+async function deleteMovement(movementId) {
+    if (!confirm('Delete this formation?')) return;
+    const { error } = await supabaseClient.from('performance_movements').delete().eq('id', movementId);
+    if (error) { alert('Could not delete formation: ' + error.message); return; }
+    if (currentMovementId === movementId) currentMovementId = null;
+    await loadMovements();
+}
+async function renameMovement(movementId) {
+    const m = performanceMovementsCache.find((x) => x.id === movementId);
+    if (!m) return;
+    const name = prompt('Name this formation (e.g. "Opening pose"):', m.label || '');
+    if (name === null) return;
+    const trimmed = name.trim();
+    const { error } = await supabaseClient.from('performance_movements').update({ label: trimmed || null }).eq('id', movementId);
+    if (error) { alert('Could not rename formation: ' + error.message); return; }
+    m.label = trimmed || null;
+    renderTimelineMarkers();
+}
+// Reuses a named formation later in the same choreography — copies the
+// source formation's positions into a brand-new one placed a few seconds
+// after the original on the timeline (so its flag lands somewhere visible
+// and draggable right away, rather than needing a separate "attach to a
+// time" step). Drag the new flag to wherever it actually belongs.
+async function duplicateMovement(movementId) {
+    const source = performanceMovementsCache.find((x) => x.id === movementId);
+    if (!source) return;
+    const nextOrder = performanceMovementsCache.length
+        ? Math.max(...performanceMovementsCache.map((m) => m.movement_order)) + 1 : 1;
+    const audio = document.getElementById('performanceAudio');
+    const duration = audio.duration || 0;
+    const sourceSeconds = typeof source.start_seconds === 'number' ? source.start_seconds : 0;
+    const newSeconds = duration ? Math.min(sourceSeconds + 3, duration) : sourceSeconds + 3;
+    const { data, error } = await supabaseClient.from('performance_movements')
+        .insert([{ performance_id: currentPerformanceId, movement_order: nextOrder, label: source.label, start_seconds: newSeconds }]).select('id');
+    if (error) { alert('Could not reuse formation: ' + error.message); return; }
+    const newId = data[0].id;
+
+    const sourcePositions = performancePositionsCache[source.id] || {};
+    const rows = Object.entries(sourcePositions).map(([studentId, p]) => ({
+        movement_id: newId, student_id: Number(studentId), x: p.x, y: p.y
+    }));
+    if (rows.length) await supabaseClient.from('performance_positions').insert(rows);
+
+    currentMovementId = newId;
+    await loadMovements();
+}
+// Switches which formation is shown on stage without a page-jump feel — if
+// the dancer chips already exist (same roster, just a different formation),
+// their positions are updated in place and the CSS transition on
+// .dancer-chip/.dancer-chip-label animates the move; only a genuinely new
+// render (roster/movements just reloaded) falls back to a full rebuild.
+function switchMovement(movementId) {
+    currentMovementId = movementId;
+    renderTimelineMarkers();
+    if (Object.keys(stageChipRefs).length) moveStageToMovement(movementId);
+    else renderStageCanvas();
+}
+function moveStageToMovement(movementId) {
+    const positions = performancePositionsCache[movementId] || {};
+    Object.keys(stageChipRefs).forEach((sid) => {
+        const ref = stageChipRefs[sid];
+        const pos = positions[sid] || { x: 50, y: 50 };
+        ref.chip.style.left = pos.x + '%';
+        ref.chip.style.top = pos.y + '%';
+        ref.label.style.left = pos.x + '%';
+        ref.label.style.top = pos.y + '%';
+    });
+}
+// How close (in stage percentage points) a drag has to get to another
+// dancer's x or y, or the stage centerline, before it snaps to it.
+const STAGE_SNAP_THRESHOLD = 1.6;
+function renderStageCanvas() {
+    if (!stageCanvasMarqueeInitialized) {
+        initStageCanvasMarquee();
+        stageCanvasMarqueeInitialized = true;
+    }
+    const canvas = document.getElementById('stageCanvas');
+    canvas.querySelectorAll('.dancer-chip, .dancer-chip-label, .stage-guide').forEach((el) => el.remove());
+    stageChipRefs = {};
+    const hint = document.getElementById('stageCanvasEmptyHint');
+
+    if (!performanceMovementsCache.length) {
+        const perf = performancesCache.find((x) => x.id === currentPerformanceId);
+        hint.textContent = perf?.song_url
+            ? 'No formations yet — click the wave above to add one.'
+            : 'Upload a song above, then click the wave to start adding formations.';
+        selectedStageStudentIds.clear();
+        applyStageSelectionStyling();
+        return;
+    }
+    if (!currentMovementId) { hint.textContent = ''; return; }
+
+    const eligible = performanceSignupsCache.filter((s) => s.roster_status !== 'spare');
+    if (!eligible.length) {
+        hint.textContent = 'No non-spare dancers on the roster yet.';
+        selectedStageStudentIds.clear();
+        applyStageSelectionStyling();
+        return;
+    }
+    hint.textContent = '';
+    // Drop anyone who's left the roster (spared, replaced) from a
+    // leftover selection so a stale entry can't silently drag nothing.
+    const eligibleIds = new Set(eligible.map((s) => s.student_id));
+    Array.from(selectedStageStudentIds).forEach((id) => { if (!eligibleIds.has(id)) selectedStageStudentIds.delete(id); });
+    const positions = performancePositionsCache[currentMovementId] || {};
+
+    const guideV = document.createElement('div');
+    guideV.className = 'stage-guide';
+    guideV.style.cssText = `position:absolute; top:0; bottom:0; width:1px; background:#f1c40f; left:50%; display:none; pointer-events:none; z-index:3;`;
+    const guideH = document.createElement('div');
+    guideH.className = 'stage-guide';
+    guideH.style.cssText = `position:absolute; left:0; right:0; height:1px; background:#f1c40f; top:50%; display:none; pointer-events:none; z-index:3;`;
+    canvas.appendChild(guideV);
+    canvas.appendChild(guideH);
+
+    eligible.forEach((s) => {
+        const pos = positions[s.student_id] || { x: 50, y: 50 };
+        const bg = s.dress_color ? DRESS_COLOR_HEX[s.dress_color] : '#7f8c8d';
+        const borderColor = s.team === 'A' ? '#3498db' : s.team === 'B' ? '#e91e8c' : 'rgba(255,255,255,0.4)';
+        const ring = s.is_captain ? '0 0 0 3px #f1c40f, 0 2px 6px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.4)';
+        const chip = document.createElement('div');
+        chip.className = 'dancer-chip';
+        chip.title = s.student_name + (s.is_captain ? ' (captain)' : '');
+        chip.textContent = s.student_name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+        chip.style.cssText = `position:absolute; width:38px; height:38px; margin:-19px 0 0 -19px; border-radius:50%; background:${bg}; border:3px solid ${borderColor}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:0.75em; font-weight:800; cursor:grab; user-select:none; box-shadow:${ring}; left:${pos.x}%; top:${pos.y}%; z-index:2;`;
+
+        const label = document.createElement('div');
+        label.className = 'dancer-chip-label';
+        label.textContent = s.student_name.split(' ')[0] + (s.gender ? ` (${s.gender})` : '');
+        label.style.cssText = `position:absolute; left:${pos.x}%; top:${pos.y}%; margin-top:21px; transform:translateX(-50%); color:#fff; font-size:0.66em; font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.8); white-space:nowrap; pointer-events:none; z-index:1;`;
+
+        // Touch has no shift key, so a long-press (hold ~450ms without
+        // moving) is the mobile equivalent of shift-click — toggles this
+        // dancer in/out of the selection instead of dragging. The decision
+        // is deferred on touch: pointerdown neither drags nor selects yet,
+        // since we don't know until the finger either moves (real drag),
+        // holds still past the timer (toggle), or lifts quickly (plain tap-
+        // select) — deciding eagerly at pointerdown would fight whichever of
+        // those turns out to be true. Mouse/pen keep the old immediate
+        // behavior, which has no such ambiguity.
+        let touchLongPressTimer = null;
+        let touchLongPressFired = false;
+        let touchDidMove = false;
+        let touchStartClientX = 0;
+        let touchStartClientY = 0;
+        function startChipDrag(e) {
+            const isGroupDrag = selectedStageStudentIds.size > 1 && selectedStageStudentIds.has(s.student_id);
+            if (!isGroupDrag) {
+                selectedStageStudentIds.clear();
+                selectedStageStudentIds.add(s.student_id);
+                applyStageSelectionStyling();
+            }
+            draggingStudentId = s.student_id;
+            chip.style.transition = 'none';
+            label.style.transition = 'none';
+            try { chip.setPointerCapture(e.pointerId); } catch (err) { /* no-op: capture is a nicety, not required for the drag math below */ }
+            chip.style.cursor = 'grabbing';
+
+            if (isGroupDrag) {
+                const startPos = (performancePositionsCache[currentMovementId] || {})[s.student_id] || { x: 50, y: 50 };
+                groupDragAnchorStart = { x: startPos.x, y: startPos.y };
+                groupDragOrigin = {};
+                selectedStageStudentIds.forEach((sid) => {
+                    const p = (performancePositionsCache[currentMovementId] || {})[sid] || { x: 50, y: 50 };
+                    groupDragOrigin[sid] = { x: p.x, y: p.y };
+                });
+            }
+        }
+        chip.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // don't also trigger the canvas-level box-select
+            if (e.shiftKey) {
+                if (selectedStageStudentIds.has(s.student_id)) selectedStageStudentIds.delete(s.student_id);
+                else selectedStageStudentIds.add(s.student_id);
+                applyStageSelectionStyling();
+                return; // shift-click only builds the selection, no drag
+            }
+            if (e.pointerType === 'touch') {
+                touchLongPressFired = false;
+                touchDidMove = false;
+                touchStartClientX = e.clientX;
+                touchStartClientY = e.clientY;
+                try { chip.setPointerCapture(e.pointerId); } catch (err) { /* no-op */ }
+                touchLongPressTimer = setTimeout(() => {
+                    touchLongPressFired = true;
+                    if (selectedStageStudentIds.has(s.student_id)) selectedStageStudentIds.delete(s.student_id);
+                    else selectedStageStudentIds.add(s.student_id);
+                    applyStageSelectionStyling();
+                }, 450);
+                return; // a real drag (if any) starts lazily in pointermove once movement is detected
+            }
+            startChipDrag(e);
+        });
+        chip.addEventListener('pointermove', (e) => {
+            if (e.pointerType === 'touch' && touchLongPressTimer && !touchDidMove) {
+                if (Math.abs(e.clientX - touchStartClientX) > 8 || Math.abs(e.clientY - touchStartClientY) > 8) {
+                    touchDidMove = true;
+                    clearTimeout(touchLongPressTimer);
+                    touchLongPressTimer = null;
+                    startChipDrag(e); // this is a real drag, not a hold — decide single/group now
+                }
+            }
+            if (draggingStudentId !== s.student_id) return;
+            const rect = canvas.getBoundingClientRect();
+            let x = ((e.clientX - rect.left) / rect.width) * 100;
+            let y = ((e.clientY - rect.top) / rect.height) * 100;
+            x = Math.max(2, Math.min(98, x));
+            y = Math.max(6, Math.min(96, y));
+
+            if (groupDragOrigin) {
+                // Group drag: every selected dancer moves by the same delta,
+                // preserving their formation shape — no smart-guide snapping
+                // here, the group moves as a rigid unit off the raw pointer.
+                const deltaX = x - groupDragAnchorStart.x;
+                const deltaY = y - groupDragAnchorStart.y;
+                selectedStageStudentIds.forEach((sid) => {
+                    const origin = groupDragOrigin[sid];
+                    if (!origin) return;
+                    const nx = Math.max(2, Math.min(98, origin.x + deltaX));
+                    const ny = Math.max(6, Math.min(96, origin.y + deltaY));
+                    const ref = stageChipRefs[sid];
+                    if (ref) {
+                        ref.chip.style.left = nx + '%';
+                        ref.chip.style.top = ny + '%';
+                        ref.label.style.left = nx + '%';
+                        ref.label.style.top = ny + '%';
+                    }
+                    performancePositionsCache[currentMovementId] = performancePositionsCache[currentMovementId] || {};
+                    performancePositionsCache[currentMovementId][sid] = { x: nx, y: ny };
+                });
+                return;
+            }
+
+            // Smart guides: snap toward stage-center or any other dancer's
+            // current spot once the drag comes within STAGE_SNAP_THRESHOLD —
+            // same idea as Figma/PowerPoint alignment guides.
+            const others = Object.entries(positions).filter(([sid]) => Number(sid) !== s.student_id).map(([, p]) => p);
+            const xCandidates = [50, ...others.map((p) => p.x)];
+            const yCandidates = [50, ...others.map((p) => p.y)];
+            const closestX = xCandidates.reduce((best, c) => (Math.abs(c - x) < Math.abs(best - x) ? c : best), xCandidates[0]);
+            const closestY = yCandidates.reduce((best, c) => (Math.abs(c - y) < Math.abs(best - y) ? c : best), yCandidates[0]);
+            if (Math.abs(closestX - x) <= STAGE_SNAP_THRESHOLD) { x = closestX; guideV.style.left = x + '%'; guideV.style.display = 'block'; } else { guideV.style.display = 'none'; }
+            if (Math.abs(closestY - y) <= STAGE_SNAP_THRESHOLD) { y = closestY; guideH.style.top = y + '%'; guideH.style.display = 'block'; } else { guideH.style.display = 'none'; }
+
+            chip.style.left = x + '%';
+            chip.style.top = y + '%';
+            label.style.left = x + '%';
+            label.style.top = y + '%';
+            performancePositionsCache[currentMovementId] = performancePositionsCache[currentMovementId] || {};
+            performancePositionsCache[currentMovementId][s.student_id] = { x, y };
+        });
+        chip.addEventListener('pointerup', async (e) => {
+            if (touchLongPressTimer) { clearTimeout(touchLongPressTimer); touchLongPressTimer = null; }
+            if (touchLongPressFired) { touchLongPressFired = false; return; } // the long-press already toggled selection — nothing left to save
+            if (e.pointerType === 'touch' && !touchDidMove && draggingStudentId !== s.student_id) {
+                // A quick tap that never moved and never held long enough to
+                // toggle — a plain single-select, same role as a mouse click.
+                selectedStageStudentIds.clear();
+                selectedStageStudentIds.add(s.student_id);
+                applyStageSelectionStyling();
+                return;
+            }
+            if (draggingStudentId !== s.student_id) return;
+            draggingStudentId = null;
+            chip.style.cursor = 'grab';
+            chip.style.transition = '';
+            label.style.transition = '';
+            guideV.style.display = 'none';
+            guideH.style.display = 'none';
+
+            if (groupDragOrigin) {
+                const rows = Array.from(selectedStageStudentIds).map((sid) => {
+                    const p = performancePositionsCache[currentMovementId][sid];
+                    return { movement_id: currentMovementId, student_id: sid, x: p.x, y: p.y };
+                });
+                groupDragOrigin = null;
+                groupDragAnchorStart = null;
+                await supabaseClient.from('performance_positions').upsert(rows, { onConflict: 'movement_id,student_id' });
+                return;
+            }
+
+            const p = performancePositionsCache[currentMovementId][s.student_id];
+            await supabaseClient.from('performance_positions')
+                .upsert([{ movement_id: currentMovementId, student_id: s.student_id, x: p.x, y: p.y }], { onConflict: 'movement_id,student_id' });
+        });
+        canvas.appendChild(chip);
+        canvas.appendChild(label);
+        stageChipRefs[s.student_id] = { chip, label };
+    });
+    applyStageSelectionStyling();
 }
 
 // Opens a clean, print-formatted roster in a new tab and triggers the
@@ -4396,6 +5702,16 @@ function applyIcons() {
     document.getElementById('paymentsTotalBalanceBtn').innerHTML = icon('credit-card', 14);
     document.getElementById('downloadBatchesPdfBtnLabel').innerHTML = iconLabel('download', 'Download PDF', 15);
     document.getElementById('refreshDataBtn').innerHTML = icon('refresh', 16);
+    document.getElementById('perfCallsHeading').innerHTML = iconLabel('users', 'Performance Calls', 15);
+    document.getElementById('createPerformanceBtnLabel').innerHTML = iconLabel('plus', 'Open Call', 15);
+    document.getElementById('rosterHeading').innerHTML = iconLabel('users', 'Roster', 15);
+    document.getElementById('rosterAddStudentBtnLabel').innerHTML = iconLabel('plus', 'Add', 14);
+    document.getElementById('autoSplitTeamsBtnLabel').textContent = 'Auto-Split Teams';
+    document.getElementById('clearAllTeamsBtnLabel').textContent = '1 Team (clear split)';
+    document.getElementById('autoAssignDressColorsBtnLabel').textContent = 'Auto-Assign Dress Colors';
+    document.getElementById('choreoHeading').innerHTML = iconLabel('move-right', 'Choreography', 15);
+    document.getElementById('performanceSongDownloadLabel').innerHTML = iconLabel('download', 'Download', 14);
+    document.getElementById('changeCallBtnLabel').textContent = 'Change Call';
     document.getElementById('securityBtnIcon').innerHTML = iconLabel('shield', 'Security', 16);
     document.getElementById('securityCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('logoutBtnIcon').innerHTML = iconLabel('log-out', 'Sign Out', 16);

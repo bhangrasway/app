@@ -388,7 +388,20 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     </div>
                     <button class="btn btn-primary btn-block hidden" id="perfJoinBtnLabel" style="margin-bottom:8px;" onclick="handlePerfJoin()"></button>
                     <button class="btn btn-outline btn-block" id="perfSpotBtnLabel" onclick="handlePerfSeeSpot()"></button>
+                    <button class="btn btn-outline btn-block hidden" id="perfCaptainBtnLabel" style="margin-top:8px;" onclick="openCaptainPanel()"></button>
                     <p class="error-text" id="perfError"></p>
+                </div>
+                <div id="perfCaptainPanel" class="hidden">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                        <div style="font-weight:800;">Captain — Positions</div>
+                        <button class="link-btn" onclick="showPerf('perfAction')">Back</button>
+                    </div>
+                    <div id="captainMovementTabs" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;"></div>
+                    <div id="captainStageCanvas" style="position:relative; width:100%; aspect-ratio:16/9; background:linear-gradient(180deg, #1b2432, #0f141c); border-radius:10px; overflow:visible; touch-action:none;">
+                        <div style="position:absolute; top:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.7em; letter-spacing:0.08em; text-transform:uppercase;">Back of stage</div>
+                        <div style="position:absolute; bottom:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.7em; letter-spacing:0.08em; text-transform:uppercase;">Front of stage</div>
+                    </div>
+                    <p id="captainCanvasHint" style="color:var(--ink-faint); font-size:0.85em; margin-top:10px;"></p>
                 </div>
                 <div id="perfJoinResult" class="hidden" style="text-align:center;">
                     <div class="result-title" id="perfJoinTitle"></div>
@@ -1229,9 +1242,12 @@ document.getElementById('attnNotifyFromTooFarBtnLabel').addEventListener('click'
 document.getElementById('attnLocRetryBtn').addEventListener('click', initAttendance);
 
 // ===== Perform tab =====
-const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#1a237e' };
+const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#2563eb', olive: '#6b8e23', pink: '#ec4899', red_boys: '#e74c3c', sky_blue_boys: '#3498db', yellow_boys: '#f1c40f', yellow_boy_kid: '#f1c40f', green_boy_kid: '#27ae60' };
+let captainWorkspace = null;
+let captainMovementId = null;
+let captainDraggingStudentId = null;
 function showPerf(id) {
-    ['perfLoading', 'perfAction', 'perfJoinResult', 'perfSpotResult'].forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
+    ['perfLoading', 'perfAction', 'perfJoinResult', 'perfSpotResult', 'perfCaptainPanel'].forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
 }
 async function initPerform() {
     showPerf('perfLoading');
@@ -1250,6 +1266,133 @@ async function initPerform() {
     }
     document.getElementById('perfSpotBtnLabel').textContent = 'See My Spot';
     showPerf('perfAction');
+    await checkCaptainStatus();
+}
+// Only the dancer admin.html starred as captain for the currently open call
+// sees this — get_captain_workspace_by_phone re-checks that server-side on
+// every call, so this button being visible is just a UX hint, not the
+// security boundary.
+async function checkCaptainStatus() {
+    const btn = document.getElementById('perfCaptainBtnLabel');
+    if (!openPerformance || !selectedMember) { btn.classList.add('hidden'); captainWorkspace = null; return; }
+    const { data: result } = await supabaseClient.rpc('get_captain_workspace_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode, p_performance_id: openPerformance.id
+    });
+    if (result?.status === 'ok') {
+        captainWorkspace = result;
+        btn.classList.remove('hidden');
+        btn.textContent = 'Manage Positions (Captain)';
+    } else {
+        captainWorkspace = null;
+        btn.classList.add('hidden');
+    }
+}
+function openCaptainPanel() {
+    if (!captainWorkspace) return;
+    captainMovementId = captainWorkspace.movements[0]?.id || null;
+    renderCaptainMovementTabs();
+    renderCaptainStageCanvas();
+    showPerf('perfCaptainPanel');
+}
+function switchCaptainMovement(id) {
+    captainMovementId = id;
+    renderCaptainMovementTabs();
+    renderCaptainStageCanvas();
+}
+function renderCaptainMovementTabs() {
+    const wrap = document.getElementById('captainMovementTabs');
+    wrap.innerHTML = (captainWorkspace.movements || []).map((m) => {
+        const active = m.id === captainMovementId;
+        return `<div onclick="switchCaptainMovement(${m.id})" style="padding:6px 10px; border-radius:8px; cursor:pointer; background:${active ? 'var(--accent)' : 'var(--bg)'}; border:1px solid ${active ? 'var(--accent)' : 'var(--border)'}; color:${active ? '#fff' : 'var(--ink)'}; font-weight:700; font-size:0.82em;">${escapeHtml(m.label || 'Movement ' + m.movement_order)}</div>`;
+    }).join('');
+}
+// Same snap distance as admin.html's canvas — keeps captain-drafted
+// formations consistent with what the admin sees when they open it.
+const STAGE_SNAP_THRESHOLD = 1.6;
+function renderCaptainStageCanvas() {
+    const canvas = document.getElementById('captainStageCanvas');
+    canvas.querySelectorAll('.dancer-chip, .dancer-chip-label, .stage-guide').forEach((el) => el.remove());
+    const hint = document.getElementById('captainCanvasHint');
+    if (!captainWorkspace.movements.length) { hint.textContent = 'No movements yet — ask the admin to add one.'; return; }
+    if (!captainMovementId) { hint.textContent = ''; return; }
+    hint.textContent = '';
+    const roster = captainWorkspace.roster || [];
+    const positions = {};
+    (captainWorkspace.positions || []).filter((p) => p.movement_id === captainMovementId).forEach((p) => { positions[p.student_id] = { x: p.x, y: p.y }; });
+
+    const guideV = document.createElement('div');
+    guideV.className = 'stage-guide';
+    guideV.style.cssText = `position:absolute; top:0; bottom:0; width:1px; background:#f1c40f; left:50%; display:none; pointer-events:none; z-index:3;`;
+    const guideH = document.createElement('div');
+    guideH.className = 'stage-guide';
+    guideH.style.cssText = `position:absolute; left:0; right:0; height:1px; background:#f1c40f; top:50%; display:none; pointer-events:none; z-index:3;`;
+    canvas.appendChild(guideV);
+    canvas.appendChild(guideH);
+
+    roster.forEach((s) => {
+        const pos = positions[s.student_id] || { x: 50, y: 50 };
+        const bg = s.dress_color ? (DRESS_COLOR_HEX[s.dress_color] || '#7f8c8d') : '#7f8c8d';
+        const borderColor = s.team === 'A' ? '#3498db' : s.team === 'B' ? '#e91e8c' : 'rgba(255,255,255,0.4)';
+        const chip = document.createElement('div');
+        chip.className = 'dancer-chip';
+        chip.title = s.student_name;
+        chip.textContent = s.student_name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+        chip.style.cssText = `position:absolute; width:36px; height:36px; margin:-18px 0 0 -18px; border-radius:50%; background:${bg}; border:3px solid ${borderColor}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:0.72em; font-weight:800; cursor:grab; user-select:none; box-shadow:0 2px 6px rgba(0,0,0,0.4); left:${pos.x}%; top:${pos.y}%; z-index:2;`;
+
+        const label = document.createElement('div');
+        label.className = 'dancer-chip-label';
+        label.textContent = s.student_name.split(' ')[0] + (s.gender ? ` (${s.gender})` : '');
+        label.style.cssText = `position:absolute; left:${pos.x}%; top:${pos.y}%; margin-top:20px; transform:translateX(-50%); color:#fff; font-size:0.64em; font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.8); white-space:nowrap; pointer-events:none; z-index:1;`;
+
+        chip.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            captainDraggingStudentId = s.student_id;
+            chip.setPointerCapture(e.pointerId);
+            chip.style.cursor = 'grabbing';
+        });
+        chip.addEventListener('pointermove', (e) => {
+            if (captainDraggingStudentId !== s.student_id) return;
+            const rect = canvas.getBoundingClientRect();
+            let x = ((e.clientX - rect.left) / rect.width) * 100;
+            let y = ((e.clientY - rect.top) / rect.height) * 100;
+            x = Math.max(2, Math.min(98, x));
+            y = Math.max(6, Math.min(96, y));
+
+            const others = Object.entries(positions).filter(([sid]) => Number(sid) !== s.student_id).map(([, p]) => p);
+            const xCandidates = [50, ...others.map((p) => p.x)];
+            const yCandidates = [50, ...others.map((p) => p.y)];
+            const closestX = xCandidates.reduce((best, c) => (Math.abs(c - x) < Math.abs(best - x) ? c : best), xCandidates[0]);
+            const closestY = yCandidates.reduce((best, c) => (Math.abs(c - y) < Math.abs(best - y) ? c : best), yCandidates[0]);
+            if (Math.abs(closestX - x) <= STAGE_SNAP_THRESHOLD) { x = closestX; guideV.style.left = x + '%'; guideV.style.display = 'block'; } else { guideV.style.display = 'none'; }
+            if (Math.abs(closestY - y) <= STAGE_SNAP_THRESHOLD) { y = closestY; guideH.style.top = y + '%'; guideH.style.display = 'block'; } else { guideH.style.display = 'none'; }
+
+            chip.style.left = x + '%';
+            chip.style.top = y + '%';
+            label.style.left = x + '%';
+            label.style.top = y + '%';
+            positions[s.student_id] = { x, y };
+        });
+        chip.addEventListener('pointerup', async (e) => {
+            if (captainDraggingStudentId !== s.student_id) return;
+            captainDraggingStudentId = null;
+            chip.style.cursor = 'grab';
+            guideV.style.display = 'none';
+            guideH.style.display = 'none';
+            const p = positions[s.student_id];
+            const posList = captainWorkspace.positions || [];
+            const existing = posList.find((pp) => pp.movement_id === captainMovementId && pp.student_id === s.student_id);
+            if (existing) { existing.x = p.x; existing.y = p.y; }
+            else { posList.push({ movement_id: captainMovementId, student_id: s.student_id, x: p.x, y: p.y }); captainWorkspace.positions = posList; }
+            const { data: status, error } = await supabaseClient.rpc('save_performance_position_by_phone', {
+                p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode,
+                p_performance_id: openPerformance.id, p_movement_id: captainMovementId,
+                p_target_student_id: s.student_id, p_x: p.x, p_y: p.y
+            });
+            if (error || status !== 'ok') { document.getElementById('captainCanvasHint').textContent = 'Could not save — try again.'; }
+        });
+        canvas.appendChild(chip);
+        canvas.appendChild(label);
+    });
 }
 async function handlePerfJoin() {
     if (!openPerformance || !selectedMember) return;
