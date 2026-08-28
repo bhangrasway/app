@@ -384,31 +384,19 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div class="report-block">
                 <div id="perfLoading"><div class="spinner small"></div></div>
                 <div id="perfAction" class="hidden">
-                    <div id="perfListWrap">
-                        <div id="perfOpenCallCard" class="card hidden" style="padding:16px; margin-bottom:14px;">
-                            <div style="font-weight:800; font-size:1.05em;" id="perfOpenCallTitle"></div>
-                            <div style="color:var(--ink-faint); font-size:0.85em; margin:2px 0 10px;" id="perfOpenCallDate"></div>
-                            <button class="btn btn-primary btn-block" id="perfOpenCallJoinBtn" onclick="handlePerfJoin()">I'm In!</button>
-                        </div>
-                        <h3 style="font-size:1em; margin:0 0 10px;">My Performances</h3>
-                        <div id="perfList"></div>
-                    </div>
-                    <div id="perfDetailWrap" class="hidden">
-                        <button class="link-btn" onclick="showPerfList()" style="margin-bottom:10px;">← All Performances</button>
-                        <div class="card" style="padding:16px; margin-bottom:14px;">
-                            <div style="font-weight:800; font-size:1.05em;" id="perfCallTitle"></div>
-                            <div style="color:var(--ink-faint); font-size:0.85em; margin-top:2px;" id="perfCallDate"></div>
-                        </div>
-                        <button class="btn btn-outline btn-block" id="perfStageViewBtnLabel" onclick="openStageViewPanel()">Watch Full Stage</button>
-                        <button class="btn btn-outline btn-block hidden" id="perfCaptainBtnLabel" style="margin-top:8px;" onclick="openCaptainPanel()"></button>
-                    </div>
+                    <h3 style="font-size:1em; margin:0 0 10px;">My Performances</h3>
+                    <div id="perfList"></div>
                     <p class="error-text" id="perfError"></p>
                 </div>
                 <div id="perfStageViewPanel" class="hidden">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                        <div style="font-weight:800;">Full Stage View</div>
-                        <button class="link-btn" onclick="showPerf('perfAction')">Back</button>
+                    <button class="link-btn" onclick="showPerf('perfAction')" style="margin-bottom:10px;">← All Performances</button>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+                        <div>
+                            <div style="font-weight:800; font-size:1.05em;" id="stageViewTitle"></div>
+                            <div style="color:var(--ink-faint); font-size:0.85em; margin-top:2px;" id="stageViewDate"></div>
+                        </div>
                     </div>
+                    <button class="btn btn-outline btn-block hidden" id="perfCaptainBtnLabel" style="margin-bottom:10px;" onclick="openCaptainPanel()"></button>
                     <div id="stageViewMyDressNote" class="hidden" style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--accent-soft); border-radius:10px; margin-bottom:10px; font-size:0.85em; color:var(--ink-soft);">
                         <span id="stageViewMyDressSwatch" style="width:11px; height:11px; border-radius:50%; flex-shrink:0;"></span>
                         <span id="stageViewMyDressText"></span>
@@ -441,13 +429,6 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                         <div style="position:absolute; bottom:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.7em; letter-spacing:0.08em; text-transform:uppercase;">Front of stage</div>
                     </div>
                     <p id="captainCanvasHint" style="color:var(--ink-faint); font-size:0.85em; margin-top:10px;"></p>
-                </div>
-                <div id="perfJoinResult" class="hidden" style="text-align:center;">
-                    <div class="result-title" id="perfJoinTitle"></div>
-                    <div class="result-sub" id="perfJoinSub"></div>
-                    <div style="font-size:1.8em; font-weight:800; margin:10px 0 2px;" id="perfJoinedCount"></div>
-                    <p class="result-sub">dancers have joined so far</p>
-                    <button class="link-btn" onclick="initPerform()">Back</button>
                 </div>
             </div>
         </div>
@@ -588,7 +569,6 @@ let enteredPasscode = null;
 let selectedMember = null;
 let passcodeMode = 'enter';
 let householdMembers = [];
-let openPerformance = null;
 let lastReport = null;
 
 function show(id) {
@@ -647,7 +627,7 @@ function renderMemberList(members) {
 function backToPhoneEntry(message) {
     document.getElementById('phoneInput').value = '';
     document.getElementById('phoneError').textContent = message || '';
-    selectedMember = null; enteredPhone = ''; enteredPasscode = null; householdMembers = []; openPerformance = null; lastReport = null;
+    selectedMember = null; enteredPhone = ''; enteredPasscode = null; householdMembers = []; lastReport = null;
     show('phoneState');
     document.getElementById('phoneInput').focus();
 }
@@ -1279,36 +1259,37 @@ let captainWorkspace = null;
 let captainMovementId = null;
 let captainDraggingStudentId = null;
 function showPerf(id) {
-    ['perfLoading', 'perfAction', 'perfJoinResult', 'perfCaptainPanel', 'perfStageViewPanel'].forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
+    ['perfLoading', 'perfAction', 'perfCaptainPanel', 'perfStageViewPanel'].forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
 }
 let myPerformancesCache = [];
 let selectedPerformanceForView = null;
 async function initPerform() {
     showPerf('perfLoading');
     document.getElementById('perfError').textContent = '';
-    const { data: openData } = await supabaseClient.from('performances')
-        .select('id, title, event_date, status').eq('status', 'open').order('created_at', { ascending: false }).limit(1);
-    openPerformance = (openData && openData[0]) || null;
 
+    // Roster-only: a student only ever learns about a performance once
+    // admin has added them to performance_signups. No anon broadcast read
+    // of the performances table — get_my_performances_by_phone is phone
+    // verified and already scoped to this student's own roster rows.
     const { data: mine, error: mineError } = await supabaseClient.rpc('get_my_performances_by_phone', {
         p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
     });
     if (mineError) console.error('get_my_performances_by_phone failed (has performances_stage_view.sql been run?):', mineError);
     myPerformancesCache = (mine?.status === 'ok' && mine.performances) || [];
 
-    const openCallCard = document.getElementById('perfOpenCallCard');
-    const alreadyJoinedOpen = openPerformance && myPerformancesCache.some((p) => p.id === openPerformance.id);
-    if (openPerformance && !alreadyJoinedOpen) {
-        openCallCard.classList.remove('hidden');
-        document.getElementById('perfOpenCallTitle').textContent = openPerformance.title;
-        document.getElementById('perfOpenCallDate').textContent = openPerformance.event_date || '';
-    } else {
-        openCallCard.classList.add('hidden');
-    }
-
     renderPerfList();
-    showPerfList();
     showPerf('perfAction');
+}
+// Status badge is derived from the event date, not the raw open/closed
+// flag, so a past show never reads as "Closed" (registration jargon) —
+// it reads as done.
+function performanceStatusBadge(p) {
+    if (p.status === 'open') return { text: 'Open', bg: 'var(--success-soft)', color: 'var(--success)' };
+    const dt = p.event_date ? new Date(String(p.event_date).slice(0, 10) + 'T00:00:00') : null;
+    const isPast = dt && !Number.isNaN(dt.getTime()) && dt < new Date(new Date().toDateString());
+    return isPast
+        ? { text: 'Performance done', bg: 'var(--bg)', color: 'var(--ink-faint)' }
+        : { text: 'Upcoming', bg: 'var(--bg)', color: 'var(--ink-faint)' };
 }
 function renderPerfList() {
     const list = document.getElementById('perfList');
@@ -1320,30 +1301,26 @@ function renderPerfList() {
         const dressSwatch = p.dress_color
             ? `<span style="display:inline-flex; align-items:center; gap:5px; font-size:0.82em; color:var(--ink-soft);"><span style="width:10px; height:10px; border-radius:50%; background:${DRESS_COLOR_HEX[p.dress_color] || '#ccc'}; display:inline-block;"></span>${escapeHtml(p.dress_color.replace(/_/g, ' '))}</span>`
             : `<span style="font-size:0.82em; color:var(--ink-faint);">Dress not set yet</span>`;
+        const badge = performanceStatusBadge(p);
         return `
         <div class="card" style="padding:14px 16px; margin-bottom:8px; cursor:pointer;" onclick="selectPerformanceForView(${p.id})">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                 <div style="font-weight:700;">${escapeHtml(p.title)}</div>
-                <span style="font-size:0.76em; font-weight:700; padding:2px 9px; border-radius:999px; background:${p.status === 'open' ? 'var(--success-soft)' : 'var(--bg)'}; color:${p.status === 'open' ? 'var(--success)' : 'var(--ink-faint)'}; white-space:nowrap;">${p.status === 'open' ? 'Open' : 'Closed'}</span>
+                <span style="font-size:0.76em; font-weight:700; padding:2px 9px; border-radius:999px; background:${badge.bg}; color:${badge.color}; white-space:nowrap;">${badge.text}</span>
             </div>
             <div style="color:var(--ink-faint); font-size:0.82em; margin:2px 0 6px;">${escapeHtml(p.event_date || '')}</div>
             ${dressSwatch}
         </div>`;
     }).join('');
 }
-function showPerfList() {
-    document.getElementById('perfListWrap').classList.remove('hidden');
-    document.getElementById('perfDetailWrap').classList.add('hidden');
-}
 async function selectPerformanceForView(performanceId) {
     selectedPerformanceForView = myPerformancesCache.find((p) => p.id === performanceId);
     if (!selectedPerformanceForView) return;
-    document.getElementById('perfListWrap').classList.add('hidden');
-    document.getElementById('perfDetailWrap').classList.remove('hidden');
-    document.getElementById('perfCallTitle').textContent = selectedPerformanceForView.title;
-    document.getElementById('perfCallDate').textContent = selectedPerformanceForView.event_date || '';
+    document.getElementById('stageViewTitle').textContent = selectedPerformanceForView.title;
+    document.getElementById('stageViewDate').textContent = selectedPerformanceForView.event_date || '';
     document.getElementById('perfError').textContent = '';
     await checkCaptainStatus();
+    await openStageViewPanel();
 }
 // Only the dancer admin.html starred as captain for this performance sees
 // this — get_captain_workspace_by_phone re-checks that server-side on every
@@ -1722,7 +1699,7 @@ function renderCaptainStageCanvas() {
             else { posList.push({ movement_id: captainMovementId, student_id: s.student_id, x: p.x, y: p.y }); captainWorkspace.positions = posList; }
             const { data: status, error } = await supabaseClient.rpc('save_performance_position_by_phone', {
                 p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode,
-                p_performance_id: openPerformance.id, p_movement_id: captainMovementId,
+                p_performance_id: selectedPerformanceForView.id, p_movement_id: captainMovementId,
                 p_target_student_id: s.student_id, p_x: p.x, p_y: p.y
             });
             if (error || status !== 'ok') { document.getElementById('captainCanvasHint').textContent = 'Could not save — try again.'; }
@@ -1731,45 +1708,6 @@ function renderCaptainStageCanvas() {
         canvas.appendChild(label);
     });
 }
-async function handlePerfJoin() {
-    if (!openPerformance || !selectedMember) return;
-    const perfError = document.getElementById('perfError');
-    perfError.textContent = '';
-    const btn = document.getElementById('perfOpenCallJoinBtn');
-    btn.disabled = true; btn.textContent = 'Joining…';
-    const { data: status, error } = await supabaseClient.rpc('join_performance_by_phone', {
-        p_performance_id: openPerformance.id, p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
-    });
-    btn.disabled = false; btn.textContent = "I'm In!";
-    if (status === 'bad_passcode') {
-        passcodeMode = 'enter'; renderPasscodeTexts();
-        document.getElementById('passcodeError').textContent = 'Wrong passcode.';
-        clearPasscodeBoxes(); show('passcodeState'); shakePasscodeBoxes();
-        document.querySelector('.passcode-box').focus();
-        return;
-    }
-    if (error || status === 'bad_phone' || status === 'not_found') { perfError.textContent = 'Something went wrong.'; return; }
-    if (status === 'closed') {
-        document.getElementById('perfJoinTitle').textContent = 'Sign-ups closed';
-        document.getElementById('perfJoinSub').textContent = 'This call is no longer accepting sign-ups.';
-        document.getElementById('perfJoinedCount').textContent = '';
-        showPerf('perfJoinResult');
-        return;
-    }
-    // Joined — go straight into its roster/stage view instead of a separate
-    // "you're in" screen; seeing the stage populate already makes the join
-    // obvious. Refresh the joined-performances list first so it's ready
-    // underneath when they eventually tap Back.
-    const { data: mine } = await supabaseClient.rpc('get_my_performances_by_phone', {
-        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
-    });
-    myPerformancesCache = (mine?.status === 'ok' && mine.performances) || [];
-    renderPerfList();
-    document.getElementById('perfOpenCallCard').classList.add('hidden');
-    await selectPerformanceForView(openPerformance.id);
-    await openStageViewPanel();
-}
-
 // ===== Camera / crop (member-side) =====
 let memberCameraStream = null;
 let memberCameraCallback = null;

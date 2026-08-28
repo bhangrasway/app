@@ -207,3 +207,14 @@ end;
 $$;
 
 grant execute on function public.get_my_spot_by_phone(bigint, text, text, bigint) to anon;
+
+-- ===== Lock down performances table to roster-only visibility =====
+-- performances.sql originally gave anon a blanket read policy so
+-- perform.html could broadcast any open call's title to every dancer
+-- (audition-style self-discovery via join_performance_by_phone). That's
+-- being retired: a student should only ever learn a performance exists
+-- once admin has actually added them to its roster. get_my_performances_by
+-- _phone above is security definer (bypasses RLS) and already scopes to
+-- the caller's own performance_signups rows, so dropping this policy just
+-- closes the anon broadcast read without affecting that RPC.
+drop policy if exists "anon_read_performances" on public.performances;
