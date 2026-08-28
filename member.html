@@ -199,6 +199,8 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     .report-block .subtitle{ margin-left:0; }
     .report-block{ margin-bottom:20px; padding-bottom:20px; }
 }
+#stageViewCommentBanner{ background:rgba(37,99,235,0.94); box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+#stageViewCommentBanner.stage-comment-empty{ background:rgba(255,255,255,0.06); border:1.5px dashed rgba(255,255,255,0.22); box-shadow:none; }
 </style>
 </head>
 <body>
@@ -382,14 +384,51 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div class="report-block">
                 <div id="perfLoading"><div class="spinner small"></div></div>
                 <div id="perfAction" class="hidden">
-                    <div class="card hidden" id="perfCallBox" style="padding:16px; margin-bottom:14px;">
-                        <div style="font-weight:800; font-size:1.05em;" id="perfCallTitle"></div>
-                        <div style="color:var(--ink-faint); font-size:0.85em; margin-top:2px;" id="perfCallDate"></div>
+                    <div id="perfListWrap">
+                        <div id="perfOpenCallCard" class="card hidden" style="padding:16px; margin-bottom:14px;">
+                            <div style="font-weight:800; font-size:1.05em;" id="perfOpenCallTitle"></div>
+                            <div style="color:var(--ink-faint); font-size:0.85em; margin:2px 0 10px;" id="perfOpenCallDate"></div>
+                            <button class="btn btn-primary btn-block" id="perfOpenCallJoinBtn" onclick="handlePerfJoin()">I'm In!</button>
+                        </div>
+                        <h3 style="font-size:1em; margin:0 0 10px;">My Performances</h3>
+                        <div id="perfList"></div>
                     </div>
-                    <button class="btn btn-primary btn-block hidden" id="perfJoinBtnLabel" style="margin-bottom:8px;" onclick="handlePerfJoin()"></button>
-                    <button class="btn btn-outline btn-block" id="perfSpotBtnLabel" onclick="handlePerfSeeSpot()"></button>
-                    <button class="btn btn-outline btn-block hidden" id="perfCaptainBtnLabel" style="margin-top:8px;" onclick="openCaptainPanel()"></button>
+                    <div id="perfDetailWrap" class="hidden">
+                        <button class="link-btn" onclick="showPerfList()" style="margin-bottom:10px;">← All Performances</button>
+                        <div class="card" style="padding:16px; margin-bottom:14px;">
+                            <div style="font-weight:800; font-size:1.05em;" id="perfCallTitle"></div>
+                            <div style="color:var(--ink-faint); font-size:0.85em; margin-top:2px;" id="perfCallDate"></div>
+                        </div>
+                        <button class="btn btn-outline btn-block" id="perfStageViewBtnLabel" onclick="openStageViewPanel()">Watch Full Stage</button>
+                        <button class="btn btn-outline btn-block hidden" id="perfCaptainBtnLabel" style="margin-top:8px;" onclick="openCaptainPanel()"></button>
+                    </div>
                     <p class="error-text" id="perfError"></p>
+                </div>
+                <div id="perfStageViewPanel" class="hidden">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                        <div style="font-weight:800;">Full Stage View</div>
+                        <button class="link-btn" onclick="showPerf('perfAction')">Back</button>
+                    </div>
+                    <div id="stageViewMyDressNote" class="hidden" style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--accent-soft); border-radius:10px; margin-bottom:10px; font-size:0.85em; color:var(--ink-soft);">
+                        <span id="stageViewMyDressSwatch" style="width:11px; height:11px; border-radius:50%; flex-shrink:0;"></span>
+                        <span id="stageViewMyDressText"></span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                        <button type="button" id="stageViewPlayBtn" onclick="toggleStageViewPlayback()" class="hidden" style="border:none; background:var(--accent); color:#fff; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;"></button>
+                        <span id="stageViewTimeLabel" style="font-size:0.85em; color:var(--ink-faint); font-variant-numeric:tabular-nums;"></span>
+                        <a id="stageViewDownloadBtn" href="#" download target="_blank" class="btn btn-outline btn-sm hidden" style="margin-left:auto;">Download</a>
+                        <audio id="stageViewAudio" style="display:none;"></audio>
+                    </div>
+                    <div id="stageViewWaveWrap" class="hidden" style="position:relative; margin-bottom:12px;">
+                        <canvas id="stageViewWaveCanvas" onclick="handleStageViewWaveClick(event)" style="display:block; width:100%; height:50px; border-radius:10px; cursor:pointer;"></canvas>
+                        <div id="stageViewMarkersLayer" style="position:absolute; top:0; left:0; right:0; height:50px; pointer-events:none;"></div>
+                    </div>
+                    <div id="stageViewStageCanvas" style="position:relative; width:100%; aspect-ratio:16/9; background:linear-gradient(180deg, #1b2432, #0f141c); border-radius:10px; overflow:visible; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;">
+                        <div style="position:absolute; top:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.68em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Back of stage</div>
+                        <div style="position:absolute; bottom:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.68em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Front of stage</div>
+                        <div id="stageViewCommentBanner" class="stage-comment-empty" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); max-width:88%; min-width:64px; min-height:14px; color:#fff; padding:6px 16px; border-radius:999px; font-size:0.8em; font-weight:600; text-align:center; z-index:5; pointer-events:none;"></div>
+                    </div>
+                    <p id="stageViewHint" style="color:var(--ink-faint); font-size:0.85em; margin-top:10px;"></p>
                 </div>
                 <div id="perfCaptainPanel" class="hidden">
                     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
@@ -408,14 +447,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <div class="result-sub" id="perfJoinSub"></div>
                     <div style="font-size:1.8em; font-weight:800; margin:10px 0 2px;" id="perfJoinedCount"></div>
                     <p class="result-sub">dancers have joined so far</p>
-                    <button class="link-btn" onclick="showPerf('perfAction')">Back</button>
-                </div>
-                <div id="perfSpotResult" class="hidden" style="text-align:center;">
-                    <div class="result-title" id="perfSpotMovementLabel"></div>
-                    <div id="perfSpotSwatch" style="width:44px; height:44px; border-radius:50%; margin:10px auto; display:none;"></div>
-                    <div class="result-sub" id="perfSpotPositionText"></div>
-                    <p class="empty-note" id="perfSpotEmptyNote" style="text-align:center;"></p>
-                    <button class="link-btn" onclick="showPerf('perfAction')">Back</button>
+                    <button class="link-btn" onclick="initPerform()">Back</button>
                 </div>
             </div>
         </div>
@@ -1247,36 +1279,81 @@ let captainWorkspace = null;
 let captainMovementId = null;
 let captainDraggingStudentId = null;
 function showPerf(id) {
-    ['perfLoading', 'perfAction', 'perfJoinResult', 'perfSpotResult', 'perfCaptainPanel'].forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
+    ['perfLoading', 'perfAction', 'perfJoinResult', 'perfCaptainPanel', 'perfStageViewPanel'].forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
 }
+let myPerformancesCache = [];
+let selectedPerformanceForView = null;
 async function initPerform() {
     showPerf('perfLoading');
     document.getElementById('perfError').textContent = '';
-    const { data, error } = await supabaseClient.from('performances').select('id, title, event_date, status').eq('status', 'open').order('created_at', { ascending: false }).limit(1);
-    openPerformance = (!error && data && data[0]) || null;
-    const callBox = document.getElementById('perfCallBox');
-    const joinBtn = document.getElementById('perfJoinBtnLabel');
-    if (openPerformance) {
-        callBox.classList.remove('hidden');
-        document.getElementById('perfCallTitle').textContent = openPerformance.title;
-        document.getElementById('perfCallDate').textContent = openPerformance.event_date || '';
-        joinBtn.classList.remove('hidden'); joinBtn.textContent = "I'm In!";
+    const { data: openData } = await supabaseClient.from('performances')
+        .select('id, title, event_date, status').eq('status', 'open').order('created_at', { ascending: false }).limit(1);
+    openPerformance = (openData && openData[0]) || null;
+
+    const { data: mine, error: mineError } = await supabaseClient.rpc('get_my_performances_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (mineError) console.error('get_my_performances_by_phone failed (has performances_stage_view.sql been run?):', mineError);
+    myPerformancesCache = (mine?.status === 'ok' && mine.performances) || [];
+
+    const openCallCard = document.getElementById('perfOpenCallCard');
+    const alreadyJoinedOpen = openPerformance && myPerformancesCache.some((p) => p.id === openPerformance.id);
+    if (openPerformance && !alreadyJoinedOpen) {
+        openCallCard.classList.remove('hidden');
+        document.getElementById('perfOpenCallTitle').textContent = openPerformance.title;
+        document.getElementById('perfOpenCallDate').textContent = openPerformance.event_date || '';
     } else {
-        callBox.classList.add('hidden'); joinBtn.classList.add('hidden');
+        openCallCard.classList.add('hidden');
     }
-    document.getElementById('perfSpotBtnLabel').textContent = 'See My Spot';
+
+    renderPerfList();
+    showPerfList();
     showPerf('perfAction');
+}
+function renderPerfList() {
+    const list = document.getElementById('perfList');
+    if (!myPerformancesCache.length) {
+        list.innerHTML = `<p class="empty-note">You haven't joined any performances yet.</p>`;
+        return;
+    }
+    list.innerHTML = myPerformancesCache.map((p) => {
+        const dressSwatch = p.dress_color
+            ? `<span style="display:inline-flex; align-items:center; gap:5px; font-size:0.82em; color:var(--ink-soft);"><span style="width:10px; height:10px; border-radius:50%; background:${DRESS_COLOR_HEX[p.dress_color] || '#ccc'}; display:inline-block;"></span>${escapeHtml(p.dress_color.replace(/_/g, ' '))}</span>`
+            : `<span style="font-size:0.82em; color:var(--ink-faint);">Dress not set yet</span>`;
+        return `
+        <div class="card" style="padding:14px 16px; margin-bottom:8px; cursor:pointer;" onclick="selectPerformanceForView(${p.id})">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <div style="font-weight:700;">${escapeHtml(p.title)}</div>
+                <span style="font-size:0.76em; font-weight:700; padding:2px 9px; border-radius:999px; background:${p.status === 'open' ? 'var(--success-soft)' : 'var(--bg)'}; color:${p.status === 'open' ? 'var(--success)' : 'var(--ink-faint)'}; white-space:nowrap;">${p.status === 'open' ? 'Open' : 'Closed'}</span>
+            </div>
+            <div style="color:var(--ink-faint); font-size:0.82em; margin:2px 0 6px;">${escapeHtml(p.event_date || '')}</div>
+            ${dressSwatch}
+        </div>`;
+    }).join('');
+}
+function showPerfList() {
+    document.getElementById('perfListWrap').classList.remove('hidden');
+    document.getElementById('perfDetailWrap').classList.add('hidden');
+}
+async function selectPerformanceForView(performanceId) {
+    selectedPerformanceForView = myPerformancesCache.find((p) => p.id === performanceId);
+    if (!selectedPerformanceForView) return;
+    document.getElementById('perfListWrap').classList.add('hidden');
+    document.getElementById('perfDetailWrap').classList.remove('hidden');
+    document.getElementById('perfCallTitle').textContent = selectedPerformanceForView.title;
+    document.getElementById('perfCallDate').textContent = selectedPerformanceForView.event_date || '';
+    document.getElementById('perfError').textContent = '';
     await checkCaptainStatus();
 }
-// Only the dancer admin.html starred as captain for the currently open call
-// sees this — get_captain_workspace_by_phone re-checks that server-side on
-// every call, so this button being visible is just a UX hint, not the
-// security boundary.
+// Only the dancer admin.html starred as captain for this performance sees
+// this — get_captain_workspace_by_phone re-checks that server-side on every
+// call, so this button being visible is just a UX hint, not the security
+// boundary.
 async function checkCaptainStatus() {
     const btn = document.getElementById('perfCaptainBtnLabel');
-    if (!openPerformance || !selectedMember) { btn.classList.add('hidden'); captainWorkspace = null; return; }
+    if (!selectedPerformanceForView || !selectedMember) { btn.classList.add('hidden'); captainWorkspace = null; return; }
     const { data: result } = await supabaseClient.rpc('get_captain_workspace_by_phone', {
-        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode, p_performance_id: openPerformance.id
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode, p_performance_id: selectedPerformanceForView.id
     });
     if (result?.status === 'ok') {
         captainWorkspace = result;
@@ -1287,6 +1364,266 @@ async function checkCaptainStatus() {
         btn.classList.add('hidden');
     }
 }
+// ===== Full Stage View (read-only, any joined member) =====
+function formatMMSS(seconds) {
+    const s = Math.max(0, Math.round(seconds || 0));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+}
+let stageViewData = null;
+let stageViewMovementId = null;
+let stageViewPeaks = null;
+let stageViewLastCommentId = null;
+async function openStageViewPanel() {
+    if (!selectedMember || !selectedPerformanceForView) return;
+    const hint = document.getElementById('stageViewHint');
+    hint.textContent = 'Loading…';
+    showPerf('perfStageViewPanel');
+    const { data: result } = await supabaseClient.rpc('get_performance_stage_view_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode, p_performance_id: selectedPerformanceForView.id
+    });
+    if (result?.status === 'bad_passcode') {
+        passcodeMode = 'enter'; renderPasscodeTexts();
+        document.getElementById('passcodeError').textContent = 'Wrong passcode.';
+        clearPasscodeBoxes(); show('passcodeState'); shakePasscodeBoxes();
+        document.querySelector('.passcode-box').focus();
+        return;
+    }
+    if (result?.status !== 'ok') {
+        hint.textContent = result?.status === 'not_joined' ? "You haven't joined this call." : 'Could not load the stage view.';
+        return;
+    }
+    stageViewData = result;
+    stageViewLastCommentId = null;
+    const audio = document.getElementById('stageViewAudio');
+    const playBtn = document.getElementById('stageViewPlayBtn');
+    const downloadBtn = document.getElementById('stageViewDownloadBtn');
+    const waveWrap = document.getElementById('stageViewWaveWrap');
+    if (result.song_url) {
+        audio.src = result.song_url;
+        playBtn.classList.remove('hidden');
+        downloadBtn.href = result.song_url;
+        downloadBtn.classList.remove('hidden');
+        waveWrap.classList.remove('hidden');
+        stageViewPeaks = null;
+        drawStageViewWaveform();
+        loadStageViewWaveform(result.song_url);
+    } else {
+        audio.removeAttribute('src');
+        playBtn.classList.add('hidden');
+        downloadBtn.classList.add('hidden');
+        waveWrap.classList.add('hidden');
+    }
+    updateStageViewPlayButton();
+    updateStageViewTimeLabel();
+    stageViewMovementId = stageViewData.movements[0]?.id || null;
+    hint.textContent = stageViewData.movements.length ? '' : 'No formations have been set for this performance yet.';
+    renderStageViewMarkers();
+    renderStageViewStage(stageViewMovementId);
+
+    const dressNote = document.getElementById('stageViewMyDressNote');
+    const myEntry = (stageViewData.roster || []).find((s) => s.student_id === selectedMember.id);
+    if (myEntry && myEntry.dress_color) {
+        document.getElementById('stageViewMyDressSwatch').style.background = DRESS_COLOR_HEX[myEntry.dress_color] || '#ccc';
+        document.getElementById('stageViewMyDressText').textContent = `Your dress color is ${myEntry.dress_color.replace(/_/g, ' ')} — practice hard and keep smiling!`;
+        dressNote.classList.remove('hidden');
+    } else {
+        dressNote.classList.add('hidden');
+    }
+}
+function toggleStageViewPlayback() {
+    const audio = document.getElementById('stageViewAudio');
+    if (!audio.src) return;
+    if (audio.paused) audio.play(); else audio.pause();
+}
+function updateStageViewPlayButton() {
+    const audio = document.getElementById('stageViewAudio');
+    const btn = document.getElementById('stageViewPlayBtn');
+    if (!btn) return;
+    btn.innerHTML = audio.paused
+        ? '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor"/></svg>'
+        : '<svg width="16" height="16" viewBox="0 0 24 24"><rect x="7" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>';
+}
+function updateStageViewTimeLabel() {
+    const audio = document.getElementById('stageViewAudio');
+    const label = document.getElementById('stageViewTimeLabel');
+    if (!label) return;
+    label.textContent = audio.duration ? `${formatMMSS(audio.currentTime)} / ${formatMMSS(audio.duration)}` : '0:00 / 0:00';
+}
+async function loadStageViewWaveform(url) {
+    try {
+        const resp = await fetch(url);
+        const buf = await resp.arrayBuffer();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtx();
+        const decoded = await audioCtx.decodeAudioData(buf);
+        const raw = decoded.getChannelData(0);
+        const buckets = 220;
+        const blockSize = Math.max(1, Math.floor(raw.length / buckets));
+        const peaks = new Float32Array(buckets);
+        for (let i = 0; i < buckets; i += 1) {
+            let max = 0;
+            const start = i * blockSize;
+            for (let j = 0; j < blockSize; j += 1) {
+                const v = Math.abs(raw[start + j] || 0);
+                if (v > max) max = v;
+            }
+            peaks[i] = max;
+        }
+        stageViewPeaks = peaks;
+        audioCtx.close();
+    } catch (e) {
+        console.error('Waveform decode failed:', e);
+    }
+    drawStageViewWaveform();
+}
+function drawStageViewWaveform() {
+    const canvas = document.getElementById('stageViewWaveCanvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, rect.width * dpr);
+    canvas.height = Math.max(1, rect.height * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#0f141c';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    if (!stageViewPeaks) {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Loading waveform…', 8, rect.height / 2 + 4);
+        return;
+    }
+    const mid = rect.height / 2;
+    const barWidth = rect.width / stageViewPeaks.length;
+    ctx.fillStyle = '#5b7a9c';
+    for (let i = 0; i < stageViewPeaks.length; i += 1) {
+        const h = Math.max(1, stageViewPeaks[i] * mid * 0.95);
+        ctx.fillRect(i * barWidth, mid - h, Math.max(1, barWidth - 1), h * 2);
+    }
+}
+function handleStageViewWaveClick(e) {
+    const audio = document.getElementById('stageViewAudio');
+    if (!audio.duration) return;
+    const canvas = document.getElementById('stageViewWaveCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = frac * audio.duration;
+    syncStageViewToPlayhead();
+}
+// Flags/dots are shown for reference only here — no drag, no add/edit menu,
+// just click-to-seek-and-select on a flag (same read-only role a click
+// already has in admin.html before you start dragging).
+function renderStageViewMarkers() {
+    const layer = document.getElementById('stageViewMarkersLayer');
+    if (!layer || !stageViewData) return;
+    const audio = document.getElementById('stageViewAudio');
+    const duration = audio.duration || 0;
+    layer.innerHTML = '';
+    if (!duration) return;
+    const clampPct = (seconds) => Math.max(0, Math.min(100, (seconds / duration) * 100));
+    (stageViewData.movements || [])
+        .filter((m) => typeof m.start_seconds === 'number' && m.start_seconds !== null)
+        .forEach((m) => {
+            const isActive = m.id === stageViewMovementId;
+            const flag = document.createElement('div');
+            flag.title = (m.label || 'Movement ' + m.movement_order) + ' — ' + formatMMSS(m.start_seconds);
+            flag.style.cssText = `position:absolute; bottom:0; left:${clampPct(m.start_seconds)}%; transform:translateX(-50%); width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:9px solid ${isActive ? 'var(--accent)' : '#f1c40f'}; cursor:pointer; pointer-events:auto;`;
+            flag.addEventListener('click', (e) => {
+                e.stopPropagation();
+                audio.currentTime = m.start_seconds;
+                stageViewMovementId = m.id;
+                renderStageViewMarkers();
+                renderStageViewStage(m.id);
+            });
+            layer.appendChild(flag);
+        });
+    (stageViewData.comments || []).forEach((c) => {
+        const dot = document.createElement('div');
+        dot.title = c.text + ' — ' + formatMMSS(c.timestamp_seconds);
+        dot.style.cssText = `position:absolute; top:2px; left:${clampPct(c.timestamp_seconds)}%; transform:translateX(-50%); width:8px; height:8px; border-radius:50%; background:var(--accent); border:1.5px solid #fff; cursor:pointer; pointer-events:auto;`;
+        dot.addEventListener('click', (e) => { e.stopPropagation(); alert(c.text); });
+        layer.appendChild(dot);
+    });
+    const playhead = document.createElement('div');
+    playhead.style.cssText = `position:absolute; top:0; bottom:0; width:1px; background:#fff; opacity:0.65; pointer-events:none; left:${clampPct(audio.currentTime)}%;`;
+    layer.appendChild(playhead);
+}
+function renderStageViewStage(movementId) {
+    const canvas = document.getElementById('stageViewStageCanvas');
+    canvas.querySelectorAll('.dancer-chip, .dancer-chip-label').forEach((el) => el.remove());
+    const hint = document.getElementById('stageViewHint');
+    if (!stageViewData) return;
+    const roster = stageViewData.roster || [];
+    if (!movementId || !roster.length) return;
+    hint.textContent = '';
+    const positions = {};
+    (stageViewData.positions || []).filter((p) => p.movement_id === movementId).forEach((p) => { positions[p.student_id] = { x: p.x, y: p.y }; });
+    roster.forEach((s) => {
+        const pos = positions[s.student_id] || { x: 50, y: 50 };
+        const bg = s.dress_color ? (DRESS_COLOR_HEX[s.dress_color] || '#7f8c8d') : '#7f8c8d';
+        const borderColor = s.team === 'A' ? '#3498db' : s.team === 'B' ? '#e91e8c' : 'rgba(255,255,255,0.4)';
+        const chip = document.createElement('div');
+        chip.className = 'dancer-chip';
+        chip.title = s.student_name;
+        chip.textContent = s.student_name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+        chip.style.cssText = `position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; background:${bg}; border:3px solid ${borderColor}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:0.7em; font-weight:800; user-select:none; box-shadow:0 2px 6px rgba(0,0,0,0.4); left:${pos.x}%; top:${pos.y}%; z-index:2;`;
+        const label = document.createElement('div');
+        label.className = 'dancer-chip-label';
+        label.textContent = s.student_name.split(' ')[0] + (s.gender ? ` (${s.gender})` : '');
+        label.style.cssText = `position:absolute; left:${pos.x}%; top:${pos.y}%; margin-top:19px; transform:translateX(-50%); color:#fff; font-size:0.62em; font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.8); white-space:nowrap; pointer-events:none; z-index:1;`;
+        canvas.appendChild(chip);
+        canvas.appendChild(label);
+    });
+}
+// Sticky auto-follow, same rule as admin.html: the active formation/comment
+// holds from the moment its flag is reached until the next one is.
+function syncStageViewToPlayhead() {
+    const audio = document.getElementById('stageViewAudio');
+    if (!stageViewData || !audio.duration) return;
+    const timed = (stageViewData.movements || []).filter((m) => typeof m.start_seconds === 'number' && m.start_seconds !== null);
+    let activeMovement = null;
+    timed.forEach((m) => {
+        if (m.start_seconds <= audio.currentTime && (!activeMovement || m.start_seconds > activeMovement.start_seconds)) activeMovement = m;
+    });
+    if (activeMovement && activeMovement.id !== stageViewMovementId) {
+        stageViewMovementId = activeMovement.id;
+        renderStageViewStage(stageViewMovementId);
+    }
+    renderStageViewMarkers();
+
+    const banner = document.getElementById('stageViewCommentBanner');
+    if (banner) {
+        let activeComment = null;
+        (stageViewData.comments || []).forEach((c) => {
+            if (c.timestamp_seconds <= audio.currentTime && (!activeComment || c.timestamp_seconds > activeComment.timestamp_seconds)) activeComment = c;
+        });
+        if (activeComment) {
+            if (activeComment.id !== stageViewLastCommentId) {
+                stageViewLastCommentId = activeComment.id;
+                banner.textContent = activeComment.text;
+                banner.classList.remove('stage-comment-empty');
+            }
+        } else if (stageViewLastCommentId !== null) {
+            stageViewLastCommentId = null;
+            banner.textContent = '';
+            banner.classList.add('stage-comment-empty');
+        }
+    }
+}
+(function initStageViewAudioListeners() {
+    document.addEventListener('DOMContentLoaded', () => {
+        const audio = document.getElementById('stageViewAudio');
+        if (!audio) return;
+        audio.addEventListener('timeupdate', () => { updateStageViewTimeLabel(); syncStageViewToPlayhead(); });
+        audio.addEventListener('loadedmetadata', () => { renderStageViewMarkers(); updateStageViewTimeLabel(); });
+        audio.addEventListener('play', updateStageViewPlayButton);
+        audio.addEventListener('pause', updateStageViewPlayButton);
+        audio.addEventListener('ended', updateStageViewPlayButton);
+    });
+})();
+
 function openCaptainPanel() {
     if (!captainWorkspace) return;
     captainMovementId = captainWorkspace.movements[0]?.id || null;
@@ -1398,7 +1735,7 @@ async function handlePerfJoin() {
     if (!openPerformance || !selectedMember) return;
     const perfError = document.getElementById('perfError');
     perfError.textContent = '';
-    const btn = document.getElementById('perfJoinBtnLabel');
+    const btn = document.getElementById('perfOpenCallJoinBtn');
     btn.disabled = true; btn.textContent = 'Joining…';
     const { data: status, error } = await supabaseClient.rpc('join_performance_by_phone', {
         p_performance_id: openPerformance.id, p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
@@ -1419,40 +1756,18 @@ async function handlePerfJoin() {
         showPerf('perfJoinResult');
         return;
     }
-    const { data: count } = await supabaseClient.rpc('get_performance_signup_count', { p_performance_id: openPerformance.id });
-    document.getElementById('perfJoinTitle').textContent = "You're in!";
-    document.getElementById('perfJoinSub').textContent = `"${openPerformance.title}"`;
-    document.getElementById('perfJoinedCount').textContent = count ?? '';
-    showPerf('perfJoinResult');
-}
-async function handlePerfSeeSpot() {
-    if (!selectedMember) return;
-    const { data: result, error } = await supabaseClient.rpc('get_my_spot_by_phone', {
+    // Joined — go straight into its roster/stage view instead of a separate
+    // "you're in" screen; seeing the stage populate already makes the join
+    // obvious. Refresh the joined-performances list first so it's ready
+    // underneath when they eventually tap Back.
+    const { data: mine } = await supabaseClient.rpc('get_my_performances_by_phone', {
         p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
     });
-    if (result?.status === 'bad_passcode') {
-        passcodeMode = 'enter'; renderPasscodeTexts();
-        document.getElementById('passcodeError').textContent = 'Wrong passcode.';
-        clearPasscodeBoxes(); show('passcodeState'); shakePasscodeBoxes();
-        document.querySelector('.passcode-box').focus();
-        return;
-    }
-    if (error) { document.getElementById('perfError').textContent = 'Something went wrong.'; return; }
-    const swatch = document.getElementById('perfSpotSwatch');
-    const emptyNote = document.getElementById('perfSpotEmptyNote');
-    const posText = document.getElementById('perfSpotPositionText');
-    const movementLabel = document.getElementById('perfSpotMovementLabel');
-    if (result?.status === 'ok') {
-        movementLabel.textContent = result.movement_label || '';
-        posText.textContent = result.position_text || '';
-        emptyNote.textContent = '';
-        swatch.style.display = 'block';
-        swatch.style.background = result.dress_color ? (DRESS_COLOR_HEX[result.dress_color] || '#ccc') : '#ccc';
-    } else {
-        movementLabel.textContent = ''; posText.textContent = ''; swatch.style.display = 'none';
-        emptyNote.textContent = result?.status === 'not_joined' ? "You haven't joined this call yet." : 'Positions have not been set yet.';
-    }
-    showPerf('perfSpotResult');
+    myPerformancesCache = (mine?.status === 'ok' && mine.performances) || [];
+    renderPerfList();
+    document.getElementById('perfOpenCallCard').classList.add('hidden');
+    await selectPerformanceForView(openPerformance.id);
+    await openStageViewPanel();
 }
 
 // ===== Camera / crop (member-side) =====

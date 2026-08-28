@@ -199,6 +199,20 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
    turns this off (set inline to 'none') so the drag tracks the pointer
    exactly, with no lag. */
 .dancer-chip, .dancer-chip-label{ transition:left 0.45s cubic-bezier(0.4,0,0.2,1), top 0.45s cubic-bezier(0.4,0,0.2,1); }
+/* Sits where "Back of stage" used to — shows the active comment, or an
+   empty placeholder box when none is active for the current playhead. */
+#stageCommentBanner{ background:rgba(37,99,235,0.94); box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+#stageCommentBanner.stage-comment-empty{ background:rgba(255,255,255,0.06); border:1.5px dashed rgba(255,255,255,0.22); box-shadow:none; }
+/* Phone in landscape watching the stage: the header + tab row are already
+   sticky and claim a good chunk of a short landscape viewport, so stacking
+   another sticky bar under them would eat even more of it. A small floating
+   button instead — reachable from anywhere, including while the stage
+   canvas is scrolled into view, without permanently reserving space. */
+#floatingPlayPauseBtn{ display:none; }
+@media (orientation:landscape) and (max-height:520px){
+    #floatingPlayPauseBtn.hidden{ display:none; }
+    #floatingPlayPauseBtn:not(.hidden){ display:flex; }
+}
 </style>
 </head>
 <body>
@@ -752,7 +766,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div class="card" style="padding:18px 20px; margin-bottom:20px;">
                 <h3 style="font-size:0.95em; margin-bottom:4px;" id="choreoHeading"></h3>
                 <p style="color:var(--ink-soft); font-size:0.85em; margin:2px 0 12px;">Drag a dancer to set their spot for the selected formation — drag on empty stage to box-select several at once (shift-click, or on touch a long-press, to add/remove just one), then drag any of them to move the whole group together. The gold star in the roster marks the captain — they can adjust these same positions from their own phone in member.html.</p>
-                <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px; padding:10px 12px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm);">
+                <div id="performanceSongControlsBar" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px; padding:10px 12px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-sm);">
                     <label class="btn btn-outline btn-sm" style="margin:0; cursor:pointer;">
                         <span id="performanceSongUploadLabel"></span>
                         <input type="file" id="performanceSongInput" accept="audio/*" onchange="uploadPerformanceSong(event)" style="display:none;">
@@ -762,40 +776,43 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <button type="button" id="performancePlayPauseBtn" onclick="togglePerformanceAudioPlayback()" class="hidden" style="border:none; background:var(--accent); color:#fff; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;"></button>
                     <span id="performanceSongTimeLabel" style="color:var(--ink-faint); font-size:0.85em; font-variant-numeric:tabular-nums;"></span>
                     <audio id="performanceAudio" style="display:none;"></audio>
+                    <span style="width:1px; align-self:stretch; background:var(--border); margin:0 2px;"></span>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="zoomWaveformOut()" title="Zoom out" style="padding:2px 10px; line-height:1;">−</button>
+                    <span id="waveformZoomLabel" style="font-size:0.8em; color:var(--ink-faint); min-width:30px; text-align:center;">1×</span>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="zoomWaveformIn()" title="Zoom in" style="padding:2px 10px; line-height:1;">+</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="resetWaveformZoom()" title="Reset zoom">Fit</button>
                 </div>
-                <div id="songWaveformWrap" style="display:none; margin-bottom:12px;">
-                    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
-                        <button type="button" class="btn btn-outline btn-sm" onclick="zoomWaveformOut()" title="Zoom out" style="padding:2px 10px; line-height:1;">−</button>
-                        <span id="waveformZoomLabel" style="font-size:0.8em; color:var(--ink-faint); min-width:30px; text-align:center;">1×</span>
-                        <button type="button" class="btn btn-outline btn-sm" onclick="zoomWaveformIn()" title="Zoom in" style="padding:2px 10px; line-height:1;">+</button>
-                        <button type="button" class="btn btn-outline btn-sm" onclick="resetWaveformZoom()" title="Reset zoom">Fit</button>
-                    </div>
-                    <div id="songWaveformScroll" style="overflow-x:auto; overflow-y:hidden; border-radius:var(--radius-sm);">
-                        <div id="songWaveformInner" style="position:relative; width:100%; padding-bottom:52px;">
+                <button type="button" id="floatingPlayPauseBtn" onclick="togglePerformanceAudioPlayback()" class="hidden" title="Play/pause" style="position:fixed; bottom:16px; right:16px; width:52px; height:52px; border:none; border-radius:50%; background:var(--accent); color:#fff; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,0.35); z-index:20;"></button>
+                <div id="songWaveformWrap" style="display:none; margin-bottom:12px; position:relative; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;">
+                    <div id="songWaveformScroll" style="overflow-x:auto; border-radius:var(--radius-sm);">
+                        <div id="songWaveformInner" style="position:relative; width:100%;">
                             <canvas id="songWaveformCanvas" onclick="handleTimelineClick(event)" style="display:block; width:100%; height:64px; border-radius:var(--radius-sm); cursor:pointer;"></canvas>
                             <div id="timelineMarkersLayer" style="position:absolute; top:0; left:0; right:0; height:64px; pointer-events:none;"></div>
-                            <div id="timelineActionMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:5;">
-                                <button class="btn btn-primary btn-sm" onclick="addMovementAtTimelineClick()" style="white-space:nowrap;">+ Formation here</button>
-                                <button class="btn btn-outline btn-sm" onclick="addCommentAtTimelineClick()" style="white-space:nowrap;">+ Comment here</button>
-                            </div>
-                            <div id="movementFlagMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
-                                <button class="btn btn-outline btn-sm" onclick="renameMovementFromFlagMenu()" style="white-space:nowrap;">Rename</button>
-                                <button class="btn btn-outline btn-sm" onclick="duplicateMovementFromFlagMenu()" style="white-space:nowrap;">Duplicate</button>
-                                <button class="btn btn-outline btn-sm" onclick="deleteMovementFromFlagMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
-                            </div>
-                            <div id="commentMarkerMenu" class="hidden" style="position:absolute; top:14px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
-                                <button class="btn btn-outline btn-sm" onclick="editCommentFromMenu()" style="white-space:nowrap;">Edit</button>
-                                <button class="btn btn-outline btn-sm" onclick="deleteCommentFromMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
-                            </div>
                         </div>
                     </div>
-                    <p style="color:var(--ink-faint); font-size:0.78em; margin-top:4px;">Everything happens on the wave: click empty space to add a formation or comment there; click a flag to select it (and rename/duplicate/delete); drag a flag left or right to retime it. Zoom in for finer placement — playback auto-follows the flags and keeps itself in view as the song plays.</p>
+                    <!-- These three popovers are siblings of the scrolling wave, not
+                         children of it, so an overflow:auto/scrollbar on the wave can
+                         never clip them regardless of zoom or scroll position — see
+                         positionWaveformMenu(), which places them in pixels computed
+                         from the click/flag's actual screen position. -->
+                    <div id="timelineActionMenu" class="hidden" style="position:absolute; display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:5;">
+                        <button class="btn btn-primary btn-sm" onclick="addMovementAtTimelineClick()" style="white-space:nowrap;">+ Formation here</button>
+                        <button class="btn btn-outline btn-sm" onclick="addCommentAtTimelineClick()" style="white-space:nowrap;">+ Comment here</button>
+                    </div>
+                    <div id="movementFlagMenu" class="hidden" style="position:absolute; display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
+                        <button class="btn btn-outline btn-sm" onclick="renameMovementFromFlagMenu()" style="white-space:nowrap;">Rename</button>
+                        <button class="btn btn-outline btn-sm" onclick="duplicateMovementFromFlagMenu()" style="white-space:nowrap;">Duplicate</button>
+                        <button class="btn btn-outline btn-sm" onclick="deleteMovementFromFlagMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
+                    </div>
+                    <div id="commentMarkerMenu" class="hidden" style="position:absolute; display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
+                        <button class="btn btn-outline btn-sm" onclick="editCommentFromMenu()" style="white-space:nowrap;">Edit</button>
+                        <button class="btn btn-outline btn-sm" onclick="deleteCommentFromMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
+                    </div>
                 </div>
-                <div id="stageCanvas" style="position:relative; width:100%; aspect-ratio:16/9; max-height:420px; background:linear-gradient(180deg, #1b2432, #0f141c); border-radius:var(--radius-sm); border:1px solid var(--border-soft); overflow:visible; touch-action:none;">
-                    <div style="position:absolute; top:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.72em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Back of stage</div>
+                <div id="stageCanvas" style="position:relative; width:100%; aspect-ratio:16/9; max-height:420px; background:linear-gradient(180deg, #1b2432, #0f141c); border-radius:var(--radius-sm); border:1px solid var(--border-soft); overflow:visible; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;">
                     <div style="position:absolute; bottom:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.72em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Front of stage (audience)</div>
                     <div id="stageMarqueeBox" style="position:absolute; border:1.5px dashed var(--accent); background:rgba(37,99,235,0.15); display:none; pointer-events:none; z-index:4;"></div>
-                    <div id="stageCommentBanner" style="display:none; position:absolute; top:26px; left:50%; transform:translateX(-50%); max-width:88%; background:rgba(37,99,235,0.94); color:#fff; padding:6px 16px; border-radius:999px; font-size:0.82em; font-weight:600; text-align:center; z-index:5; pointer-events:none; box-shadow:0 4px 14px rgba(0,0,0,0.35);"></div>
+                    <div id="stageCommentBanner" class="stage-comment-empty" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); max-width:88%; min-width:64px; min-height:14px; color:#fff; padding:6px 16px; border-radius:999px; font-size:0.82em; font-weight:600; text-align:center; z-index:5; pointer-events:none;"></div>
                 </div>
                 <p id="stageCanvasEmptyHint" style="color:var(--ink-faint); font-size:0.85em; margin-top:10px;"></p>
                 <p id="stageSelectionInfo" style="color:var(--accent-ink); font-size:0.82em; margin-top:6px; display:none;"></p>
@@ -2032,17 +2049,20 @@ function renderPerformanceSongUI(p) {
     const timeLabel = document.getElementById('performanceSongTimeLabel');
     const uploadLabel = document.getElementById('performanceSongUploadLabel');
     const downloadBtn = document.getElementById('performanceSongDownloadBtn');
+    const floatingBtn = document.getElementById('floatingPlayPauseBtn');
     lastShownStageCommentId = null;
     const banner = document.getElementById('stageCommentBanner');
-    if (banner) banner.style.display = 'none';
+    if (banner) { banner.textContent = ''; banner.classList.add('stage-comment-empty'); }
     if (p.song_url) {
         audio.src = p.song_url;
-        nameEl.textContent = 'Song uploaded';
-        uploadLabel.innerHTML = iconLabel('music-note', 'Change Song', 14);
+        nameEl.textContent = 'Uploaded';
+        uploadLabel.innerHTML = icon('music-note', 16);
+        uploadLabel.parentElement.title = 'Change Song';
         downloadBtn.href = p.song_url;
         downloadBtn.classList.remove('hidden');
         waveWrap.style.display = 'block';
         playBtn.classList.remove('hidden');
+        if (floatingBtn) floatingBtn.classList.remove('hidden');
         timeLabel.textContent = '0:00 / 0:00';
         updatePlayPauseButton();
         setWaveformZoom(1);
@@ -2050,11 +2070,13 @@ function renderPerformanceSongUI(p) {
     } else {
         audio.removeAttribute('src');
         nameEl.textContent = 'No song yet';
-        uploadLabel.innerHTML = iconLabel('music-note', 'Upload Song', 14);
+        uploadLabel.innerHTML = icon('music-note', 16);
+        uploadLabel.parentElement.title = 'Upload Song';
         downloadBtn.classList.add('hidden');
         downloadBtn.removeAttribute('href');
         waveWrap.style.display = 'none';
         playBtn.classList.add('hidden');
+        if (floatingBtn) floatingBtn.classList.add('hidden');
         timeLabel.textContent = '';
         waveformPeaks = null;
         waveformCacheUrl = null;
@@ -2065,11 +2087,24 @@ function togglePerformanceAudioPlayback() {
     if (!audio.src) return;
     if (audio.paused) audio.play(); else audio.pause();
 }
+// Spacebar play/pause, standard media-player convention — skipped while
+// typing in any form field (including contenteditable) so it doesn't hijack
+// normal spacebar use elsewhere in the app.
+document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' && e.key !== ' ') return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+    const audio = document.getElementById('performanceAudio');
+    if (!audio || !audio.src) return;
+    e.preventDefault();
+    togglePerformanceAudioPlayback();
+});
 function updatePlayPauseButton() {
     const audio = document.getElementById('performanceAudio');
     const btn = document.getElementById('performancePlayPauseBtn');
-    if (!btn) return;
-    btn.innerHTML = audio.paused ? icon('play', 15) : icon('pause', 15);
+    if (btn) btn.innerHTML = audio.paused ? icon('play', 15) : icon('pause', 15);
+    const floatingBtn = document.getElementById('floatingPlayPauseBtn');
+    if (floatingBtn) floatingBtn.innerHTML = audio.paused ? icon('play', 22) : icon('pause', 22);
 }
 function updateSongTimeLabel() {
     const audio = document.getElementById('performanceAudio');
@@ -2203,22 +2238,24 @@ function setWaveformZoom(newZoom) {
 function zoomWaveformIn() { setWaveformZoom(waveformZoom * 2); }
 function zoomWaveformOut() { setWaveformZoom(waveformZoom / 2); }
 function resetWaveformZoom() { setWaveformZoom(1); }
-// Any of the three wave popovers is positioned centered on the click/flag
-// via left:X%; transform:translateX(-50%) — fine in the middle of the wave,
-// but centering on a point near either edge pushes the menu partway outside
-// #songWaveformInner, clipped and half-invisible. Once shown (so it has a
-// real measured width), nudge it back to stay fully inside the wave.
-function clampWaveformMenuOnScreen(menu) {
-    const container = document.getElementById('songWaveformInner');
-    if (!container) return;
-    const menuRect = menu.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
+// The three wave popovers are now positioned in #songWaveformWrap, a
+// sibling of the scrolling wave itself (not a child of it) — so they never
+// need a reserved gap in the wave's own layout, and can never be clipped by
+// its overflow:auto scrollbar regardless of zoom/scroll. clientX is the
+// popover's real screen position (from the click or the flag/dot's own
+// pointerup), converted into a pixel offset within the wrap and clamped so
+// it never runs past either edge.
+function positionWaveformMenu(menu, clientX) {
+    menu.classList.remove('hidden');
+    const wrap = document.getElementById('songWaveformWrap');
+    const wrapRect = wrap.getBoundingClientRect();
+    const canvasRect = document.getElementById('songWaveformCanvas').getBoundingClientRect();
+    const menuWidth = menu.getBoundingClientRect().width || 160;
     const margin = 4;
-    let leftPx = menuRect.left - containerRect.left;
-    const maxLeft = Math.max(margin, containerRect.width - menuRect.width - margin);
-    leftPx = Math.max(margin, Math.min(leftPx, maxLeft));
-    menu.style.left = leftPx + 'px';
-    menu.style.transform = 'none';
+    let left = (clientX - wrapRect.left) - menuWidth / 2;
+    left = Math.max(margin, Math.min(left, wrapRect.width - menuWidth - margin));
+    menu.style.left = left + 'px';
+    menu.style.top = (canvasRect.bottom - wrapRect.top + 6) + 'px';
 }
 function handleTimelineClick(e) {
     const audio = document.getElementById('performanceAudio');
@@ -2233,10 +2270,7 @@ function handleTimelineClick(e) {
     hideCommentMarkerMenu();
     const menu = document.getElementById('timelineActionMenu');
     menu.dataset.seconds = String(seconds);
-    menu.style.transform = 'translateX(-50%)';
-    menu.style.left = (frac * 100) + '%';
-    menu.classList.remove('hidden');
-    clampWaveformMenuOnScreen(menu);
+    positionWaveformMenu(menu, e.clientX);
 }
 function hideTimelineActionMenu() {
     document.getElementById('timelineActionMenu').classList.add('hidden');
@@ -2288,15 +2322,12 @@ async function loadPerformanceComments() {
 }
 // The flag popover (Rename/Duplicate/Delete) opened by clicking (not
 // dragging) an existing flag — see the pointerup handler in renderTimelineMarkers.
-function openMovementFlagMenu(movementId, xPercent) {
+function openMovementFlagMenu(movementId, clientX) {
     hideTimelineActionMenu();
     hideCommentMarkerMenu();
     const menu = document.getElementById('movementFlagMenu');
     menu.dataset.movementId = String(movementId);
-    menu.style.transform = 'translateX(-50%)';
-    menu.style.left = xPercent + '%';
-    menu.classList.remove('hidden');
-    clampWaveformMenuOnScreen(menu);
+    positionWaveformMenu(menu, clientX);
 }
 async function renameMovementFromFlagMenu() {
     const id = Number(document.getElementById('movementFlagMenu').dataset.movementId);
@@ -2314,15 +2345,12 @@ async function deleteMovementFromFlagMenu() {
     await deleteMovement(id);
 }
 // The comment popover (Edit/Delete) opened by clicking a comment dot.
-function openCommentMarkerMenu(commentId, xPercent) {
+function openCommentMarkerMenu(commentId, clientX) {
     hideTimelineActionMenu();
     hideMovementFlagMenu();
     const menu = document.getElementById('commentMarkerMenu');
     menu.dataset.commentId = String(commentId);
-    menu.style.transform = 'translateX(-50%)';
-    menu.style.left = xPercent + '%';
-    menu.classList.remove('hidden');
-    clampWaveformMenuOnScreen(menu);
+    positionWaveformMenu(menu, clientX);
 }
 async function editCommentFromMenu() {
     const id = Number(document.getElementById('commentMarkerMenu').dataset.commentId);
@@ -2410,7 +2438,7 @@ function renderTimelineMarkers() {
                     switchMovement(m.id);
                 } else {
                     switchMovement(m.id);
-                    openMovementFlagMenu(m.id, clampPct(m.start_seconds));
+                    openMovementFlagMenu(m.id, e.clientX);
                 }
             });
             layer.appendChild(flag);
@@ -2423,7 +2451,7 @@ function renderTimelineMarkers() {
         dot.className = 'timeline-comment-dot';
         dot.title = c.text + ' — ' + formatMMSS(c.timestamp_seconds) + (pastEnd ? ' (past end of current song)' : '');
         dot.style.cssText = `position:absolute; top:2px; left:${pct}%; transform:translateX(-50%); width:9px; height:9px; border-radius:50%; background:${pastEnd ? '#e74c3c' : 'var(--accent)'}; border:1.5px solid #fff; cursor:pointer; pointer-events:auto;`;
-        dot.addEventListener('click', (e) => { e.stopPropagation(); openCommentMarkerMenu(c.id, pct); });
+        dot.addEventListener('click', (e) => { e.stopPropagation(); openCommentMarkerMenu(c.id, e.clientX); });
         layer.appendChild(dot);
     });
 
@@ -2485,22 +2513,23 @@ let lastShownStageCommentId = null;
 // auto-follow — until a later comment's mark is crossed, or playback moves
 // before the first comment (nothing active yet, banner hidden).
 function syncCommentBannerToPlayhead() {
-    const audio = document.getElementById('performanceAudio');
     const banner = document.getElementById('stageCommentBanner');
-    if (!audio || !banner || !audio.duration) return;
+    if (!banner) return;
+    const audio = document.getElementById('performanceAudio');
     let active = null;
-    performanceCommentsCache.forEach((c) => {
-        if (c.timestamp_seconds <= audio.currentTime && (!active || c.timestamp_seconds > active.timestamp_seconds)) active = c;
-    });
+    if (audio && audio.duration) {
+        performanceCommentsCache.forEach((c) => {
+            if (c.timestamp_seconds <= audio.currentTime && (!active || c.timestamp_seconds > active.timestamp_seconds)) active = c;
+        });
+    }
     if (active) {
-        if (active.id !== lastShownStageCommentId) {
-            lastShownStageCommentId = active.id;
-            banner.textContent = active.text;
-            banner.style.display = 'block';
-        }
-    } else if (lastShownStageCommentId !== null) {
+        lastShownStageCommentId = active.id;
+        banner.textContent = active.text;
+        banner.classList.remove('stage-comment-empty');
+    } else {
         lastShownStageCommentId = null;
-        banner.style.display = 'none';
+        banner.textContent = '';
+        banner.classList.add('stage-comment-empty');
     }
 }
 (function initPerformanceAudioListeners() {
@@ -3022,13 +3051,18 @@ function moveStageToMovement(movementId) {
     });
 }
 // How close (in stage percentage points) a drag has to get to another
-// dancer's x or y, or the stage centerline, before it snaps to it.
-const STAGE_SNAP_THRESHOLD = 1.6;
+// dancer's x or y, or the stage centerline, before it snaps to it. Dancer
+// chips are 38px wide, so on a typical ~1100px-wide canvas even two chips
+// sitting edge-to-edge are already ~3.5% apart — the old 1.6% threshold
+// required dragging almost exactly onto another chip's center before the
+// guide would ever appear, which read as "smart guides don't work."
+const STAGE_SNAP_THRESHOLD = 3.5;
 function renderStageCanvas() {
     if (!stageCanvasMarqueeInitialized) {
         initStageCanvasMarquee();
         stageCanvasMarqueeInitialized = true;
     }
+    syncCommentBannerToPlayhead();
     const canvas = document.getElementById('stageCanvas');
     canvas.querySelectorAll('.dancer-chip, .dancer-chip-label, .stage-guide').forEach((el) => el.remove());
     stageChipRefs = {};
@@ -3084,21 +3118,21 @@ function renderStageCanvas() {
         label.textContent = s.student_name.split(' ')[0] + (s.gender ? ` (${s.gender})` : '');
         label.style.cssText = `position:absolute; left:${pos.x}%; top:${pos.y}%; margin-top:21px; transform:translateX(-50%); color:#fff; font-size:0.66em; font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.8); white-space:nowrap; pointer-events:none; z-index:1;`;
 
-        // Touch has no shift key, so a long-press (hold ~450ms without
-        // moving) is the mobile equivalent of shift-click — toggles this
-        // dancer in/out of the selection instead of dragging. The decision
-        // is deferred on touch: pointerdown neither drags nor selects yet,
-        // since we don't know until the finger either moves (real drag),
-        // holds still past the timer (toggle), or lifts quickly (plain tap-
-        // select) — deciding eagerly at pointerdown would fight whichever of
-        // those turns out to be true. Mouse/pen keep the old immediate
-        // behavior, which has no such ambiguity.
-        let touchLongPressTimer = null;
-        let touchLongPressFired = false;
-        let touchDidMove = false;
-        let touchStartClientX = 0;
-        let touchStartClientY = 0;
-        function startChipDrag(e) {
+        // Single click/tap selects just this dancer; if this chip is already
+        // part of a multi-selection (built via the box-select drag on empty
+        // stage, or shift-click), dragging it moves the whole group instead.
+        // Same behavior on touch as mouse — box-select already works via
+        // pointer events regardless of input type, so no separate touch
+        // gesture is needed here.
+        chip.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // don't also trigger the canvas-level box-select
+            if (e.shiftKey) {
+                if (selectedStageStudentIds.has(s.student_id)) selectedStageStudentIds.delete(s.student_id);
+                else selectedStageStudentIds.add(s.student_id);
+                applyStageSelectionStyling();
+                return; // shift-click only builds the selection, no drag
+            }
             const isGroupDrag = selectedStageStudentIds.size > 1 && selectedStageStudentIds.has(s.student_id);
             if (!isGroupDrag) {
                 selectedStageStudentIds.clear();
@@ -3120,41 +3154,8 @@ function renderStageCanvas() {
                     groupDragOrigin[sid] = { x: p.x, y: p.y };
                 });
             }
-        }
-        chip.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            e.stopPropagation(); // don't also trigger the canvas-level box-select
-            if (e.shiftKey) {
-                if (selectedStageStudentIds.has(s.student_id)) selectedStageStudentIds.delete(s.student_id);
-                else selectedStageStudentIds.add(s.student_id);
-                applyStageSelectionStyling();
-                return; // shift-click only builds the selection, no drag
-            }
-            if (e.pointerType === 'touch') {
-                touchLongPressFired = false;
-                touchDidMove = false;
-                touchStartClientX = e.clientX;
-                touchStartClientY = e.clientY;
-                try { chip.setPointerCapture(e.pointerId); } catch (err) { /* no-op */ }
-                touchLongPressTimer = setTimeout(() => {
-                    touchLongPressFired = true;
-                    if (selectedStageStudentIds.has(s.student_id)) selectedStageStudentIds.delete(s.student_id);
-                    else selectedStageStudentIds.add(s.student_id);
-                    applyStageSelectionStyling();
-                }, 450);
-                return; // a real drag (if any) starts lazily in pointermove once movement is detected
-            }
-            startChipDrag(e);
         });
         chip.addEventListener('pointermove', (e) => {
-            if (e.pointerType === 'touch' && touchLongPressTimer && !touchDidMove) {
-                if (Math.abs(e.clientX - touchStartClientX) > 8 || Math.abs(e.clientY - touchStartClientY) > 8) {
-                    touchDidMove = true;
-                    clearTimeout(touchLongPressTimer);
-                    touchLongPressTimer = null;
-                    startChipDrag(e); // this is a real drag, not a hold — decide single/group now
-                }
-            }
             if (draggingStudentId !== s.student_id) return;
             const rect = canvas.getBoundingClientRect();
             let x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -3205,16 +3206,6 @@ function renderStageCanvas() {
             performancePositionsCache[currentMovementId][s.student_id] = { x, y };
         });
         chip.addEventListener('pointerup', async (e) => {
-            if (touchLongPressTimer) { clearTimeout(touchLongPressTimer); touchLongPressTimer = null; }
-            if (touchLongPressFired) { touchLongPressFired = false; return; } // the long-press already toggled selection — nothing left to save
-            if (e.pointerType === 'touch' && !touchDidMove && draggingStudentId !== s.student_id) {
-                // A quick tap that never moved and never held long enough to
-                // toggle — a plain single-select, same role as a mouse click.
-                selectedStageStudentIds.clear();
-                selectedStageStudentIds.add(s.student_id);
-                applyStageSelectionStyling();
-                return;
-            }
             if (draggingStudentId !== s.student_id) return;
             draggingStudentId = null;
             chip.style.cursor = 'grab';
@@ -5847,7 +5838,8 @@ function applyIcons() {
     document.getElementById('clearAllTeamsBtnLabel').textContent = '1 Team (clear split)';
     document.getElementById('autoAssignDressColorsBtnLabel').textContent = 'Auto-Assign Dress Colors';
     document.getElementById('choreoHeading').innerHTML = iconLabel('move-right', 'Choreography', 15);
-    document.getElementById('performanceSongDownloadLabel').innerHTML = iconLabel('download', 'Download', 14);
+    document.getElementById('performanceSongDownloadLabel').innerHTML = icon('download', 16);
+    document.getElementById('performanceSongDownloadBtn').title = 'Download';
     document.getElementById('changeCallBtnLabel').textContent = 'Change Call';
     document.getElementById('securityBtnIcon').innerHTML = iconLabel('shield', 'Security', 16);
     document.getElementById('securityCloseBtn').innerHTML = icon('x', 16);
