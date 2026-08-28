@@ -764,25 +764,38 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <audio id="performanceAudio" style="display:none;"></audio>
                 </div>
                 <div id="songWaveformWrap" style="display:none; margin-bottom:12px;">
-                    <div style="position:relative;">
-                        <canvas id="songWaveformCanvas" onclick="handleTimelineClick(event)" style="display:block; width:100%; height:64px; border-radius:var(--radius-sm); cursor:pointer;"></canvas>
-                        <div id="timelineMarkersLayer" style="position:absolute; inset:0; pointer-events:none;"></div>
-                        <div id="timelineActionMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:5;">
-                            <button class="btn btn-primary btn-sm" onclick="addMovementAtTimelineClick()" style="white-space:nowrap;">+ Formation here</button>
-                            <button class="btn btn-outline btn-sm" onclick="addCommentAtTimelineClick()" style="white-space:nowrap;">+ Comment here</button>
-                        </div>
-                        <div id="movementFlagMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
-                            <button class="btn btn-outline btn-sm" onclick="renameMovementFromFlagMenu()" style="white-space:nowrap;">Rename</button>
-                            <button class="btn btn-outline btn-sm" onclick="duplicateMovementFromFlagMenu()" style="white-space:nowrap;">Duplicate</button>
-                            <button class="btn btn-outline btn-sm" onclick="deleteMovementFromFlagMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
+                    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="zoomWaveformOut()" title="Zoom out" style="padding:2px 10px; line-height:1;">−</button>
+                        <span id="waveformZoomLabel" style="font-size:0.8em; color:var(--ink-faint); min-width:30px; text-align:center;">1×</span>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="zoomWaveformIn()" title="Zoom in" style="padding:2px 10px; line-height:1;">+</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="resetWaveformZoom()" title="Reset zoom">Fit</button>
+                    </div>
+                    <div id="songWaveformScroll" style="overflow-x:auto; overflow-y:hidden; border-radius:var(--radius-sm);">
+                        <div id="songWaveformInner" style="position:relative; width:100%; padding-bottom:52px;">
+                            <canvas id="songWaveformCanvas" onclick="handleTimelineClick(event)" style="display:block; width:100%; height:64px; border-radius:var(--radius-sm); cursor:pointer;"></canvas>
+                            <div id="timelineMarkersLayer" style="position:absolute; top:0; left:0; right:0; height:64px; pointer-events:none;"></div>
+                            <div id="timelineActionMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:5;">
+                                <button class="btn btn-primary btn-sm" onclick="addMovementAtTimelineClick()" style="white-space:nowrap;">+ Formation here</button>
+                                <button class="btn btn-outline btn-sm" onclick="addCommentAtTimelineClick()" style="white-space:nowrap;">+ Comment here</button>
+                            </div>
+                            <div id="movementFlagMenu" class="hidden" style="position:absolute; top:70px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
+                                <button class="btn btn-outline btn-sm" onclick="renameMovementFromFlagMenu()" style="white-space:nowrap;">Rename</button>
+                                <button class="btn btn-outline btn-sm" onclick="duplicateMovementFromFlagMenu()" style="white-space:nowrap;">Duplicate</button>
+                                <button class="btn btn-outline btn-sm" onclick="deleteMovementFromFlagMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
+                            </div>
+                            <div id="commentMarkerMenu" class="hidden" style="position:absolute; top:14px; transform:translateX(-50%); display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; z-index:6;">
+                                <button class="btn btn-outline btn-sm" onclick="editCommentFromMenu()" style="white-space:nowrap;">Edit</button>
+                                <button class="btn btn-outline btn-sm" onclick="deleteCommentFromMenu()" style="white-space:nowrap; color:var(--danger);">Delete</button>
+                            </div>
                         </div>
                     </div>
-                    <p style="color:var(--ink-faint); font-size:0.78em; margin-top:4px;">Everything happens on the wave: click empty space to add a formation or comment there; click a flag to select it (and rename/duplicate/delete); drag a flag left or right to retime it. Playback auto-follows the flags as the song plays.</p>
+                    <p style="color:var(--ink-faint); font-size:0.78em; margin-top:4px;">Everything happens on the wave: click empty space to add a formation or comment there; click a flag to select it (and rename/duplicate/delete); drag a flag left or right to retime it. Zoom in for finer placement — playback auto-follows the flags and keeps itself in view as the song plays.</p>
                 </div>
                 <div id="stageCanvas" style="position:relative; width:100%; aspect-ratio:16/9; max-height:420px; background:linear-gradient(180deg, #1b2432, #0f141c); border-radius:var(--radius-sm); border:1px solid var(--border-soft); overflow:visible; touch-action:none;">
                     <div style="position:absolute; top:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.72em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Back of stage</div>
                     <div style="position:absolute; bottom:6px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.3); font-size:0.72em; letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;">Front of stage (audience)</div>
                     <div id="stageMarqueeBox" style="position:absolute; border:1.5px dashed var(--accent); background:rgba(37,99,235,0.15); display:none; pointer-events:none; z-index:4;"></div>
+                    <div id="stageCommentBanner" style="display:none; position:absolute; top:26px; left:50%; transform:translateX(-50%); max-width:88%; background:rgba(37,99,235,0.94); color:#fff; padding:6px 16px; border-radius:999px; font-size:0.82em; font-weight:600; text-align:center; z-index:5; pointer-events:none; box-shadow:0 4px 14px rgba(0,0,0,0.35);"></div>
                 </div>
                 <p id="stageCanvasEmptyHint" style="color:var(--ink-faint); font-size:0.85em; margin-top:10px;"></p>
                 <p id="stageSelectionInfo" style="color:var(--accent-ink); font-size:0.82em; margin-top:6px; display:none;"></p>
@@ -1130,6 +1143,7 @@ let currentMovementId = null;
 let draggingStudentId = null;
 let draggingMovementFlagId = null;
 let performanceCommentsCache = [];
+let waveformZoom = 1; // 1x = fits the card width; doubles up to WAVEFORM_MAX_ZOOM
 let replacingSignupId = null; // roster row currently showing the "pick a replacement" select
 let waveformPeaks = null;
 let waveformCacheUrl = null;
@@ -2018,6 +2032,9 @@ function renderPerformanceSongUI(p) {
     const timeLabel = document.getElementById('performanceSongTimeLabel');
     const uploadLabel = document.getElementById('performanceSongUploadLabel');
     const downloadBtn = document.getElementById('performanceSongDownloadBtn');
+    lastShownStageCommentId = null;
+    const banner = document.getElementById('stageCommentBanner');
+    if (banner) banner.style.display = 'none';
     if (p.song_url) {
         audio.src = p.song_url;
         nameEl.textContent = 'Song uploaded';
@@ -2028,6 +2045,7 @@ function renderPerformanceSongUI(p) {
         playBtn.classList.remove('hidden');
         timeLabel.textContent = '0:00 / 0:00';
         updatePlayPauseButton();
+        setWaveformZoom(1);
         loadWaveform(p.song_url);
     } else {
         audio.removeAttribute('src');
@@ -2169,6 +2187,39 @@ function drawWaveform() {
         ctx.fillRect(i * barWidth, mid - h, Math.max(1, barWidth - 1), h * 2);
     }
 }
+const WAVEFORM_MAX_ZOOM = 16;
+// Widens #songWaveformInner beyond the card's width so #songWaveformScroll
+// can scroll it horizontally — click-to-seek, flag drag, and marker
+// placement all read the canvas's *current* getBoundingClientRect(), so
+// they stay accurate at any zoom level with no extra math needed. Only the
+// waveform bars themselves need an explicit redraw, since the canvas's
+// pixel buffer has to be resized to match its new rendered width.
+function setWaveformZoom(newZoom) {
+    waveformZoom = Math.max(1, Math.min(WAVEFORM_MAX_ZOOM, newZoom));
+    document.getElementById('songWaveformInner').style.width = (waveformZoom * 100) + '%';
+    document.getElementById('waveformZoomLabel').textContent = waveformZoom + '×';
+    drawWaveform();
+}
+function zoomWaveformIn() { setWaveformZoom(waveformZoom * 2); }
+function zoomWaveformOut() { setWaveformZoom(waveformZoom / 2); }
+function resetWaveformZoom() { setWaveformZoom(1); }
+// Any of the three wave popovers is positioned centered on the click/flag
+// via left:X%; transform:translateX(-50%) — fine in the middle of the wave,
+// but centering on a point near either edge pushes the menu partway outside
+// #songWaveformInner, clipped and half-invisible. Once shown (so it has a
+// real measured width), nudge it back to stay fully inside the wave.
+function clampWaveformMenuOnScreen(menu) {
+    const container = document.getElementById('songWaveformInner');
+    if (!container) return;
+    const menuRect = menu.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const margin = 4;
+    let leftPx = menuRect.left - containerRect.left;
+    const maxLeft = Math.max(margin, containerRect.width - menuRect.width - margin);
+    leftPx = Math.max(margin, Math.min(leftPx, maxLeft));
+    menu.style.left = leftPx + 'px';
+    menu.style.transform = 'none';
+}
 function handleTimelineClick(e) {
     const audio = document.getElementById('performanceAudio');
     if (!audio.duration || !currentPerformanceId) return;
@@ -2179,16 +2230,22 @@ function handleTimelineClick(e) {
     audio.currentTime = seconds;
     syncActiveMovementToPlayhead();
     hideMovementFlagMenu();
+    hideCommentMarkerMenu();
     const menu = document.getElementById('timelineActionMenu');
     menu.dataset.seconds = String(seconds);
+    menu.style.transform = 'translateX(-50%)';
     menu.style.left = (frac * 100) + '%';
     menu.classList.remove('hidden');
+    clampWaveformMenuOnScreen(menu);
 }
 function hideTimelineActionMenu() {
     document.getElementById('timelineActionMenu').classList.add('hidden');
 }
 function hideMovementFlagMenu() {
     document.getElementById('movementFlagMenu').classList.add('hidden');
+}
+function hideCommentMarkerMenu() {
+    document.getElementById('commentMarkerMenu').classList.add('hidden');
 }
 document.addEventListener('click', (e) => {
     const actionMenu = document.getElementById('timelineActionMenu');
@@ -2198,6 +2255,10 @@ document.addEventListener('click', (e) => {
     const flagMenu = document.getElementById('movementFlagMenu');
     if (flagMenu && !flagMenu.classList.contains('hidden') && !flagMenu.contains(e.target) && !e.target.closest('.timeline-flag')) {
         hideMovementFlagMenu();
+    }
+    const commentMenu = document.getElementById('commentMarkerMenu');
+    if (commentMenu && !commentMenu.classList.contains('hidden') && !commentMenu.contains(e.target) && !e.target.closest('.timeline-comment-dot')) {
+        hideCommentMarkerMenu();
     }
 });
 async function addMovementAtTimelineClick() {
@@ -2225,22 +2286,17 @@ async function loadPerformanceComments() {
     performanceCommentsCache = data || [];
     renderTimelineMarkers();
 }
-async function handleCommentMarkerClick(commentId) {
-    const c = performanceCommentsCache.find((x) => x.id === commentId);
-    if (!c) return;
-    if (!confirm(`"${c.text}" (${formatMMSS(c.timestamp_seconds)})\n\nDelete this comment?`)) return;
-    const { error } = await supabaseClient.from('performance_comments').delete().eq('id', commentId);
-    if (error) { alert('Could not delete comment: ' + error.message); return; }
-    await loadPerformanceComments();
-}
 // The flag popover (Rename/Duplicate/Delete) opened by clicking (not
 // dragging) an existing flag — see the pointerup handler in renderTimelineMarkers.
 function openMovementFlagMenu(movementId, xPercent) {
     hideTimelineActionMenu();
+    hideCommentMarkerMenu();
     const menu = document.getElementById('movementFlagMenu');
     menu.dataset.movementId = String(movementId);
+    menu.style.transform = 'translateX(-50%)';
     menu.style.left = xPercent + '%';
     menu.classList.remove('hidden');
+    clampWaveformMenuOnScreen(menu);
 }
 async function renameMovementFromFlagMenu() {
     const id = Number(document.getElementById('movementFlagMenu').dataset.movementId);
@@ -2256,6 +2312,39 @@ async function deleteMovementFromFlagMenu() {
     const id = Number(document.getElementById('movementFlagMenu').dataset.movementId);
     hideMovementFlagMenu();
     await deleteMovement(id);
+}
+// The comment popover (Edit/Delete) opened by clicking a comment dot.
+function openCommentMarkerMenu(commentId, xPercent) {
+    hideTimelineActionMenu();
+    hideMovementFlagMenu();
+    const menu = document.getElementById('commentMarkerMenu');
+    menu.dataset.commentId = String(commentId);
+    menu.style.transform = 'translateX(-50%)';
+    menu.style.left = xPercent + '%';
+    menu.classList.remove('hidden');
+    clampWaveformMenuOnScreen(menu);
+}
+async function editCommentFromMenu() {
+    const id = Number(document.getElementById('commentMarkerMenu').dataset.commentId);
+    hideCommentMarkerMenu();
+    const c = performanceCommentsCache.find((x) => x.id === id);
+    if (!c) return;
+    const text = prompt(`Edit comment at ${formatMMSS(c.timestamp_seconds)}:`, c.text);
+    if (text === null || !text.trim()) return;
+    const { error } = await supabaseClient.from('performance_comments').update({ text: text.trim() }).eq('id', id);
+    if (error) { alert('Could not update comment: ' + error.message); return; }
+    c.text = text.trim();
+    renderTimelineMarkers();
+}
+async function deleteCommentFromMenu() {
+    const id = Number(document.getElementById('commentMarkerMenu').dataset.commentId);
+    hideCommentMarkerMenu();
+    const c = performanceCommentsCache.find((x) => x.id === id);
+    if (!c) return;
+    if (!confirm(`"${c.text}" (${formatMMSS(c.timestamp_seconds)})\n\nDelete this comment?`)) return;
+    const { error } = await supabaseClient.from('performance_comments').delete().eq('id', id);
+    if (error) { alert('Could not delete comment: ' + error.message); return; }
+    await loadPerformanceComments();
 }
 // Every formation's flag lives directly on the wave — click it (no drag) to
 // select that formation and open its Rename/Duplicate/Delete menu; drag it
@@ -2329,10 +2418,12 @@ function renderTimelineMarkers() {
 
     performanceCommentsCache.forEach((c) => {
         const pastEnd = c.timestamp_seconds > duration;
+        const pct = clampPct(c.timestamp_seconds);
         const dot = document.createElement('div');
+        dot.className = 'timeline-comment-dot';
         dot.title = c.text + ' — ' + formatMMSS(c.timestamp_seconds) + (pastEnd ? ' (past end of current song)' : '');
-        dot.style.cssText = `position:absolute; top:2px; left:${clampPct(c.timestamp_seconds)}%; transform:translateX(-50%); width:9px; height:9px; border-radius:50%; background:${pastEnd ? '#e74c3c' : 'var(--accent)'}; border:1.5px solid #fff; cursor:pointer; pointer-events:auto;`;
-        dot.addEventListener('click', (e) => { e.stopPropagation(); hideTimelineActionMenu(); hideMovementFlagMenu(); handleCommentMarkerClick(c.id); });
+        dot.style.cssText = `position:absolute; top:2px; left:${pct}%; transform:translateX(-50%); width:9px; height:9px; border-radius:50%; background:${pastEnd ? '#e74c3c' : 'var(--accent)'}; border:1.5px solid #fff; cursor:pointer; pointer-events:auto;`;
+        dot.addEventListener('click', (e) => { e.stopPropagation(); openCommentMarkerMenu(c.id, pct); });
         layer.appendChild(dot);
     });
 
@@ -2346,7 +2437,24 @@ function updatePlayhead() {
     const audio = document.getElementById('performanceAudio');
     const playhead = document.getElementById('songPlayhead');
     if (!playhead || !audio.duration) return;
-    playhead.style.left = ((audio.currentTime / audio.duration) * 100) + '%';
+    const pct = (audio.currentTime / audio.duration) * 100;
+    playhead.style.left = pct + '%';
+
+    // While zoomed in, the wave can be wider than the visible scroll area —
+    // keep the playhead in view during playback instead of leaving it to
+    // scroll off-screen unnoticed.
+    if (waveformZoom > 1) {
+        const scrollWrap = document.getElementById('songWaveformScroll');
+        const inner = document.getElementById('songWaveformInner');
+        if (scrollWrap && inner) {
+            const playheadPx = (pct / 100) * inner.offsetWidth;
+            const visibleLeft = scrollWrap.scrollLeft;
+            const visibleRight = visibleLeft + scrollWrap.clientWidth;
+            if (playheadPx < visibleLeft || playheadPx > visibleRight) {
+                scrollWrap.scrollLeft = Math.max(0, playheadPx - scrollWrap.clientWidth / 2);
+            }
+        }
+    }
 }
 // Keeps the stage canvas showing whichever formation is "active" for the
 // current playhead — the formation whose flag is the latest one at or
@@ -2371,11 +2479,35 @@ function syncActiveMovementToPlayhead() {
         else renderStageCanvas();
     }
 }
+let lastShownStageCommentId = null;
+// Shows a comment's text over the stage the moment playback reaches it,
+// held there — same "sticky until the next one" rule as the formation
+// auto-follow — until a later comment's mark is crossed, or playback moves
+// before the first comment (nothing active yet, banner hidden).
+function syncCommentBannerToPlayhead() {
+    const audio = document.getElementById('performanceAudio');
+    const banner = document.getElementById('stageCommentBanner');
+    if (!audio || !banner || !audio.duration) return;
+    let active = null;
+    performanceCommentsCache.forEach((c) => {
+        if (c.timestamp_seconds <= audio.currentTime && (!active || c.timestamp_seconds > active.timestamp_seconds)) active = c;
+    });
+    if (active) {
+        if (active.id !== lastShownStageCommentId) {
+            lastShownStageCommentId = active.id;
+            banner.textContent = active.text;
+            banner.style.display = 'block';
+        }
+    } else if (lastShownStageCommentId !== null) {
+        lastShownStageCommentId = null;
+        banner.style.display = 'none';
+    }
+}
 (function initPerformanceAudioListeners() {
     document.addEventListener('DOMContentLoaded', () => {
         const audio = document.getElementById('performanceAudio');
         if (!audio) return;
-        audio.addEventListener('timeupdate', () => { updatePlayhead(); updateSongTimeLabel(); syncActiveMovementToPlayhead(); });
+        audio.addEventListener('timeupdate', () => { updatePlayhead(); updateSongTimeLabel(); syncActiveMovementToPlayhead(); syncCommentBannerToPlayhead(); });
         audio.addEventListener('loadedmetadata', () => { renderTimelineMarkers(); updateSongTimeLabel(); });
         audio.addEventListener('play', updatePlayPauseButton);
         audio.addEventListener('pause', updatePlayPauseButton);
@@ -2796,10 +2928,15 @@ async function addMovement(startSeconds) {
     if (error) { alert('Could not add formation: ' + error.message); return; }
     const newId = data[0].id;
 
-    // New formation starts from the previous one's positions (so the admin
-    // drags from a sensible starting point instead of everyone stacked at
-    // center) — falls back to an even spread along the front for the first.
-    const prevMovement = performanceMovementsCache[performanceMovementsCache.length - 1];
+    // New formation starts from whichever existing formation is latest ON
+    // THE TIMELINE (highest start_seconds) — NOT the last-created one, since
+    // formations can now be added anywhere on the wave in any order, so
+    // creation order and time order are no longer the same thing. Falls back
+    // to an even spread along the front when this is the first formation.
+    const timedMovements = performanceMovementsCache.filter((m) => typeof m.start_seconds === 'number' && m.start_seconds !== null);
+    const prevMovement = timedMovements.length
+        ? timedMovements.reduce((latest, m) => (m.start_seconds > latest.start_seconds ? m : latest), timedMovements[0])
+        : null;
     const eligible = performanceSignupsCache.filter((s) => s.roster_status !== 'spare');
     const prevPositions = prevMovement ? (performancePositionsCache[prevMovement.id] || {}) : {};
     const rows = eligible.map((s, i) => {
