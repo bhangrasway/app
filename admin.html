@@ -9,6 +9,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script type="module">
+  // Fast (non-realtime) video export: WebCodecs-based muxing, used by
+  // startVideoExport() in the Performances tab. Exposed as a plain global
+  // since the rest of this app is written as classic (non-module) scripts.
+  import { Output, Mp4OutputFormat, WebMOutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality }
+    from 'https://cdn.jsdelivr.net/npm/mediabunny@1.55.3/dist/bundles/mediabunny.min.mjs';
+  window.Mediabunny = { Output, Mp4OutputFormat, WebMOutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality };
+</script>
 <script src="membership.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -781,6 +789,14 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <span id="waveformZoomLabel" style="font-size:0.8em; color:var(--ink-faint); min-width:30px; text-align:center;">1×</span>
                     <button type="button" class="btn btn-outline btn-sm" onclick="zoomWaveformIn()" title="Zoom in" style="padding:2px 10px; line-height:1;">+</button>
                     <button type="button" class="btn btn-outline btn-sm" onclick="resetWaveformZoom()" title="Reset zoom">Fit</button>
+                    <span style="width:1px; align-self:stretch; background:var(--border); margin:0 2px;"></span>
+                    <select id="videoExportResolution" style="padding:5px 8px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
+                        <option value="720">720p</option>
+                        <option value="480">480p</option>
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm" id="exportVideoBtnLabel" onclick="startVideoExport()" title="Download a video of this choreography with the song"></button>
+                    <button type="button" class="btn btn-outline btn-sm hidden" id="cancelVideoExportBtn" onclick="cancelVideoExport()">Cancel</button>
+                    <span id="videoExportProgress" style="color:var(--ink-faint); font-size:0.85em;"></span>
                 </div>
                 <button type="button" id="floatingPlayPauseBtn" onclick="togglePerformanceAudioPlayback()" class="hidden" title="Play/pause" style="position:fixed; bottom:16px; right:16px; width:52px; height:52px; border:none; border-radius:50%; background:var(--accent); color:#fff; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,0.35); z-index:20;"></button>
                 <div id="songWaveformWrap" style="display:none; margin-bottom:12px; position:relative; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;">
@@ -1135,7 +1151,8 @@ const ICONS = {
     copy: '<rect x="8" y="8" width="12" height="12" rx="1.8"/><path d="M16 8V5.8A1.8 1.8 0 0 0 14.2 4H5.8A1.8 1.8 0 0 0 4 5.8v8.4A1.8 1.8 0 0 0 5.8 16H8"/>',
     'music-note': '<path d="M9 18V5.5l10-2v12.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
     play: '<path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor" stroke="none"/>',
-    pause: '<rect x="7" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/>'
+    pause: '<rect x="7" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/>',
+    video: '<rect x="3" y="6.5" width="13" height="11" rx="1.8"/><path d="M16 10.5l4.5-2.8v8.6l-4.5-2.8z"/>'
 };
 function icon(name, size, color) {
     size = size || 18;
@@ -2543,6 +2560,280 @@ function syncCommentBannerToPlayhead() {
         audio.addEventListener('ended', updatePlayPauseButton);
     });
 })();
+
+// ===== Video export (admin-only) =====
+// Renders the same "sticky formation, floating transition" choreography the
+// live stage canvas shows onto a plain off-DOM canvas, captures it at 30fps
+// via canvas.captureStream(), and routes the song's audio into the same
+// recording through a WebAudio graph — MediaRecorder muxes both into one
+// downloadable file. This runs in real time (recording a 3-minute song takes
+// 3 minutes) because MediaRecorder captures live output, not an offline
+// render; there's no server in this app to do frame-by-frame ffmpeg-style
+// rendering instead. Output is WebM (VP9/VP8 + Opus) — browsers' MediaRecorder
+// support for true MP4 is inconsistent, so WebM is what's reliably capturable
+// client-side.
+let videoExportState = null; // { cancelled, performanceId }
+const VIDEO_EXPORT_TRANSITION_SECONDS = 0.45; // matches .dancer-chip's CSS transition duration
+
+// Mirrors CSS's cubic-bezier(0.4,0,0.2,1) ("standard" ease) so the recorded
+// video's formation glide matches what the live canvas actually shows.
+function videoExportEase(t) {
+    t = Math.min(1, Math.max(0, t));
+    const x1 = 0.4, y1 = 0, x2 = 0.2, y2 = 1;
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const sampleX = (u) => ((ax * u + bx) * u + cx) * u;
+    const sampleY = (u) => ((ay * u + by) * u + cy) * u;
+    const sampleXDeriv = (u) => (3 * ax * u + 2 * bx) * u + cx;
+    let u = t;
+    for (let i = 0; i < 8; i += 1) {
+        const d = sampleXDeriv(u);
+        if (Math.abs(d) < 1e-6) break;
+        u -= (sampleX(u) - t) / d;
+        u = Math.min(1, Math.max(0, u));
+    }
+    return sampleY(u);
+}
+function videoExportSortedMovements() {
+    return performanceMovementsCache
+        .filter((m) => typeof m.start_seconds === 'number' && m.start_seconds !== null)
+        .slice()
+        .sort((a, b) => a.start_seconds - b.start_seconds);
+}
+function videoExportActiveCommentAt(t) {
+    let active = null;
+    performanceCommentsCache.forEach((c) => {
+        if (c.timestamp_seconds <= t && (!active || c.timestamp_seconds > active.timestamp_seconds)) active = c;
+    });
+    return active;
+}
+function drawVideoExportRoundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+function renderVideoExportFrame(ctx, width, height, t) {
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#1b2432');
+    grad.addColorStop(1, '#0f141c');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `600 ${Math.round(height * 0.024)}px system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillText('FRONT OF STAGE (AUDIENCE)', width / 2, height - height * 0.03);
+
+    const timed = videoExportSortedMovements();
+    let activeIdx = -1;
+    for (let i = 0; i < timed.length; i += 1) {
+        if (timed[i].start_seconds <= t) activeIdx = i; else break;
+    }
+    const active = activeIdx >= 0 ? timed[activeIdx] : null;
+    const prev = activeIdx > 0 ? timed[activeIdx - 1] : null;
+    const eased = active && prev ? videoExportEase((t - active.start_seconds) / VIDEO_EXPORT_TRANSITION_SECONDS) : 1;
+
+    if (active) {
+        ctx.textAlign = 'left';
+        ctx.font = `600 ${Math.round(height * 0.026)}px system-ui, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillText(active.label || `Formation ${active.movement_order}`, width * 0.02, height * 0.06);
+    }
+
+    const targetPositions = active ? (performancePositionsCache[active.id] || {}) : {};
+    const prevPositions = prev ? (performancePositionsCache[prev.id] || {}) : targetPositions;
+    const eligible = performanceSignupsCache.filter((s) => s.roster_status !== 'spare');
+    const radius = Math.max(10, height * 0.035);
+
+    eligible.forEach((s) => {
+        const target = targetPositions[s.student_id] || { x: 50, y: 50 };
+        const from = prevPositions[s.student_id] || target;
+        const x = from.x + (target.x - from.x) * eased;
+        const y = from.y + (target.y - from.y) * eased;
+        const px = (x / 100) * width;
+        const py = (y / 100) * height;
+        const bg = s.dress_color ? (DRESS_COLOR_HEX[s.dress_color] || '#7f8c8d') : '#7f8c8d';
+        const borderColor = s.team === 'A' ? '#3498db' : s.team === 'B' ? '#e91e8c' : 'rgba(255,255,255,0.4)';
+
+        if (s.is_captain) {
+            ctx.beginPath();
+            ctx.arc(px, py, radius + 4, 0, Math.PI * 2);
+            ctx.strokeStyle = '#f1c40f';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fillStyle = bg;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = borderColor;
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.font = `800 ${Math.round(radius * 0.75)}px system-ui, sans-serif`;
+        ctx.fillText(s.student_name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(), px, py);
+
+        const label = s.student_name.split(' ')[0] + (s.gender ? ` (${s.gender})` : '');
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = `700 ${Math.round(radius * 0.5)}px system-ui, sans-serif`;
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(label, px, py + radius + Math.round(radius * 0.5) + 4);
+        ctx.shadowBlur = 0;
+    });
+
+    const activeComment = videoExportActiveCommentAt(t);
+    if (activeComment) {
+        ctx.font = `600 ${Math.round(height * 0.026)}px system-ui, sans-serif`;
+        const maxWidth = width * 0.85;
+        const textWidth = Math.min(maxWidth, ctx.measureText(activeComment.text).width);
+        const paddingX = width * 0.02, paddingY = height * 0.014;
+        const boxHeight = Math.round(height * 0.026) + paddingY * 2;
+        const boxWidth = textWidth + paddingX * 2;
+        const boxX = width / 2 - boxWidth / 2;
+        const boxY = height * 0.03;
+        ctx.fillStyle = 'rgba(37,99,235,0.94)';
+        drawVideoExportRoundedRect(ctx, boxX, boxY, boxWidth, boxHeight, boxHeight / 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(activeComment.text, width / 2, boxY + boxHeight / 2, maxWidth);
+    }
+}
+function updateVideoExportUI(active, currentTime, duration) {
+    const progress = document.getElementById('videoExportProgress');
+    const btn = document.getElementById('exportVideoBtnLabel');
+    const cancelBtn = document.getElementById('cancelVideoExportBtn');
+    const resSel = document.getElementById('videoExportResolution');
+    if (active) {
+        const pct = duration ? Math.min(100, Math.round((currentTime / duration) * 100)) : 0;
+        if (progress) progress.textContent = `Rendering… ${pct}%`;
+        if (btn) btn.disabled = true;
+        if (resSel) resSel.disabled = true;
+        if (cancelBtn) cancelBtn.classList.remove('hidden');
+    } else {
+        if (progress) progress.textContent = '';
+        if (btn) btn.disabled = false;
+        if (resSel) resSel.disabled = false;
+        if (cancelBtn) cancelBtn.classList.add('hidden');
+    }
+}
+// Decodes the full song into an AudioBuffer once per URL (cached — the
+// waveform already does this same fetch+decode for its peaks, but discards
+// the buffer; export needs the actual samples, so it decodes its own copy).
+let videoExportAudioCache = { url: null, buffer: null };
+async function videoExportGetAudioBuffer(url) {
+    if (videoExportAudioCache.url === url && videoExportAudioCache.buffer) return videoExportAudioCache.buffer;
+    const resp = await fetch(url);
+    const arr = await resp.arrayBuffer();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const decoded = await new AudioCtx().decodeAudioData(arr);
+    videoExportAudioCache = { url, buffer: decoded };
+    return decoded;
+}
+// Renders every frame directly from the formation math (no real playback
+// involved) and feeds the whole decoded song straight in as samples — an
+// offline encode via WebCodecs (through Mediabunny), so this runs as fast as
+// the machine can encode instead of taking the length of the song.
+async function videoExportRenderWithMediabunny(format, canvas, ctx, width, height, duration, audioBuffer) {
+    const M = window.Mediabunny;
+    const output = new M.Output({
+        format: format === 'mp4' ? new M.Mp4OutputFormat() : new M.WebMOutputFormat(),
+        target: new M.BufferTarget(),
+    });
+    const videoSource = new M.CanvasSource(canvas, {
+        codec: format === 'mp4' ? 'avc' : 'vp9',
+        quality: new M.Quality('high'),
+    });
+    output.addVideoTrack(videoSource, { frameRate: 30 });
+    const audioSource = new M.AudioBufferSource({
+        codec: format === 'mp4' ? 'aac' : 'opus',
+        quality: new M.Quality('high'),
+    });
+    output.addAudioTrack(audioSource);
+
+    await output.start();
+    await audioSource.add(audioBuffer);
+
+    const frameDuration = 1 / 30;
+    const totalFrames = Math.max(1, Math.ceil(duration / frameDuration));
+    for (let i = 0; i < totalFrames; i += 1) {
+        if (videoExportState?.cancelled) throw new Error('cancelled');
+        const t = i * frameDuration;
+        renderVideoExportFrame(ctx, width, height, t);
+        await videoSource.add(t, frameDuration);
+        if (i % 15 === 0 || i === totalFrames - 1) {
+            updateVideoExportUI(true, t, duration);
+            await new Promise((r) => setTimeout(r, 0)); // yield so progress/Cancel stay responsive
+        }
+    }
+    await output.finalize();
+    return new Blob([output.target.buffer], { type: format === 'mp4' ? 'video/mp4' : 'video/webm' });
+}
+async function startVideoExport() {
+    if (videoExportState) return;
+    const perf = performancesCache.find((x) => x.id === currentPerformanceId);
+    if (!perf || !perf.song_url) { alert('Upload a song first — the video needs audio.'); return; }
+    if (!performanceMovementsCache.length) { alert('Add at least one formation first.'); return; }
+    if (!window.Mediabunny || !window.VideoEncoder || !window.AudioEncoder) {
+        alert("Video export isn't supported in this browser. Try the latest Chrome or Edge.");
+        return;
+    }
+
+    const resSel = document.getElementById('videoExportResolution');
+    const height = Number(resSel.value) || 720;
+    const width = Math.round((height * 16 / 9) / 2) * 2;
+
+    videoExportState = { cancelled: false, performanceId: currentPerformanceId };
+    updateVideoExportUI(true, 0, 0);
+
+    try {
+        const audioBuffer = await videoExportGetAudioBuffer(perf.song_url);
+        const duration = audioBuffer.duration;
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        let blob, ext;
+        try {
+            blob = await videoExportRenderWithMediabunny('mp4', canvas, ctx, width, height, duration, audioBuffer);
+            ext = 'mp4';
+        } catch (mp4Err) {
+            if (videoExportState?.cancelled) throw mp4Err;
+            console.warn('MP4 export failed, falling back to WebM:', mp4Err);
+            blob = await videoExportRenderWithMediabunny('webm', canvas, ctx, width, height, duration, audioBuffer);
+            ext = 'webm';
+        }
+
+        const url = URL.createObjectURL(blob);
+        const safeName = (perf.title || 'performance').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}_stage_video.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+        if (!videoExportState?.cancelled) alert('Video export failed: ' + err.message);
+    } finally {
+        videoExportState = null;
+        updateVideoExportUI(false);
+    }
+}
+function cancelVideoExport() {
+    if (!videoExportState) return;
+    videoExportState.cancelled = true;
+}
 
 // ===== Performances tab — Roster & signups =====
 async function loadRoster() {
@@ -5840,6 +6131,7 @@ function applyIcons() {
     document.getElementById('choreoHeading').innerHTML = iconLabel('move-right', 'Choreography', 15);
     document.getElementById('performanceSongDownloadLabel').innerHTML = icon('download', 16);
     document.getElementById('performanceSongDownloadBtn').title = 'Download';
+    document.getElementById('exportVideoBtnLabel').innerHTML = iconLabel('video', 'Download Video', 15);
     document.getElementById('changeCallBtnLabel').textContent = 'Change Call';
     document.getElementById('securityBtnIcon').innerHTML = iconLabel('shield', 'Security', 16);
     document.getElementById('securityCloseBtn').innerHTML = icon('x', 16);
