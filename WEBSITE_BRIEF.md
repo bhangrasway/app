@@ -8,8 +8,9 @@ marketing website. Written 2026-07-09.
 - **Name:** Bhangra Sway Cremona — a bhangra (Punjabi folk dance) studio in
   Cremona, Italy.
 - **Logo:** `logo.png` in repo root (55 KB, used on every page).
-- **Classes:** weekends — Saturday & Sunday, 1:15 PM – 7:00 PM (from
-  `checkin_settings` defaults; confirm with owner before publishing).
+- **Classes:** Saturday only — 3 batches, 1:30 PM – 7:30 PM (Advance /
+  Intermediate / Beginner, back-to-back 2-hour slots). Self check-in window in
+  `checkin_settings`: Sat, 1:15 PM – 7:45 PM.
 - **Location:** Corso XX Settembre 39, 26100 Cremona CR. Coordinates used by the
   check-in geofence: lat 45.133938, lng 10.029063 (Plus Code 42MH+HJ Cremona —
   the venue entry gate), 1 km radius.
@@ -36,7 +37,7 @@ Reference site the owner likes: https://www.bhangraempire.com/
 Planned structure — single-page site:
 1. Hero — logo, purple gradient branding, energetic tagline
 2. What is Bhangra / About the studio
-3. Classes — schedule (Sat–Sun 1:15–7:00 PM) + location/map
+3. Classes — schedule (Saturday, 1:30–7:30 PM) + location/map
 4. Free trial CTA — WhatsApp deep-link ("Hi, I'd like to try a class!")
 5. Gallery — styled placeholders until owner provides photos
 6. Footer — contact, socials, small "Members" link to `home.html`

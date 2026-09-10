@@ -60,8 +60,8 @@ create policy "authenticated_all" on public.checkin_settings
     for all to authenticated using (true) with check (true);
 
 -- ===== 3. Public pages (anon role) =========================================
--- checkin_settings stays readable so checkin.html can show "open Sat & Sun,
--- 1:15 PM - 7:00 PM" — it contains nothing sensitive. Everything else is
+-- checkin_settings stays readable so checkin.html can show "open Saturday,
+-- 1:15 PM - 7:45 PM" — it contains nothing sensitive. Everything else is
 -- closed to anon: RLS with no anon policy denies, and we also revoke the
 -- default table grants as defense in depth.
 drop policy if exists "anon_read_checkin_settings" on public.checkin_settings;

@@ -5,10 +5,13 @@
 -- Builds on phone_privacy.sql / member_passcode.sql (must already be applied).
 --
 -- Replaces the old hardcoded 4-value batch list (Beginner/Intermediate/
--- Advanced/Professional) with a real, admin-editable table of the 5 actual
--- Saturday/Sunday batches, and adds a self-service "request to move batch"
+-- Advanced/Professional) with a real, admin-editable table of the 3 actual
+-- Saturday batches, and adds a self-service "request to move batch"
 -- flow for members, mirroring request_manual_checkin_by_phone /
 -- request_passcode_reset_by_phone exactly.
+--
+-- (The studio ran 5 Sat/Sun batches for a while — batches_saturday_3.sql
+-- merged them back down to these 3. Seed below reflects the current layout.)
 -- ============================================================================
 
 -- ===== 1. Batches =====
@@ -34,11 +37,9 @@ alter table public.batches disable row level security;
 
 insert into public.batches (name, day, start_time, end_time, category, sort_order)
 values
-    ('Avanzato 1', 'Saturday', '1:30 PM', '3:30 PM', 'advance', 1),
-    ('Avanzato 2', 'Saturday', '3:30 PM', '5:30 PM', 'advance', 2),
-    ('Principianti (primo livello)', 'Saturday', '5:30 PM', '7:30 PM', 'beginner', 3),
-    ('Principianti (secondo livello)', 'Sunday', '2:00 PM', '4:00 PM', 'beginner', 4),
-    ('Intermedio', 'Sunday', '4:00 PM', '6:00 PM', 'intermediate', 5)
+    ('Avanzato', 'Saturday', '1:30 PM', '3:30 PM', 'advance', 1),
+    ('Intermedio', 'Saturday', '3:30 PM', '5:30 PM', 'intermediate', 2),
+    ('Principianti', 'Saturday', '5:30 PM', '7:30 PM', 'beginner', 3)
 on conflict (name) do nothing;
 
 -- ===== 2. Batch change requests =====

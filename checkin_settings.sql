@@ -1,19 +1,19 @@
 -- Run this once in the Supabase SQL editor (Project -> SQL Editor -> New query).
 -- Creates the single-row settings table that controls when the public
 -- self check-in page (checkin.html) is open, and seeds it with the
--- requested default window: Saturday & Sunday, 1:15 PM - 7:00 PM.
+-- requested default window: Saturday only, 1:15 PM - 7:45 PM.
 
 create table if not exists public.checkin_settings (
     id smallint primary key default 1,
-    active_days smallint[] not null default '{6,0}',  -- JS Date.getDay(): 0=Sun, 6=Sat
+    active_days smallint[] not null default '{6}',    -- JS Date.getDay(): 0=Sun, 6=Sat
     start_time time not null default '13:15:00',
-    end_time time not null default '19:00:00',
+    end_time time not null default '19:45:00',
     updated_at timestamptz not null default now(),
     constraint checkin_settings_singleton check (id = 1)
 );
 
 insert into public.checkin_settings (id, active_days, start_time, end_time)
-values (1, '{6,0}', '13:15:00', '19:00:00')
+values (1, '{6}', '13:15:00', '19:45:00')
 on conflict (id) do nothing;
 
 -- Supabase enables RLS with zero policies on every new table by default,

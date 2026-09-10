@@ -5281,12 +5281,12 @@ async function loadCheckinSettingsIntoForm() {
         cb.checked = !error && data ? (data.active_days || []).includes(Number(cb.value)) : false;
     });
     document.getElementById('checkinStartTime').value = (!error && data) ? String(data.start_time).slice(0, 5) : '13:15';
-    document.getElementById('checkinEndTime').value = (!error && data) ? String(data.end_time).slice(0, 5) : '19:00';
+    document.getElementById('checkinEndTime').value = (!error && data) ? String(data.end_time).slice(0, 5) : '19:45';
 }
 async function saveCheckinSettings() {
     const activeDays = Array.from(document.querySelectorAll('.checkinDay:checked')).map((cb) => Number(cb.value));
     const startTime = document.getElementById('checkinStartTime').value || '13:15';
-    const endTime = document.getElementById('checkinEndTime').value || '19:00';
+    const endTime = document.getElementById('checkinEndTime').value || '19:45';
     const { error } = await supabaseClient.from('checkin_settings').upsert({ id: 1, active_days: activeDays, start_time: startTime, end_time: endTime });
     if (error) { alert('Could not save the check-in window: ' + error.message); return; }
     closeCheckinWindowModal();
