@@ -1137,9 +1137,12 @@ function renderHistoricalRecord(student, report) {
 }
 
 // ===== Attendance tab (self check-in) =====
-const STUDIO_LAT = 45.1395108;
-const STUDIO_LNG = 10.0288616;
-const STUDIO_RADIUS_METERS = 500;
+// Corso XX Settembre 39, 26100 Cremona CR — the shared pin (Plus Code
+// 42MH+HJ) is the venue's entry gate, ~600-700m from the practice hall, so
+// the radius is deliberately wide.
+const STUDIO_LAT = 45.133938;
+const STUDIO_LNG = 10.029063;
+const STUDIO_RADIUS_METERS = 1000;
 let attnLocStatus = 'too-far';
 let attnClosedMsg = null;
 
@@ -1213,7 +1216,7 @@ function renderAttnLocBlock() {
     document.getElementById('attnLocHeading').textContent = unknown ? "We couldn't verify your location" : 'You seem far from the studio';
     document.getElementById('attnLocBody').textContent = unknown
         ? "Self check-in needs your phone's location to confirm you're at the studio. Allow location access and try again, or send a request instead."
-        : "Your phone's location says you're more than 500m from the studio. Maybe location wasn't shared correctly, you can notify your instructor instead.";
+        : "Your phone's location says you're more than 1km from the studio. Maybe location wasn't shared correctly, you can notify your instructor instead.";
     document.getElementById('attnLocRetryBtn').textContent = "I've enabled location, try again";
 }
 async function handleAttnConfirm() {

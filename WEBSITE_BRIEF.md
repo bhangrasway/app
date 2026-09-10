@@ -10,8 +10,9 @@ marketing website. Written 2026-07-09.
 - **Logo:** `logo.png` in repo root (55 KB, used on every page).
 - **Classes:** weekends — Saturday & Sunday, 1:15 PM – 7:00 PM (from
   `checkin_settings` defaults; confirm with owner before publishing).
-- **Location:** studio coordinates used by the check-in geofence:
-  lat 45.1395108, lng 10.0288616 (from the studio's Google Maps listing).
+- **Location:** Corso XX Settembre 39, 26100 Cremona CR. Coordinates used by the
+  check-in geofence: lat 45.133938, lng 10.029063 (Plus Code 42MH+HJ Cremona —
+  the venue entry gate), 1 km radius.
 - **Audience:** local Punjabi community + Italians curious about bhangra;
   many students are kids (parent contact on file).
 - **Free demo classes exist** as a concept — the app tracks `isdemo`
@@ -23,7 +24,6 @@ marketing website. Written 2026-07-09.
 - Instagram / Facebook / YouTube handles
 - Public contact phone/email (owner's email: bhangrasway@gmail.com — confirm
   before publishing it)
-- Street address of the studio
 - Photos / videos of classes and performances
 - Pricing (monthly fee varies per student in the app; no public price list yet)
 

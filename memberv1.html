@@ -8,7 +8,7 @@
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#667eea">
-    <script src="i18n.js?v=3"></script>
+    <script src="i18n.js?v=4"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Shared trust-based membership engine (same file the admin dashboard
          loads, so this report can never drift from the admin's math) -->
@@ -843,10 +843,11 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Bhangra Sway, Cremona (from the studio's Google Maps listing)
-        const STUDIO_LAT = 45.1395108;
-        const STUDIO_LNG = 10.0288616;
-        const STUDIO_RADIUS_METERS = 500;
+        // Bhangra Sway — Corso XX Settembre 39, 26100 Cremona CR (pin is the
+        // venue entry gate, ~600-700m from the practice hall, hence wide radius)
+        const STUDIO_LAT = 45.133938;
+        const STUDIO_LNG = 10.029063;
+        const STUDIO_RADIUS_METERS = 1000;
 
         // Perform tab (ported from perform.html)
         const DRESS_COLOR_HEX = { red: '#e74c3c', green: '#27ae60', purple: '#8e44ad', orange: '#e67e22', sky_blue: '#3498db', royal_blue: '#1a237e' };

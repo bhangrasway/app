@@ -234,10 +234,11 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Bhangra Sway, Cremona (from the studio's Google Maps listing)
-        const STUDIO_LAT = 45.1395108;
-        const STUDIO_LNG = 10.0288616;
-        const STUDIO_RADIUS_METERS = 500;
+        // Bhangra Sway — Corso XX Settembre 39, 26100 Cremona CR (pin is the
+        // venue entry gate, ~600-700m from the practice hall, hence wide radius)
+        const STUDIO_LAT = 45.133938;
+        const STUDIO_LNG = 10.029063;
+        const STUDIO_RADIUS_METERS = 1000;
 
         // ===== Identification =====
         // No member names ever reach this page up-front: the member types their
