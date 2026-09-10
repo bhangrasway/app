@@ -11,6 +11,8 @@
 --   Intermedio                                    -> Intermedio    Sat 3:30-5:30 PM
 --   Principianti (primo + secondo livello)        -> Principianti  Sat 5:30-7:30 PM
 --
+-- Also sets every batch's capacity to max 30, no minimum.
+--
 -- students.batch stores the batch NAME (existing pattern), so students on a
 -- merged-away batch are moved onto the surviving one first — nobody is left
 -- pointing at a batch that no longer exists.
@@ -54,7 +56,12 @@ where name = 'Principianti (primo livello)';
 delete from public.batches
 where name in ('Avanzato 2', 'Principianti (secondo livello)');
 
--- 5. Any pending "move me to batch X" request that now points at a batch that
+-- 5. Capacity: cap each batch at 30, with no minimum (removes the
+--    "under capacity" warning entirely).
+alter table public.batches alter column min_capacity drop not null;
+update public.batches set max_capacity = 30, min_capacity = null;
+
+-- 6. Any pending "move me to batch X" request that now points at a batch that
 --    no longer exists is stale — dismiss it (same effect as
 --    request_batch_change_by_phone replacing a superseded request).
 update public.batch_change_requests
@@ -62,7 +69,7 @@ set status = 'dismissed', resolved_at = now()
 where status = 'pending'
   and requested_batch not in (select name from public.batches where active);
 
--- 6. Self check-in window: classes are Saturday-only now, last one ends 7:30 PM.
+-- 7. Self check-in window: classes are Saturday-only now, last one ends 7:30 PM.
 --    Saturday only (JS getDay 6), 1:15 PM - 7:45 PM.
 update public.checkin_settings
 set active_days = '{6}', start_time = '13:15:00', end_time = '19:45:00', updated_at = now()

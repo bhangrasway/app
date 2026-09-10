@@ -1779,7 +1779,10 @@ function getBatchDisplayLabel(batchName) {
 // Shared by the roster card badge and the PDF export, so both always agree
 // on what "under" / "over" / "good" means for a given count.
 function getBatchCapacityInfo(count, b) {
-    const rangeLabel = `${b.min_capacity ?? '—'}-${b.max_capacity ?? '—'}`;
+    // No minimum set -> show just the cap ("5/30"), not a range ("5/—-30").
+    const rangeLabel = b.min_capacity != null
+        ? `${b.min_capacity}-${b.max_capacity ?? '—'}`
+        : `${b.max_capacity ?? '—'}`;
     if (b.min_capacity != null && count < b.min_capacity) {
         return { under: true, over: false, rangeLabel, badgeClass: 'badge-warning', iconName: 'warning', label: 'Under capacity', color: '#c07a06' };
     }

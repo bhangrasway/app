@@ -24,8 +24,8 @@ create table if not exists public.batches (
     start_time text not null,             -- e.g. '1:30 PM'
     end_time text not null,               -- e.g. '3:30 PM'
     category text not null,               -- 'beginner' | 'intermediate' | 'advance'
-    min_capacity int not null default 8,
-    max_capacity int not null default 12,
+    min_capacity int,                     -- null = no minimum, no "under capacity" flag
+    max_capacity int not null default 30,
     sort_order int not null default 0,
     active boolean not null default true
 );
