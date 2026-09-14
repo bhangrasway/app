@@ -1438,8 +1438,21 @@ async function loadAllData() {
         displayFeesTab();
         const reportFromInput = document.getElementById('reportFrom');
         const reportToInput = document.getElementById('reportTo');
-        if (reportFromInput && !reportFromInput.value) reportFromInput.valueAsDate = new Date();
-        if (reportToInput && !reportToInput.value) reportToInput.valueAsDate = new Date();
+        // Default to "This Month" — same default window as the Income &
+        // Expenses tab (getFeesPeriodRange()'s default). This used to default
+        // to today-only, so a fresh look at Reports right after Income &
+        // Expenses (which shows the whole month) looked like income/expenses
+        // had vanished, when it was really just looking at a single day.
+        if (reportFromInput && !reportFromInput.value) {
+            const today = new Date();
+            // .value (a plain "YYYY-MM-DD" string via formatLocalDate) —
+            // NOT .valueAsDate, which interprets the Date object as UTC and
+            // silently rolls back to the previous day whenever the browser's
+            // local timezone is ahead of UTC (e.g. Italy in CEST: local
+            // midnight on the 1st is still 10pm UTC on the 31st).
+            reportFromInput.value = formatLocalDate(new Date(today.getFullYear(), today.getMonth(), 1));
+        }
+        if (reportToInput && !reportToInput.value) reportToInput.value = formatLocalDate(new Date());
         displayReports();
         await loadWebsiteTab();
         await loadTaxRecords();
@@ -1568,7 +1581,7 @@ function renderStudentsList() {
         : students.filter(isStudentActive);
     const filtered = base.filter((s) =>
         !term || s.name.toLowerCase().includes(term) || (s.parentName || '').toLowerCase().includes(term)
-    );
+    ).sort((a, b) => String(b.joinDate || '').localeCompare(String(a.joinDate || '')));
     document.getElementById('studentsCountLabel').textContent = `${filtered.length} of ${students.length} students`;
 
     // Hidden by default — the button reveals the sum of whatever's
@@ -4032,6 +4045,23 @@ function displayReports() {
     });
     const totalIncome = reportRecharges.reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
+    // Every OTHER transaction type too — straight from each student's own
+    // ledger (v2_credit_transactions), not derived from the attendance table.
+    // These don't feed Income/Expenses/Profit above (a class charge just
+    // consumes credit that was already counted as income when recharged —
+    // counting it again would double-count), they're purely for visibility
+    // into everything that happened in the period, same as a passbook.
+    const reportClassDeductions = v2CreditTransactions.filter((t) => {
+        if (t.type !== 'class_deduction' || t.deleted_at) return false;
+        const d = String(t.attendance_date).slice(0, 10);
+        return d >= fromDate && d <= toDate;
+    });
+    const reportAdjustments = v2CreditTransactions.filter((t) => {
+        if (t.type !== 'adjustment' || t.deleted_at) return false;
+        const d = String(t.created_at).slice(0, 10);
+        return d >= fromDate && d <= toDate;
+    });
+
     let totalClassesHeld = 0;
     const uniqueStudentIds = new Set();
     let totalStudentAttendance = 0;
@@ -4048,7 +4078,8 @@ function displayReports() {
     const totalExpenses = reportExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
     const profit = totalIncome - totalExpenses;
 
-    const noData = reportAttendance.length === 0 && reportExpenses.length === 0 && reportRecharges.length === 0;
+    const noData = reportAttendance.length === 0 && reportExpenses.length === 0 && reportRecharges.length === 0
+        && reportClassDeductions.length === 0 && reportAdjustments.length === 0;
     if (noData) {
         grid.innerHTML = '';
         summary.innerHTML = '';
@@ -4099,6 +4130,34 @@ function displayReports() {
                 <strong style="color:var(--danger);">€${Math.round(e.amount || 0)}</strong>
             </div>`;
         });
+    }
+
+    if (reportClassDeductions.length > 0) {
+        breakdownHtml += `<div style="font-weight:700; color:var(--ink-soft); margin:14px 0 8px; font-size:0.9em;">Class Charges (${reportClassDeductions.length})</div>`;
+        reportClassDeductions
+            .slice()
+            .sort((a, b) => String(b.attendance_date).localeCompare(String(a.attendance_date)))
+            .forEach((t) => {
+                const s = students.find((x) => x.id === t.student_id);
+                breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 14px; background:var(--bg); border-left:3px solid var(--ink-faint); border-radius:var(--radius-sm); margin-bottom:5px; font-size:0.9em;">
+                    <span>${escapeHtml(s?.name || 'Unknown')} <span style="color:var(--ink-faint); font-size:0.85em;">(${String(t.attendance_date).slice(0, 10)})</span></span>
+                    <strong style="color:var(--ink-soft);">€${t.amount}</strong>
+                </div>`;
+            });
+    }
+
+    if (reportAdjustments.length > 0) {
+        breakdownHtml += `<div style="font-weight:700; color:var(--ink-soft); margin:14px 0 8px; font-size:0.9em;">Adjustments (${reportAdjustments.length})</div>`;
+        reportAdjustments
+            .slice()
+            .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+            .forEach((t) => {
+                const s = students.find((x) => x.id === t.student_id);
+                breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 14px; background:var(--bg); border-left:3px solid var(--ink-faint); border-radius:var(--radius-sm); margin-bottom:5px; font-size:0.9em;">
+                    <span>${escapeHtml(s?.name || 'Unknown')}${t.note ? ' — ' + escapeHtml(t.note) : ''} <span style="color:var(--ink-faint); font-size:0.85em;">(${String(t.created_at).slice(0, 10)})</span></span>
+                    <strong style="color:${Number(t.amount) >= 0 ? 'var(--success)' : 'var(--danger)'};">${Number(t.amount) > 0 ? '+' : ''}€${t.amount}</strong>
+                </div>`;
+            });
     }
 
     summary.innerHTML = breakdownHtml;
@@ -5108,19 +5167,27 @@ async function writeStudentWithSchemaFallback(payload, studentId) {
     return { error: { message: 'Could not determine the correct column names after several attempts.' } };
 }
 
+// Both return the ids that failed to write, instead of only console.error'ing
+// them — a save used to be able to report "Attendance saved" with complete
+// confidence while a deduction or refund silently failed underneath it,
+// leaving the credit ledger out of sync with attendance with no visible sign
+// anything was wrong. saveAttendance() below now surfaces these explicitly.
 async function deductV2CreditForAttendance(studentIds, attendanceDate) {
+    const failedIds = [];
     for (const id of studentIds) {
         const rate = getPerClassRateById(id);
         const { data: inserted, error } = await supabaseClient
             .from('v2_credit_transactions')
             .insert({ student_id: id, type: 'class_deduction', amount: -rate, note: 'Class attendance', attendance_date: attendanceDate, created_at: new Date().toISOString() })
             .select().single();
-        if (error) { console.error('Error deducting v2 credit for student', id, error); continue; }
+        if (error) { console.error('Error deducting v2 credit for student', id, error); failedIds.push(id); continue; }
         v2CreditTransactions.push(inserted);
         await recomputeV2Balance(id);
     }
+    return failedIds;
 }
 async function refundV2CreditForAttendance(studentIds, attendanceDate) {
+    const failedIds = [];
     for (const id of studentIds) {
         // .filter, not .find — a double-submitted save (Save clicked twice
         // before the first click's data refresh lands) can leave more than
@@ -5132,13 +5199,16 @@ async function refundV2CreditForAttendance(studentIds, attendanceDate) {
         );
         if (rows.length === 0) continue; // nothing charged for this date (e.g. predates this feature)
         const deletedAt = new Date().toISOString();
+        let rowFailed = false;
         for (const row of rows) {
             const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', row.id);
-            if (error) { console.error('Error refunding v2 credit for student', id, error); continue; }
+            if (error) { console.error('Error refunding v2 credit for student', id, error); rowFailed = true; continue; }
             row.deleted_at = deletedAt;
         }
+        if (rowFailed) failedIds.push(id);
         await recomputeV2Balance(id);
     }
+    return failedIds;
 }
 
 // Re-entrancy guard: without it, a second click (double-click, or clicking
@@ -5156,8 +5226,10 @@ async function saveAttendance() {
 
     const pendingForDate = pendingAttendanceChanges[attendanceDate] || {};
     const dbPresent = attendance[attendanceDate] || {};
+    const changedIds = Object.keys(pendingForDate).map((id) => Number(id)).filter((id) => Number.isFinite(id));
+    if (changedIds.length === 0) { alert('No changes to save.'); return; }
 
-    const flippedToAbsent = students.filter((s) => (s.id in pendingForDate) && pendingForDate[s.id] === false && !!dbPresent[s.id]);
+    const flippedToAbsent = students.filter((s) => changedIds.includes(s.id) && pendingForDate[s.id] === false && !!dbPresent[s.id]);
     if (flippedToAbsent.length > 0) {
         const ok = confirm(
             `${flippedToAbsent.length} student${flippedToAbsent.length > 1 ? 's' : ''} will change from PRESENT to ABSENT (their class credit will be refunded):\n\n` +
@@ -5166,16 +5238,20 @@ async function saveAttendance() {
         if (!ok) return;
     }
 
-    // Preserve any existing demo flag for this date through the delete +
-    // reinsert below — demo classes are only ever created via the Add
-    // Student "Direct join" flow (or a future free-class action), never
-    // toggled from this grid, so a resave must not silently clear them.
+    // Only touch the students actually changed on this screen — NOT every
+    // student on this date. This used to delete + reinsert the WHOLE day's
+    // attendance from local memory (dbPresent), so anyone whose attendance
+    // changed elsewhere since this tab last refreshed (most commonly: a
+    // student self-checking in via member.html on their own phone mid-class)
+    // got silently overwritten back to absent the next time anyone here hit
+    // Save, even though nobody touched their row. Scoping the delete/insert
+    // to changedIds means everyone else's row is never touched, so it can't
+    // go stale no matter how out-of-date this tab's local cache is.
     const dateDemo = demoAttendance[attendanceDate] || {};
-    const allIds = students.map((s) => s.id).filter((id) => Number.isFinite(id));
-    const records = allIds.map((id) => ({
+    const records = changedIds.map((id) => ({
         studentId: id,
         attendanceDate,
-        isPresent: id in pendingForDate ? pendingForDate[id] : !!dbPresent[id],
+        isPresent: pendingForDate[id],
         isDemo: !!dateDemo[id]
     }));
 
@@ -5183,19 +5259,26 @@ async function saveAttendance() {
     const saveBtn = document.getElementById('saveAttendanceBtnLabel');
     if (saveBtn) saveBtn.disabled = true;
     try {
-        await deleteAttendanceByDateWithSchemaFallback(attendanceDate);
+        await deleteAttendanceByDateAndStudentsWithSchemaFallback(attendanceDate, changedIds);
         if (records.length > 0) await insertAttendanceWithSchemaFallback(records);
 
         // Demo classes are free — never deducted, matching admin.html.
         const newlyPresentIds = records.filter((r) => r.isPresent && !r.isDemo && !dbPresent[r.studentId]).map((r) => r.studentId);
-        if (newlyPresentIds.length > 0) await deductV2CreditForAttendance(newlyPresentIds, attendanceDate);
+        const failedDeductIds = newlyPresentIds.length > 0 ? await deductV2CreditForAttendance(newlyPresentIds, attendanceDate) : [];
 
         const newlyAbsentIds = records.filter((r) => !r.isPresent && dbPresent[r.studentId]).map((r) => r.studentId);
-        if (newlyAbsentIds.length > 0) await refundV2CreditForAttendance(newlyAbsentIds, attendanceDate);
+        const failedRefundIds = newlyAbsentIds.length > 0 ? await refundV2CreditForAttendance(newlyAbsentIds, attendanceDate) : [];
 
         delete pendingAttendanceChanges[attendanceDate];
         await loadAllData();
-        alert('Attendance saved.');
+
+        const failedIds = [...failedDeductIds, ...failedRefundIds];
+        if (failedIds.length > 0) {
+            const names = failedIds.map((id) => students.find((s) => s.id === id)?.name || `#${id}`).join(', ');
+            alert(`Attendance saved, but the credit ledger could NOT be updated for: ${names}. Check their balance manually — you can delete a wrong class charge from their Transaction Ledger.`);
+        } else {
+            alert('Attendance saved.');
+        }
     } catch (error) {
         console.error('Error saving attendance:', error);
         alert('Error saving attendance: ' + error.message);
@@ -5774,20 +5857,40 @@ function renderStudentViewModal(s) {
     // Deleted rows still exist for the record, they're just never shown on
     // this particular screen; the Income & Expense tab's Transaction History
     // is the one place that surfaces them.
-    const txAscending = v2CreditTransactions.filter((t) => t.student_id === s.id && !t.deleted_at).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    // Demo/free classes never get a real v2_credit_transactions row (they're
+    // free, nothing to charge or refund) — so on their own they're invisible
+    // in a ledger built purely from that table. These are synthetic, display-
+    // only €0 rows built from demoAttendance instead, merged in purely so the
+    // passbook shows the full picture of what happened; there's no real row
+    // behind them, so they're never clickable/editable/deletable like a
+    // genuine transaction.
+    const demoEntries = Object.keys(demoAttendance)
+        .filter((d) => demoAttendance[d] && demoAttendance[d][s.id])
+        .map((d) => ({ id: null, type: 'demo_class', amount: 0, note: null, created_at: `${d}T12:00:00.000Z` }));
+    // A class_deduction's created_at is the moment it was RECORDED (real
+    // wall-clock time, "now") — attendance_date is the class day it's FOR.
+    // These diverge whenever attendance is marked retroactively (e.g. for
+    // the 12th, entered on the 14th), and showing created_at made a
+    // correctly-dated charge for a past class look like it was charged for
+    // today. _effectiveDate picks the field that actually means "the date
+    // this transaction is for" per type, for both display and ordering.
+    const txAscending = [...v2CreditTransactions.filter((t) => t.student_id === s.id && !t.deleted_at), ...demoEntries]
+        .map((t) => ({ ...t, _effectiveDate: t.type === 'class_deduction' ? t.attendance_date : t.created_at }))
+        .sort((a, b) => String(a._effectiveDate).localeCompare(String(b._effectiveDate)));
     let runningBalance = 0;
     const withRunningBalance = txAscending.map((t) => { runningBalance += Number(t.amount || 0); return { ...t, _runningBalance: runningBalance }; });
     const rows = withRunningBalance.slice().reverse();
     document.getElementById('svmDocuments').innerHTML = rows.length
         ? rows.map((t) => {
-            const clickable = t.type !== 'class_deduction';
-            const label = t.type === 'recharge' ? 'Recharge' : t.type === 'class_deduction' ? 'Class attended' : 'Adjustment';
+            const clickable = t.type !== 'class_deduction' && t.type !== 'demo_class';
+            const label = t.type === 'recharge' ? 'Recharge' : t.type === 'class_deduction' ? 'Class attended' : t.type === 'demo_class' ? 'Demo class' : 'Adjustment';
             return `
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;${clickable ? ' cursor:pointer;' : ''}"${clickable ? ` onclick="openEditRechargeModal(${t.id})"` : ''}>
-                <span>${label}${t.note ? ' — ' + escapeHtml(t.note) : ''} · ${String(t.created_at).slice(0,10)}</span>
-                <span style="text-align:right; white-space:nowrap;">
+                <span>${label}${t.note ? ' — ' + escapeHtml(t.note) : ''} · ${String(t._effectiveDate).slice(0,10)}</span>
+                <span style="display:flex; align-items:center; gap:8px; text-align:right; white-space:nowrap;">
                     <strong style="color:${Number(t.amount) > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${Number(t.amount) > 0 ? '+' : ''}€${t.amount}</strong>
                     <span style="color:var(--ink-faint);"> (bal €${t._runningBalance})</span>
+                    ${t.type === 'class_deduction' ? `<button type="button" class="icon-btn-close" style="color:var(--danger);" title="Delete this transaction" onclick="event.stopPropagation(); deleteClassDeductionTransaction(${t.id})">${icon('trash', 14)}</button>` : ''}
                 </span>
             </div>`;
         }).join('')
@@ -5890,6 +5993,26 @@ async function deleteRechargeTransaction() {
     renderStudentsList();
     renderPaymentsList();
     if (currentViewingStudentId === sid) renderStudentViewModal(students.find((x) => x.id === sid));
+}
+// Manual escape hatch for a class_deduction transaction that saveAttendance's
+// automatic refund should have reversed (see refundV2CreditForAttendance)
+// but didn't — e.g. the attendance row was already flipped to absent from a
+// stale local cache that didn't know the student had been marked present, so
+// the "newly absent" comparison silently missed them. This only touches the
+// ledger row; it doesn't touch the attendance record, since that's usually
+// already correct by the time this button is needed.
+async function deleteClassDeductionTransaction(txId) {
+    const tx = v2CreditTransactions.find((t) => t.id === txId);
+    if (!tx) return;
+    if (!confirm('Delete this class charge and refund the credit?')) return;
+    const deletedAt = new Date().toISOString();
+    const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', txId);
+    if (error) { alert('Could not delete: ' + error.message); return; }
+    tx.deleted_at = deletedAt;
+    await recomputeV2Balance(tx.student_id);
+    renderStudentsList();
+    renderPaymentsList();
+    if (currentViewingStudentId === tx.student_id) renderStudentViewModal(students.find((x) => x.id === tx.student_id));
 }
 async function recomputeV2Balance(studentId) {
     const total = v2CreditTransactions.filter((t) => t.student_id === studentId && !t.deleted_at).reduce((sum, t) => sum + Number(t.amount || 0), 0);

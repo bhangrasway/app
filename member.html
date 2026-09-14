@@ -881,7 +881,22 @@ function renderPaymentHistoryCard(rows) {
     const hiddenEl = document.getElementById('creditLedgerHidden');
     const toggleBtn = document.getElementById('creditLedgerToggleBtn');
 
-    if (!rows.length) {
+    // Demo/free classes never get a real v2_credit_transactions row (nothing
+    // to charge) — these are synthetic, display-only €0 rows built from the
+    // attendance data this dashboard already has (report.attendance, which
+    // includes isdemo), merged in so the student sees the full picture, same
+    // as admin.html's per-student ledger. _effectiveDate also fixes a display
+    // bug: a class_deduction's created_at is when it was RECORDED, not the
+    // class day it's for (attendance_date) — those diverge whenever
+    // attendance is entered retroactively.
+    const demoRows = (lastReport?.attendance || [])
+        .filter((a) => a.ispresent && a.isdemo)
+        .map((a) => ({ type: 'demo_class', amount: 0, note: null, attendance_date: a.attendancedate, created_at: `${String(a.attendancedate).slice(0, 10)}T12:00:00.000Z` }));
+    const allRows = [...rows, ...demoRows]
+        .map((tx) => ({ ...tx, _effectiveDate: tx.type === 'class_deduction' ? tx.attendance_date : tx.created_at }))
+        .sort((a, b) => String(b._effectiveDate).localeCompare(String(a._effectiveDate)));
+
+    if (!allRows.length) {
         listEl.innerHTML = `<span class="empty-note">No transactions yet.</span>`;
         hiddenEl.innerHTML = ''; hiddenEl.classList.add('hidden'); toggleBtn.classList.add('hidden');
         return;
@@ -889,8 +904,9 @@ function renderPaymentHistoryCard(rows) {
     const rowHtml = (tx) => {
         const isRecharge = tx.type === 'recharge';
         const isClass = tx.type === 'class_deduction';
-        const iconName = isRecharge ? 'credit-card' : (isClass ? 'calendar' : 'file-text');
-        const label = isRecharge ? 'Recharge' : (isClass ? 'Class attended' : 'Adjustment');
+        const isDemo = tx.type === 'demo_class';
+        const iconName = isRecharge ? 'credit-card' : (isClass || isDemo ? 'calendar' : 'file-text');
+        const label = isRecharge ? 'Recharge' : (isClass ? 'Class attended' : (isDemo ? 'Demo class' : 'Adjustment'));
         const amt = Number(tx.amount) || 0;
         const amtText = amt > 0 ? `+€${amt}` : (amt < 0 ? `−€${Math.abs(amt)}` : '€0');
         return `
@@ -898,13 +914,13 @@ function renderPaymentHistoryCard(rows) {
                 <div class="ledger-icon">${icon(iconName, 17)}</div>
                 <div style="flex:1; min-width:0;">
                     <div style="font-weight:700; font-size:0.87em;">${label}</div>
-                    <div style="font-size:0.75em; color:var(--ink-faint);">${String(tx.created_at).slice(0, 10)}</div>
+                    <div style="font-size:0.75em; color:var(--ink-faint);">${String(tx._effectiveDate).slice(0, 10)}</div>
                 </div>
                 <div style="font-weight:700; font-size:0.87em; color:${amt > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${amtText}</div>
             </div>`;
     };
-    const visible = rows.slice(0, 4);
-    const rest = rows.slice(4);
+    const visible = allRows.slice(0, 4);
+    const rest = allRows.slice(4);
     listEl.innerHTML = visible.map(rowHtml).join('');
     if (rest.length) {
         hiddenEl.innerHTML = rest.map(rowHtml).join('');
@@ -930,11 +946,16 @@ async function renderBatchBlock(student) {
     const { data: allBatches } = await supabaseClient.from('batches').select('name').eq('active', true).order('sort_order', { ascending: true });
     const select = document.getElementById('batchRequestSelect');
     select.innerHTML = '';
-    (allBatches || []).filter((b) => b.name !== student.batch).forEach((b) => {
+    (allBatches || []).forEach((b) => {
         const opt = document.createElement('option');
-        opt.value = b.name; opt.textContent = b.name;
+        const isCurrent = b.name === student.batch;
+        opt.value = b.name;
+        opt.textContent = isCurrent ? `✓ ${b.name} (current)` : b.name;
+        opt.disabled = isCurrent;
         select.appendChild(opt);
     });
+    const firstSelectable = Array.from(select.options).find((o) => !o.disabled);
+    if (firstSelectable) select.value = firstSelectable.value;
 
     const { data: pendingBatch } = await supabaseClient.rpc('get_batch_request_status_by_phone', {
         p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
