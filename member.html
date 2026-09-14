@@ -309,6 +309,11 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             </div>
 
             <div class="report-block">
+                <h3 id="liveAttendanceHeadingLabel"></h3>
+                <div id="liveAttendanceList" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+            </div>
+
+            <div class="report-block">
                 <h3 id="batchHeadingLabel"></h3>
                 <p><strong id="currentBatchLabel"></strong></p>
                 <div id="batchRequestForm" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
@@ -327,7 +332,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 </div>
                 <label class="btn btn-primary" id="certificateUploadLabel" style="cursor:pointer; margin-top:8px;">
                     <span id="certificateUploadBtnText"></span>
-                    <input type="file" id="certificateUploadInput" accept="application/pdf" style="display:none;" onchange="uploadMedicalCertificate(this.files)">
+                    <input type="file" id="certificateUploadInput" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="uploadMedicalCertificate(this.files)">
                 </label>
             </div>
 
@@ -821,11 +826,26 @@ function renderReport(report) {
     const totalClasses = attendanceRows.filter((r) => r.ispresent).length;
 
     renderCreditStatus(s, totalClasses);
+    renderLiveAttendanceCard(report);
     renderBatchBlock(s);
     renderCertificateStatus(s);
     renderInvoices(s);
     renderProfilePhotoCard(s);
     renderHistoricalRecord(s, report);
+}
+
+// Live (post-cutover) attendance dates as small chips — same style as the
+// pre-cutover "Past Attendance" chips further down (renderHistoricalRecord),
+// just scoped to >= CUTOVER_DATE instead of < CUTOVER_DATE.
+function renderLiveAttendanceCard(report) {
+    const dates = (report.attendance || [])
+        .filter((a) => a.ispresent && String(a.attendancedate).slice(0, 10) >= CUTOVER_DATE)
+        .map((a) => String(a.attendancedate).slice(0, 10))
+        .sort().reverse();
+    const listEl = document.getElementById('liveAttendanceList');
+    listEl.innerHTML = dates.length
+        ? dates.map((d) => `<span class="badge hist-date-badge">${formatShortDate(d)}</span>`).join('')
+        : `<span class="empty-note">${t('mv2_attendance_empty')}</span>`;
 }
 
 async function renderCreditStatus(student, totalClasses) {
@@ -853,7 +873,7 @@ async function renderCreditStatus(student, totalClasses) {
         pillEl.innerHTML = iconLabel('warning', 'Needs recharge', 13);
         classesLeftEl.textContent = balance < 0 ? `${Math.ceil(Math.abs(balance) / rate)} class${Math.ceil(Math.abs(balance) / rate) === 1 ? '' : 'es'} on credit` : '0 classes left';
     }
-    document.getElementById('creditTotalClassesLine').textContent = `${totalClasses} classes total`;
+    document.getElementById('creditTotalClassesLine').textContent = `${totalClasses} classes total attended`;
     renderCreditSubtitle();
 
     const { data: ledger, error } = await supabaseClient.rpc('get_my_credit_ledger_v2_by_phone', {
@@ -993,7 +1013,7 @@ async function renderCertificateStatus(student) {
     if (error || !status || status === 'bad_phone' || status === 'bad_passcode' || status === 'none') {
         label.textContent = 'No certificate on file.';
         uploadLabel.classList.remove('hidden'); approvedActions.classList.add('hidden');
-        document.getElementById('certificateUploadBtnText').textContent = 'Upload PDF';
+        document.getElementById('certificateUploadBtnText').textContent = t('mv2_cert_upload_btn');
         return;
     }
     if (status === 'approved') {
@@ -1002,15 +1022,74 @@ async function renderCertificateStatus(student) {
     } else if (status === 'pending') {
         label.textContent = 'Submitted, waiting for review.';
         uploadLabel.classList.remove('hidden'); approvedActions.classList.add('hidden');
-        document.getElementById('certificateUploadBtnText').textContent = 'Re-upload PDF';
+        document.getElementById('certificateUploadBtnText').textContent = t('mv2_cert_reupload_btn');
     }
 }
+// A PDF or a photo of the certificate — a photo taken on a phone is the
+// common case here, so this needs to actually work for that: file.type can
+// be unreliable for HEIC specifically (some browsers report it blank or as
+// application/octet-stream), so the filename's own extension is checked
+// first and is the more trustworthy signal, with file.type as a fallback.
+function inferCertFileExtension(file) {
+    const nameExt = (file.name.match(/\.([a-zA-Z0-9]+)$/) || [])[1];
+    if (nameExt) return nameExt.toLowerCase();
+    const map = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/heif': 'heif', 'image/webp': 'webp' };
+    return map[file.type] || 'bin';
+}
+function isAllowedCertFile(file) {
+    if (file.type === 'application/pdf' || file.type.startsWith('image/')) return true;
+    return /\.(pdf|jpe?g|png|heic|heif|webp)$/i.test(file.name); // file.type fallback for HEIC etc.
+}
+function isHeicFile(file) {
+    return /\.(heic|heif)$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
+}
+// Loaded on demand, only when someone actually picks a HEIC file — most
+// desktop browsers can't display HEIC at all, so the instructor reviewing
+// certificates in admin.html would just see a broken preview otherwise.
+// heic2any bundles its own WASM decoder inline, so this one script tag is
+// the whole dependency — no separate asset fetch, matching the rest of this
+// app's "no build step, CDN only" approach.
+let heic2anyLoadPromise = null;
+function ensureHeic2AnyLoaded() {
+    if (window.heic2any) return Promise.resolve();
+    if (heic2anyLoadPromise) return heic2anyLoadPromise;
+    heic2anyLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => { heic2anyLoadPromise = null; reject(new Error('load failed')); };
+        document.head.appendChild(script);
+    });
+    return heic2anyLoadPromise;
+}
 async function uploadMedicalCertificate(fileList) {
-    const file = fileList && fileList[0];
+    let file = fileList && fileList[0];
     if (!file) return;
-    if (file.type !== 'application/pdf') { alert('PDF files only.'); return; }
-    const path = `pending/${selectedMember.id}_${Date.now()}.pdf`;
-    const { error: uploadError } = await supabaseClient.storage.from('medical-cert-uploads').upload(path, file, { contentType: 'application/pdf' });
+    if (!isAllowedCertFile(file)) { alert('Please upload a PDF or a photo (JPG, PNG, HEIC, etc.).'); return; }
+
+    const btnText = document.getElementById('certificateUploadBtnText');
+    const originalBtnText = btnText.textContent;
+
+    if (isHeicFile(file)) {
+        btnText.textContent = 'Converting…';
+        try {
+            await ensureHeic2AnyLoaded();
+            const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+            const jpegBlob = Array.isArray(result) ? result[0] : result;
+            file = new File([jpegBlob], file.name.replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg' });
+        } catch (e) {
+            console.error('HEIC conversion failed:', e);
+            alert("Couldn't convert this photo automatically. Please try saving it as JPG first (or take the photo again with your camera set to \"Most Compatible\" instead of \"High Efficiency\" in iPhone Settings > Camera > Formats), or upload a PDF instead.");
+            btnText.textContent = originalBtnText;
+            document.getElementById('certificateUploadInput').value = '';
+            return;
+        }
+    }
+
+    const ext = inferCertFileExtension(file);
+    const path = `pending/${selectedMember.id}_${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabaseClient.storage.from('medical-cert-uploads').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+    btnText.textContent = originalBtnText;
     if (uploadError) { alert('Something went wrong.'); return; }
     const { data: status, error } = await supabaseClient.rpc('submit_medical_certificate_by_phone', {
         p_student_id: selectedMember.id, p_phone: enteredPhone, p_file_path: path, p_passcode: enteredPasscode
@@ -1024,7 +1103,11 @@ async function viewMedicalCertificate() {
         p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
     });
     if (error || !token) { alert('Something went wrong.'); return; }
-    window.open(supabaseClient.storage.from('member-docs').getPublicUrl(`${token}.pdf`).data.publicUrl, '_blank');
+    // Newer publishes store the full filename (with its real extension) as
+    // the token; older ones predate that and are bare tokens always
+    // published as .pdf — keep both working.
+    const filename = /\.[a-zA-Z0-9]+$/.test(token) ? token : `${token}.pdf`;
+    window.open(supabaseClient.storage.from('member-docs').getPublicUrl(filename).data.publicUrl, '_blank');
 }
 async function deleteMedicalCertificate() {
     if (!confirm('Delete your medical certificate?')) return;
@@ -1851,6 +1934,7 @@ function applyStaticLabels() {
     document.getElementById('creditHeadingLabel').innerHTML = chipLabel('credit-card', t('mv2_credit_heading'), 'icon-chip-success');
     renderCreditSubtitle();
     document.getElementById('ledgerHeadingLabel').innerHTML = chipLabel('file-text', t('mv2_ledger_heading'), 'icon-chip-accent');
+    document.getElementById('liveAttendanceHeadingLabel').innerHTML = chipLabel('calendar', t('mv2_attendance_heading'), 'icon-chip-accent');
     document.getElementById('batchHeadingLabel').innerHTML = chipLabel('users-group', t('mv2_batch_heading'), 'icon-chip-purple');
     document.getElementById('certHeadingLabel').innerHTML = chipLabel('stethoscope', t('mv2_cert_heading'), 'icon-chip-warning');
     document.getElementById('invoicesHeadingLabel').innerHTML = chipLabel('file-text', t('mv2_invoices_heading'), 'icon-chip-accent');

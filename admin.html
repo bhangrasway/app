@@ -4176,11 +4176,16 @@ let certSubmissionsCache = [];
 function generateMemberDocToken() {
     return (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`).replace(/-/g, '') + Math.random().toString(36).slice(2);
 }
-async function publishMemberDoc(blob) {
+// Returns the full filename (token + real extension), not a bare token —
+// certificates can now be photos (JPG/PNG/HEIC/etc.), not just PDFs, and the
+// published copy's storage key has to end in the extension it was actually
+// uploaded with or getPublicUrl() on the member side 404s.
+async function publishMemberDoc(blob, ext) {
     const token = generateMemberDocToken();
-    const { error } = await supabaseClient.storage.from(MEMBER_DOCS_BUCKET).upload(`${token}.pdf`, blob, { contentType: 'application/pdf', upsert: false });
+    const filename = `${token}.${ext || 'pdf'}`;
+    const { error } = await supabaseClient.storage.from(MEMBER_DOCS_BUCKET).upload(filename, blob, { contentType: blob.type || 'application/octet-stream', upsert: false });
     if (error) throw error;
-    return token;
+    return filename;
 }
 
 async function loadTaxRecords() {
@@ -4455,16 +4460,21 @@ async function useCertificateSubmission(submissionId, studentId, filePath) {
     try {
         const { data: blob, error: downloadError } = await supabaseClient.storage.from(MEDICAL_CERT_BUCKET).download(filePath);
         if (downloadError) throw downloadError;
-        const destPath = `student_${studentId}/doctor_cert.pdf`;
-        const { error: uploadError } = await supabaseClient.storage.from(TAX_BUCKET).upload(destPath, blob, { contentType: 'application/pdf', upsert: true });
+        // Students can now submit a photo (JPG/PNG/HEIC/etc.) instead of a
+        // PDF — filePath already carries the real extension it was uploaded
+        // with (member.html sets this), so read it from there rather than
+        // assuming .pdf.
+        const ext = (String(filePath).match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase() || 'pdf';
+        const destPath = `student_${studentId}/doctor_cert.${ext}`;
+        const { error: uploadError } = await supabaseClient.storage.from(TAX_BUCKET).upload(destPath, blob, { contentType: blob.type || 'application/octet-stream', upsert: true });
         if (uploadError) throw uploadError;
         const rec = getTaxRecord(studentId);
         rec.doctorPdfPath = destPath;
-        rec.doctorPdfName = 'doctor_cert.pdf';
+        rec.doctorPdfName = `doctor_cert.${ext}`;
         rec.hasDoctor = true;
         setTaxRecord(studentId, rec);
         let publicToken = null;
-        try { publicToken = await publishMemberDoc(blob); } catch (e) { console.error('Could not publish member-facing copy:', e); }
+        try { publicToken = await publishMemberDoc(blob, ext); } catch (e) { console.error('Could not publish member-facing copy:', e); }
         await supabaseClient.from('medical_certificate_submissions').update({ status: 'approved', reviewed_at: new Date().toISOString(), public_token: publicToken }).eq('id', submissionId);
         await supabaseClient.storage.from(MEDICAL_CERT_BUCKET).remove([filePath]);
         renderTaxRecords();
