@@ -1233,8 +1233,15 @@ function showApp() {
     // Classes only ever happen on or before today — capping the picker
     // stops a future date from being pickable at all, on top of the
     // save-time guard in saveAttendance() for anything that slips past it
-    // (typed in directly, or an older cached page).
-    document.getElementById('attendanceDate').max = new Date().toISOString().slice(0, 10);
+    // (typed in directly, or an older cached page). Same reasoning applies
+    // to joinDate (feeds the Direct Join auto-charge), the recharge date,
+    // and the free-class date — all guarded server-side too, this is just
+    // the UI-level first line of defense.
+    const todayForMaxDate = new Date().toISOString().slice(0, 10);
+    document.getElementById('attendanceDate').max = todayForMaxDate;
+    document.getElementById('joinDate').max = todayForMaxDate;
+    document.getElementById('rechargeDateInput').max = todayForMaxDate;
+    document.getElementById('freeClassDateInput').max = todayForMaxDate;
     loadAllData();
 }
 // This browser proved it's really the admin once before (localStorage still
@@ -5233,6 +5240,14 @@ async function writeStudentWithSchemaFallback(payload, studentId) {
 // leaving the credit ledger out of sync with attendance with no visible sign
 // anything was wrong. saveAttendance() below now surfaces these explicitly.
 async function deductV2CreditForAttendance(studentIds, attendanceDate) {
+    // A class can never be attended before it happens — a future
+    // attendanceDate always means an upstream bug (e.g. a mis-picked join
+    // date), never a real charge. This is the single choke point all
+    // callers go through, so guarding here protects all of them at once.
+    if (attendanceDate > new Date().toISOString().slice(0, 10)) {
+        console.error('Refusing to deduct v2 credit for a future attendance date:', attendanceDate, studentIds);
+        return studentIds.slice();
+    }
     const failedIds = [];
     for (const id of studentIds) {
         const rate = getPerClassRateById(id);
@@ -5598,8 +5613,13 @@ async function saveStudent(event) {
 
         // Auto-record the first class on the join date — only meaningful for
         // brand-new students with a join date on/after the cutover (a past
-        // join date is historical and shouldn't get a newly-created live row).
-        if (isNewStudent && studentId && payload.joinDate && payload.joinDate >= CUTOVER_DATE) {
+        // join date is historical and shouldn't get a newly-created live row)
+        // and on/before today (a class can't have happened yet). The student
+        // record itself still saves either way — only this side effect skips.
+        const todayStrForJoin = new Date().toISOString().slice(0, 10);
+        if (isNewStudent && studentId && payload.joinDate && payload.joinDate > todayStrForJoin) {
+            alert('Join date is in the future — first class was not auto-recorded.');
+        } else if (isNewStudent && studentId && payload.joinDate && payload.joinDate >= CUTOVER_DATE) {
             const isDemo = !directJoin;
             try {
                 await insertAttendanceWithSchemaFallback([{
@@ -6010,6 +6030,7 @@ async function confirmRecharge() {
     const dateValue = document.getElementById('rechargeDateInput').value;
     const amount = Number(document.getElementById('rechargeAmountInput').value);
     if (!dateValue) { alert('Pick a date.'); return; }
+    if (dateValue > new Date().toISOString().slice(0, 10)) { alert("Can't record a transaction for a future date."); return; }
     if (!Number.isFinite(amount) || amount === 0) { alert('Enter a valid amount.'); return; }
 
     const createdAt = new Date(dateValue + 'T12:00:00').toISOString();
@@ -6129,6 +6150,7 @@ async function confirmFreeClass() {
     const s = students.find((x) => x.id === freeClassStudentId);
     const dateValue = document.getElementById('freeClassDateInput').value;
     if (!s || !dateValue) { closeFreeClassModal(); return; }
+    if (dateValue > new Date().toISOString().slice(0, 10)) { alert("Can't record a class for a future date."); return; }
 
     try {
         await deleteAttendanceByDateAndStudentsWithSchemaFallback(dateValue, [s.id]);
