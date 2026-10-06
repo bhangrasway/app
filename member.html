@@ -914,7 +914,7 @@ function renderPaymentHistoryCard(rows) {
         .filter((a) => a.ispresent && a.isdemo)
         .map((a) => ({ type: 'demo_class', amount: 0, note: null, attendance_date: a.attendancedate, created_at: `${String(a.attendancedate).slice(0, 10)}T12:00:00.000Z` }));
     const allRows = [...rows, ...demoRows]
-        .map((tx) => ({ ...tx, _effectiveDate: tx.type === 'class_deduction' ? tx.attendance_date : tx.created_at }))
+        .map((tx) => ({ ...tx, _effectiveDate: tx.type === 'class_deduction' || tx.type === 'practice_fee' ? tx.attendance_date : tx.created_at }))
         .sort((a, b) => String(b._effectiveDate).localeCompare(String(a._effectiveDate)));
 
     if (!allRows.length) {
@@ -926,8 +926,10 @@ function renderPaymentHistoryCard(rows) {
         const isRecharge = tx.type === 'recharge';
         const isClass = tx.type === 'class_deduction';
         const isDemo = tx.type === 'demo_class';
-        const iconName = isRecharge ? 'credit-card' : (isClass || isDemo ? 'calendar' : 'file-text');
-        const label = isRecharge ? 'Recharge' : (isClass ? 'Class attended' : (isDemo ? 'Demo class' : 'Adjustment'));
+        const isPractice = tx.type === 'practice_fee';
+        const isExtra = tx.type === 'extra_charge';
+        const iconName = isRecharge ? 'credit-card' : (isClass || isDemo || isPractice ? 'calendar' : 'file-text');
+        const label = isRecharge ? 'Recharge' : (isClass ? 'Class attended' : (isPractice ? 'Competition practice' : (isExtra ? escapeHtml(tx.note || 'Charge') : (isDemo ? 'Demo class' : 'Adjustment'))));
         const amt = Number(tx.amount) || 0;
         const amtText = amt > 0 ? `+€${amt}` : (amt < 0 ? `−€${Math.abs(amt)}` : '€0');
         return `

@@ -389,6 +389,41 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div id="checkinReqList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
 
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <button class="btn btn-primary btn-sm" id="attModeRegularBtn" onclick="setAttendanceMode('regular')">Regular class</button>
+            <button class="btn btn-outline btn-sm" id="attModePracticeBtn" onclick="setAttendanceMode('practice')">Competition practice</button>
+        </div>
+
+        <!-- FRIDAY PRACTICE MODE — one fixed list, €5 to everyone on it per saved session -->
+        <div id="practicePanel" class="hidden">
+            <div class="card" style="padding:16px 18px; margin-bottom:16px;">
+                <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+                    <div class="field" style="margin-bottom:0; min-width:170px;">
+                        <label>Practice date</label>
+                        <input type="date" id="practiceDate" onchange="onPracticeDateChange()">
+                    </div>
+                    <div style="flex:1;"></div>
+                    <button class="btn btn-outline btn-sm" onclick="openPracticeListModal()" id="editPracticeListBtnLabel"></button>
+                </div>
+                <div id="practiceStatus" style="margin-top:12px; font-size:0.86em; color:var(--ink-soft);"></div>
+            </div>
+
+            <div id="practiceLiveBar" class="hidden" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
+                <div class="stat-tile"><div class="label">Present</div><div class="value" style="color:var(--success);" id="practicePresentCount">0</div></div>
+                <div class="stat-tile"><div class="label">Absent</div><div class="value" style="color:var(--danger);" id="practiceAbsentCount">0</div></div>
+                <div class="stat-tile"><div class="label">Total</div><div class="value" id="practiceTotalCount">0</div></div>
+                <div style="flex:1;"></div>
+                <button class="btn btn-outline btn-sm" onclick="markAllPractice(true)">Mark All Present</button>
+                <button class="btn btn-outline btn-sm" onclick="markAllPractice(false)">Mark All Absent</button>
+                <button class="btn btn-outline btn-sm hidden" style="color:var(--danger);" onclick="cancelPracticeSession()" id="cancelPracticeBtn">Cancel this session</button>
+                <button class="btn btn-primary btn-sm" onclick="savePracticeSession()" id="savePracticeBtnLabel"></button>
+            </div>
+
+            <div id="practiceGrid"></div>
+            <div id="noPracticeStudentsMsg" class="placeholder-card hidden"></div>
+        </div>
+
+        <div id="regularAttendancePanel">
         <div class="card" style="padding:16px 18px; margin-bottom:16px;">
             <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
                 <div class="field" style="margin-bottom:0; min-width:170px;">
@@ -422,6 +457,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 
         <div id="attendanceGrid"></div>
         <div id="noAttendanceStudentsMsg" class="placeholder-card hidden"></div>
+        </div>
     </div>
     <!-- PAYMENTS TAB (Part C) -->
     <div class="tab-panel" data-panel="payments">
@@ -430,6 +466,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div style="display:flex; align-items:center; gap:10px;">
                 <div id="paymentsCountLabel" style="color:var(--ink-soft); font-size:0.86em;"></div>
                 <button class="btn btn-outline btn-sm" onclick="togglePaymentsTotalBalance()" id="paymentsTotalBalanceBtn" title="Show each card's total balance"></button>
+                <button class="btn btn-primary btn-sm" onclick="openExtraChargeModal()" id="chargeStudentsBtnLabel"></button>
             </div>
         </div>
 
@@ -951,6 +988,55 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     </div>
 </div>
 
+<!-- FRIDAY PRACTICE LIST MODAL -->
+<div id="practiceListModal" class="modal-backdrop" onclick="if(event.target===this) closePracticeListModal()">
+    <div class="modal-box" style="max-width:440px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;">Competition practice list</h3>
+            <button class="icon-btn-close" onclick="closePracticeListModal()" id="practiceListCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">Tick the students who are in the practice. Everyone on this list is charged €5 for each practice you save, present or absent. Changes only apply to practices saved from now on.</p>
+            <div class="field"><input id="practiceListSearch" placeholder="Search name…" oninput="renderPracticeListModal()"></div>
+            <div id="practiceListCount" style="font-size:0.8em; color:var(--ink-faint); margin-bottom:8px;"></div>
+            <div id="practiceListItems" style="max-height:50vh; overflow-y:auto; display:flex; flex-direction:column; gap:4px;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closePracticeListModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmPracticeList()" id="practiceListSaveBtn">Save list</button>
+        </div>
+    </div>
+</div>
+
+<!-- CHARGE STUDENTS (EXTRA CHARGE) MODAL -->
+<div id="extraChargeModal" class="modal-backdrop" onclick="if(event.target===this) closeExtraChargeModal()">
+    <div class="modal-box" style="max-width:460px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;">Charge students</h3>
+            <button class="icon-btn-close" onclick="closeExtraChargeModal()" id="extraChargeCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">For extras like a costume, entry fee or travel. The amount comes off each ticked student's balance, and they see the name in their app.</p>
+            <div class="field"><label>What for</label><input id="extraChargeName" maxlength="60" placeholder="e.g. Costume"></div>
+            <div style="display:flex; gap:12px;">
+                <div class="field" style="flex:1;"><label>Amount per student (€)</label><input type="number" id="extraChargeAmount" step="0.5" min="0" placeholder="30" oninput="updateExtraChargeCount()"></div>
+                <div class="field" style="flex:1;"><label>Date</label><input type="date" id="extraChargeDate"></div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="selectPracticeListForExtraCharge()">Select competition practice list</button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="clearExtraChargeSelection()">Clear</button>
+            </div>
+            <div class="field"><input id="extraChargeSearch" placeholder="Search name…" oninput="renderExtraChargeList()"></div>
+            <div id="extraChargeCount" style="font-size:0.8em; color:var(--ink-faint); margin-bottom:8px;"></div>
+            <div id="extraChargeItems" style="max-height:40vh; overflow-y:auto; display:flex; flex-direction:column; gap:4px;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeExtraChargeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmExtraCharge()" id="extraChargeSaveBtn">Charge</button>
+        </div>
+    </div>
+</div>
+
 <!-- SECURITY (TRUSTED BROWSER) MODAL -->
 <div id="securityModal" class="modal-backdrop" onclick="if(event.target===this) closeSecurityModal()">
     <div class="modal-box" style="max-width:400px;">
@@ -1120,6 +1206,10 @@ const INACTIVE_MONTHS_THRESHOLD = 3;
 // (e.g. family) pay a different flat rate — null means "use this default".
 const DEFAULT_CLASS_RATE = 10;
 
+// Flat fee per Friday practice session (practice_sessions.sql) — charged to
+// everyone on the practice list, present or absent.
+const PRACTICE_RATE = 5;
+
 // ===== Inline SVG icon set — stroke-style, 24x24 viewbox, currentColor.
 // No emoji anywhere in this file; every icon need routes through here. =====
 const ICONS = {
@@ -1195,6 +1285,10 @@ const ROSTER_TIER_LABELS = { advanced: 'Advanced', intermediate: 'Intermediate',
 let currentViewingStudentId = null;
 let currentEditingStudentId = null;
 let pendingAttendanceChanges = {}; // { 'YYYY-MM-DD': { [studentId]: boolean } } — unsaved checkbox edits
+let practiceAttendance = {}; // { 'YYYY-MM-DD': { [studentId]: isPresent } } — a date here = session already saved (and charged)
+let pendingPracticeChanges = {}; // { 'YYYY-MM-DD': { [studentId]: boolean } } — unsaved practice checkbox edits
+let practiceTableMissing = false; // practice_sessions.sql not run yet
+let attendanceMode = 'regular'; // 'regular' | 'practice'
 let paymentsFilter = 'all';
 let studentsTotalBalanceVisible = false; // Students tab "total balance" reveal toggle
 let paymentsTotalBalanceVisible = false; // Payments tab "total balance" reveal toggle
@@ -1417,6 +1511,7 @@ async function loadAllData() {
             oldCreditBalance: Number(s.credit_balance) || 0,
             activeOverride: s.active_override === null || s.active_override === undefined ? null : !!s.active_override,
             perClassRate: s.per_class_rate === null || s.per_class_rate === undefined ? null : Number(s.per_class_rate),
+            inPracticeGroup: !!s.in_practice_group,
             locationId: s.location_id ?? s.locationId ?? null
         }));
 
@@ -1441,6 +1536,22 @@ async function loadAllData() {
 
         v2CreditTransactions = await fetchAllRows('v2_credit_transactions');
 
+        // Own try/catch: if practice_sessions.sql hasn't been run yet, the
+        // rest of the admin must still load — only practice mode is blocked.
+        practiceAttendance = {};
+        try {
+            const practiceRows = await fetchAllRows('practice_attendance');
+            practiceTableMissing = false;
+            (practiceRows || []).forEach((r) => {
+                const d = String(r.practice_date).slice(0, 10);
+                if (!practiceAttendance[d]) practiceAttendance[d] = {};
+                practiceAttendance[d][r.student_id] = !!r.is_present;
+            });
+        } catch (e) {
+            console.error('Could not load practice_attendance (has practice_sessions.sql been run?):', e);
+            practiceTableMissing = true;
+        }
+
         const expenseRows = await fetchAllRows('expenses');
         expenses = (expenseRows || []).map(normalizeExpense);
 
@@ -1451,6 +1562,9 @@ async function loadAllData() {
         const dateInput = document.getElementById('attendanceDate');
         if (dateInput && !dateInput.value) dateInput.valueAsDate = new Date();
         displayAttendanceTab();
+        const practiceDateInput = document.getElementById('practiceDate');
+        if (practiceDateInput && !practiceDateInput.value) practiceDateInput.value = getDefaultPracticeDate();
+        displayPracticeTab();
         renderPaymentsList();
         await loadBatchesData();
         await loadPerformancesTab();
@@ -4148,6 +4262,16 @@ function displayReports() {
         const d = String(t.attendance_date).slice(0, 10);
         return d >= fromDate && d <= toDate;
     });
+    const reportPracticeFees = v2CreditTransactions.filter((t) => {
+        if (t.type !== 'practice_fee' || t.deleted_at || !studentInScope(t.student_id)) return false;
+        const d = String(t.attendance_date).slice(0, 10);
+        return d >= fromDate && d <= toDate;
+    });
+    const reportExtraCharges = v2CreditTransactions.filter((t) => {
+        if (t.type !== 'extra_charge' || t.deleted_at || !studentInScope(t.student_id)) return false;
+        const d = String(t.created_at).slice(0, 10);
+        return d >= fromDate && d <= toDate;
+    });
     const reportAdjustments = v2CreditTransactions.filter((t) => {
         if (t.type !== 'adjustment' || t.deleted_at || !studentInScope(t.student_id)) return false;
         const d = String(t.created_at).slice(0, 10);
@@ -4176,7 +4300,7 @@ function displayReports() {
     const profit = totalIncome - totalExpenses;
 
     const noData = reportAttendance.length === 0 && reportExpenses.length === 0 && reportRecharges.length === 0
-        && reportClassDeductions.length === 0 && reportAdjustments.length === 0;
+        && reportClassDeductions.length === 0 && reportPracticeFees.length === 0 && reportExtraCharges.length === 0 && reportAdjustments.length === 0;
     if (noData) {
         grid.innerHTML = '';
         summary.innerHTML = '';
@@ -4238,6 +4362,36 @@ function displayReports() {
                 const s = students.find((x) => x.id === t.student_id);
                 breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 14px; background:var(--bg); border-left:3px solid var(--ink-faint); border-radius:var(--radius-sm); margin-bottom:5px; font-size:0.9em;">
                     <span>${escapeHtml(s?.name || 'Unknown')} <span style="color:var(--ink-faint); font-size:0.85em;">(${String(t.attendance_date).slice(0, 10)})</span></span>
+                    <strong style="color:var(--ink-soft);">€${t.amount}</strong>
+                </div>`;
+            });
+    }
+
+    if (reportPracticeFees.length > 0) {
+        const practiceTotal = reportPracticeFees.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
+        breakdownHtml += `<div style="font-weight:700; color:var(--ink-soft); margin:14px 0 8px; font-size:0.9em;">Competition Practice Charges (${reportPracticeFees.length}) — €${practiceTotal}</div>`;
+        reportPracticeFees
+            .slice()
+            .sort((a, b) => String(b.attendance_date).localeCompare(String(a.attendance_date)))
+            .forEach((t) => {
+                const s = students.find((x) => x.id === t.student_id);
+                breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 14px; background:var(--bg); border-left:3px solid var(--ink-faint); border-radius:var(--radius-sm); margin-bottom:5px; font-size:0.9em;">
+                    <span>${escapeHtml(s?.name || 'Unknown')} <span style="color:var(--ink-faint); font-size:0.85em;">(${String(t.attendance_date).slice(0, 10)})</span></span>
+                    <strong style="color:var(--ink-soft);">€${t.amount}</strong>
+                </div>`;
+            });
+    }
+
+    if (reportExtraCharges.length > 0) {
+        const extraTotal = reportExtraCharges.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
+        breakdownHtml += `<div style="font-weight:700; color:var(--ink-soft); margin:14px 0 8px; font-size:0.9em;">Other Charges (${reportExtraCharges.length}) — €${extraTotal}</div>`;
+        reportExtraCharges
+            .slice()
+            .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+            .forEach((t) => {
+                const s = students.find((x) => x.id === t.student_id);
+                breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 14px; background:var(--bg); border-left:3px solid var(--ink-faint); border-radius:var(--radius-sm); margin-bottom:5px; font-size:0.9em;">
+                    <span>${escapeHtml(s?.name || 'Unknown')} — ${escapeHtml(t.note || 'Charge')} <span style="color:var(--ink-faint); font-size:0.85em;">(${String(t.created_at).slice(0, 10)})</span></span>
                     <strong style="color:var(--ink-soft);">€${t.amount}</strong>
                 </div>`;
             });
@@ -5469,6 +5623,399 @@ async function saveAttendance() {
     }
 }
 
+// ===== Friday practice (practice_sessions.sql) =====
+// One fixed list (students.in_practice_group). The FIRST save of a practice
+// date is what charges: every student on the list at that moment gets one
+// €PRACTICE_RATE 'practice_fee' row, present or absent, and that roster is
+// then frozen for the date (its practice_attendance rows). Re-saving the
+// same date only updates present/absent — it never charges again, never
+// refunds, and never re-charges someone whose fee was deleted by hand from
+// their ledger (a deliberate waiver). A cancelled Friday is simply never
+// saved; a session saved by mistake is undone with "Cancel this session".
+function setAttendanceMode(mode) {
+    attendanceMode = mode;
+    const isPractice = mode === 'practice';
+    document.getElementById('practicePanel').classList.toggle('hidden', !isPractice);
+    document.getElementById('regularAttendancePanel').classList.toggle('hidden', isPractice);
+    document.getElementById('attModeRegularBtn').className = `btn btn-sm ${isPractice ? 'btn-outline' : 'btn-primary'}`;
+    document.getElementById('attModePracticeBtn').className = `btn btn-sm ${isPractice ? 'btn-primary' : 'btn-outline'}`;
+    document.getElementById('attendanceModeBadge').classList.toggle('hidden', isPractice);
+    if (isPractice) displayPracticeTab(); else displayAttendanceTab();
+}
+
+// Today if it's a Friday, otherwise the most recent Friday.
+function getDefaultPracticeDate() {
+    const d = new Date();
+    d.setDate(d.getDate() - ((d.getDay() - 5 + 7) % 7));
+    return formatLocalDate(d);
+}
+
+function getPracticeListStudents() {
+    return students.filter((s) => s.inPracticeGroup).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Saved session: the frozen roster of that date. Unsaved: the current list.
+function getPracticeRosterForDate(practiceDate) {
+    const saved = practiceAttendance[practiceDate];
+    if (!saved) return getPracticeListStudents();
+    return Object.keys(saved)
+        .map((id) => students.find((s) => s.id === Number(id)) || { id: Number(id), name: `#${id}`, parentName: '' })
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function onPracticeDateChange() {
+    pendingPracticeChanges = {};
+    displayPracticeTab();
+}
+
+function displayPracticeTab() {
+    const dateInput = document.getElementById('practiceDate');
+    const status = document.getElementById('practiceStatus');
+    const liveBar = document.getElementById('practiceLiveBar');
+    const grid = document.getElementById('practiceGrid');
+    const emptyMsg = document.getElementById('noPracticeStudentsMsg');
+    const cancelBtn = document.getElementById('cancelPracticeBtn');
+    if (!dateInput || !status || !liveBar || !grid || !emptyMsg || !cancelBtn) return;
+
+    const showEmpty = (html) => {
+        liveBar.classList.add('hidden');
+        grid.innerHTML = '';
+        emptyMsg.classList.remove('hidden');
+        emptyMsg.innerHTML = html;
+    };
+
+    if (practiceTableMissing) {
+        status.innerHTML = '';
+        showEmpty(`${icon('warning', 26)}<h3>Practice isn't set up yet</h3><div style="color:var(--ink-soft); font-size:0.88em;">Run practice_sessions.sql in the Supabase SQL editor, then refresh.</div>`);
+        return;
+    }
+
+    const practiceDate = dateInput.value;
+    if (!practiceDate) { status.innerHTML = ''; showEmpty(`${icon('calendar', 26)}<h3>Pick a practice date</h3>`); return; }
+
+    const isSaved = !!practiceAttendance[practiceDate];
+    const roster = getPracticeRosterForDate(practiceDate);
+    cancelBtn.classList.toggle('hidden', !isSaved);
+
+    if (isSaved) {
+        const charged = v2CreditTransactions.filter((t) => t.type === 'practice_fee' && !t.deleted_at && String(t.attendance_date).slice(0, 10) === practiceDate).length;
+        status.innerHTML = `<span class="badge badge-success">${icon('check-circle', 13)} Saved</span> &nbsp;€${PRACTICE_RATE} charged to ${charged} student${charged === 1 ? '' : 's'} for this practice. Saving again only updates present/absent.`;
+    } else {
+        status.innerHTML = `<span class="badge badge-neutral">${icon('clock', 13)} Not saved yet</span> &nbsp;Saving will charge €${PRACTICE_RATE} to all ${roster.length} student${roster.length === 1 ? '' : 's'} on the list, present or absent.`;
+    }
+
+    if (roster.length === 0) {
+        showEmpty(`${icon('users', 26)}<h3>The practice list is empty</h3><div style="color:var(--ink-soft); font-size:0.88em;">Use Edit practice list to add students.</div>`);
+        return;
+    }
+    emptyMsg.classList.add('hidden');
+    liveBar.classList.remove('hidden');
+
+    const savedForDate = practiceAttendance[practiceDate] || {};
+    const pendingForDate = pendingPracticeChanges[practiceDate] || {};
+    grid.innerHTML = roster.map((s) => {
+        const isPresent = s.id in pendingForDate ? pendingForDate[s.id] : !!savedForDate[s.id];
+        return `
+            <div class="attendance-row ${isPresent ? 'present' : ''}">
+                <div class="student-info">
+                    ${renderAvatarHtml(s)}
+                    <div>
+                        <div style="font-weight:700;">${escapeHtml(s.name)}</div>
+                        <div class="student-meta">${escapeHtml(s.parentName || '—')}</div>
+                    </div>
+                </div>
+                <label class="attendance-checkbox-label">
+                    <input type="checkbox" class="practice-checkbox" data-student-id="${s.id}" ${isPresent ? 'checked' : ''} onchange="onPracticeCheckboxChange(${s.id}, this.checked)">
+                    Present
+                </label>
+            </div>`;
+    }).join('');
+    updatePracticeCounts();
+}
+
+function onPracticeCheckboxChange(studentId, checked) {
+    const practiceDate = document.getElementById('practiceDate').value;
+    if (!pendingPracticeChanges[practiceDate]) pendingPracticeChanges[practiceDate] = {};
+    pendingPracticeChanges[practiceDate][studentId] = checked;
+    document.querySelector(`.practice-checkbox[data-student-id="${studentId}"]`)?.closest('.attendance-row')?.classList.toggle('present', checked);
+    updatePracticeCounts();
+}
+
+function markAllPractice(present) {
+    document.querySelectorAll('.practice-checkbox').forEach((cb) => {
+        if (cb.checked !== present) {
+            cb.checked = present;
+            onPracticeCheckboxChange(parseInt(cb.dataset.studentId, 10), present);
+        }
+    });
+}
+
+function updatePracticeCounts() {
+    const boxes = document.querySelectorAll('.practice-checkbox');
+    let present = 0;
+    boxes.forEach((cb) => { if (cb.checked) present += 1; });
+    document.getElementById('practicePresentCount').textContent = present;
+    document.getElementById('practiceAbsentCount').textContent = boxes.length - present;
+    document.getElementById('practiceTotalCount').textContent = boxes.length;
+}
+
+let practiceSaveInProgress = false;
+async function savePracticeSession() {
+    if (practiceSaveInProgress) return;
+    const practiceDate = document.getElementById('practiceDate').value;
+    if (!practiceDate) { alert('Please select a practice date.'); return; }
+    if (practiceDate < CUTOVER_DATE) { alert('This date is before the cutover and is read-only.'); return; }
+    if (practiceDate > formatLocalDate(new Date())) { alert("Can't save a practice for a future date."); return; }
+
+    const isNewSession = !practiceAttendance[practiceDate];
+    const roster = getPracticeRosterForDate(practiceDate);
+    if (roster.length === 0) { alert('The practice list is empty — add students with Edit practice list first.'); return; }
+
+    const savedForDate = practiceAttendance[practiceDate] || {};
+    const pendingForDate = pendingPracticeChanges[practiceDate] || {};
+    if (!isNewSession && Object.keys(pendingForDate).length === 0) { alert('No changes to save.'); return; }
+
+    if (isNewSession) {
+        const ok = confirm(`Save practice for ${practiceDate}?\n\n€${PRACTICE_RATE} will be charged to all ${roster.length} students on the list (present or absent).`);
+        if (!ok) return;
+    }
+
+    const rows = roster.map((s) => ({
+        student_id: s.id,
+        practice_date: practiceDate,
+        is_present: s.id in pendingForDate ? !!pendingForDate[s.id] : !!savedForDate[s.id]
+    }));
+
+    practiceSaveInProgress = true;
+    const saveBtn = document.getElementById('savePracticeBtnLabel');
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+        const { error } = await supabaseClient.from('practice_attendance').upsert(rows, { onConflict: 'student_id,practice_date' });
+        if (error) throw error;
+
+        const failedIds = [];
+        if (isNewSession) {
+            for (const s of roster) {
+                // Guard against a double charge if a fee for this date somehow
+                // already exists (e.g. a previous save failed half-way).
+                const alreadyCharged = v2CreditTransactions.some((t) =>
+                    t.student_id === s.id && t.type === 'practice_fee' && !t.deleted_at && String(t.attendance_date).slice(0, 10) === practiceDate
+                );
+                if (alreadyCharged) continue;
+                const { data: inserted, error: txError } = await supabaseClient
+                    .from('v2_credit_transactions')
+                    .insert({ student_id: s.id, type: 'practice_fee', amount: -PRACTICE_RATE, note: 'Competition practice', attendance_date: practiceDate, created_at: new Date().toISOString() })
+                    .select().single();
+                if (txError) { console.error('Error charging practice fee for student', s.id, txError); failedIds.push(s.id); continue; }
+                v2CreditTransactions.push(inserted);
+                await recomputeV2Balance(s.id);
+            }
+        }
+
+        delete pendingPracticeChanges[practiceDate];
+        await loadAllData();
+
+        if (failedIds.length > 0) {
+            const names = failedIds.map((id) => students.find((s) => s.id === id)?.name || `#${id}`).join(', ');
+            alert(`Practice saved, but the €${PRACTICE_RATE} charge could NOT be recorded for: ${names}. Check their balance manually.`);
+        } else {
+            alert(isNewSession ? `Practice saved. €${PRACTICE_RATE} charged to ${roster.length} students.` : 'Practice attendance updated.');
+        }
+    } catch (error) {
+        console.error('Error saving practice:', error);
+        alert('Error saving practice: ' + error.message);
+    } finally {
+        practiceSaveInProgress = false;
+        if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
+async function cancelPracticeSession() {
+    const practiceDate = document.getElementById('practiceDate').value;
+    if (!practiceDate || !practiceAttendance[practiceDate]) return;
+    const fees = v2CreditTransactions.filter((t) => t.type === 'practice_fee' && !t.deleted_at && String(t.attendance_date).slice(0, 10) === practiceDate);
+    const ok = confirm(`Cancel the practice on ${practiceDate}?\n\nThe €${PRACTICE_RATE} charge will be refunded to ${fees.length} student${fees.length === 1 ? '' : 's'} and this practice's attendance will be removed.`);
+    if (!ok) return;
+    try {
+        const deletedAt = new Date().toISOString();
+        const failedIds = [];
+        for (const row of fees) {
+            const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', row.id);
+            if (error) { console.error('Error refunding practice fee', row.id, error); failedIds.push(row.student_id); continue; }
+            row.deleted_at = deletedAt;
+            await recomputeV2Balance(row.student_id);
+        }
+        if (failedIds.length > 0) {
+            const names = failedIds.map((id) => students.find((s) => s.id === id)?.name || `#${id}`).join(', ');
+            alert(`Could not refund: ${names}. The practice was NOT cancelled — try again.`);
+            await loadAllData();
+            return;
+        }
+        const { error } = await supabaseClient.from('practice_attendance').delete().eq('practice_date', practiceDate);
+        if (error) throw error;
+        delete pendingPracticeChanges[practiceDate];
+        await loadAllData();
+        alert('Practice cancelled and refunded.');
+    } catch (error) {
+        console.error('Error cancelling practice:', error);
+        alert('Error cancelling practice: ' + error.message);
+    }
+}
+
+// ---- Edit practice list modal ----
+let practiceListDraft = new Set();
+function openPracticeListModal() {
+    if (practiceTableMissing) { alert('Run practice_sessions.sql in Supabase first, then refresh.'); return; }
+    practiceListDraft = new Set(getPracticeListStudents().map((s) => s.id));
+    document.getElementById('practiceListSearch').value = '';
+    renderPracticeListModal();
+    document.getElementById('practiceListModal').style.display = 'flex';
+}
+function closePracticeListModal() { document.getElementById('practiceListModal').style.display = 'none'; }
+function togglePracticeListDraft(studentId, checked) {
+    if (checked) practiceListDraft.add(studentId); else practiceListDraft.delete(studentId);
+    document.getElementById('practiceListCount').textContent = `${practiceListDraft.size} on the list`;
+}
+// Students already on the list first, then active students, alphabetical.
+// Inactive students stay reachable through search, not shown by default.
+function renderPracticeListModal() {
+    const term = (document.getElementById('practiceListSearch').value || '').toLowerCase();
+    const candidates = students
+        .filter((s) => practiceListDraft.has(s.id) || (term ? s.name.toLowerCase().includes(term) : isStudentActive(s)))
+        .filter((s) => !term || s.name.toLowerCase().includes(term))
+        .sort((a, b) => (practiceListDraft.has(b.id) - practiceListDraft.has(a.id)) || a.name.localeCompare(b.name));
+    document.getElementById('practiceListCount').textContent = `${practiceListDraft.size} on the list`;
+    document.getElementById('practiceListItems').innerHTML = candidates.length
+        ? candidates.map((s) => `
+            <label style="display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:var(--radius-sm); cursor:pointer; border:1px solid var(--border-soft);">
+                <input type="checkbox" ${practiceListDraft.has(s.id) ? 'checked' : ''} onchange="togglePracticeListDraft(${s.id}, this.checked)" style="width:16px; height:16px; margin:0;">
+                <span style="font-weight:600; font-size:0.9em;">${escapeHtml(s.name)}</span>
+                <span style="color:var(--ink-faint); font-size:0.8em; margin-left:auto;">${escapeHtml(getBatchDisplayLabel(s.batch))}</span>
+            </label>`).join('')
+        : `<div style="color:var(--ink-faint); font-size:0.85em;">No students found.</div>`;
+}
+async function confirmPracticeList() {
+    const current = new Set(getPracticeListStudents().map((s) => s.id));
+    const toAdd = [...practiceListDraft].filter((id) => !current.has(id));
+    const toRemove = [...current].filter((id) => !practiceListDraft.has(id));
+    if (toAdd.length === 0 && toRemove.length === 0) { closePracticeListModal(); return; }
+    const saveBtn = document.getElementById('practiceListSaveBtn');
+    saveBtn.disabled = true;
+    try {
+        if (toAdd.length > 0) {
+            const { error } = await supabaseClient.from('students').update({ in_practice_group: true }).in('id', toAdd);
+            if (error) throw error;
+        }
+        if (toRemove.length > 0) {
+            const { error } = await supabaseClient.from('students').update({ in_practice_group: false }).in('id', toRemove);
+            if (error) throw error;
+        }
+        students.forEach((s) => { s.inPracticeGroup = practiceListDraft.has(s.id); });
+        closePracticeListModal();
+        displayPracticeTab();
+    } catch (error) {
+        console.error('Error saving practice list:', error);
+        alert('Could not save the practice list: ' + error.message);
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
+// ===== Charge students (extras: costume, entry fee, travel…) =====
+// One named charge applied to any set of students in one go, as one
+// 'extra_charge' v2_credit_transactions row each (note = the name, shown to
+// the student in member.html). Undone per student from their ledger's trash
+// button, same as a class or practice charge.
+let extraChargeSelection = new Set();
+function openExtraChargeModal() {
+    extraChargeSelection = new Set();
+    document.getElementById('extraChargeName').value = '';
+    document.getElementById('extraChargeAmount').value = '';
+    document.getElementById('extraChargeDate').value = formatLocalDate(new Date());
+    document.getElementById('extraChargeSearch').value = '';
+    renderExtraChargeList();
+    document.getElementById('extraChargeModal').style.display = 'flex';
+}
+function closeExtraChargeModal() { document.getElementById('extraChargeModal').style.display = 'none'; }
+function updateExtraChargeCount() {
+    const amount = Number(document.getElementById('extraChargeAmount').value);
+    const n = extraChargeSelection.size;
+    const total = Number.isFinite(amount) && amount > 0 ? ` · total €${Math.round(amount * n * 100) / 100}` : '';
+    document.getElementById('extraChargeCount').textContent = `${n} selected${total}`;
+}
+function toggleExtraChargeStudent(studentId, checked) {
+    if (checked) extraChargeSelection.add(studentId); else extraChargeSelection.delete(studentId);
+    updateExtraChargeCount();
+}
+function selectPracticeListForExtraCharge() {
+    getPracticeListStudents().forEach((s) => extraChargeSelection.add(s.id));
+    renderExtraChargeList();
+}
+function clearExtraChargeSelection() {
+    extraChargeSelection = new Set();
+    renderExtraChargeList();
+}
+// Ticked students first, then active students, alphabetical. Inactive
+// students stay reachable through search, not shown by default.
+function renderExtraChargeList() {
+    const term = (document.getElementById('extraChargeSearch').value || '').toLowerCase();
+    const candidates = students
+        .filter((s) => term ? s.name.toLowerCase().includes(term) : (extraChargeSelection.has(s.id) || isStudentActive(s)))
+        .sort((a, b) => (extraChargeSelection.has(b.id) - extraChargeSelection.has(a.id)) || a.name.localeCompare(b.name));
+    document.getElementById('extraChargeItems').innerHTML = candidates.length
+        ? candidates.map((s) => `
+            <label style="display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:var(--radius-sm); cursor:pointer; border:1px solid var(--border-soft);">
+                <input type="checkbox" ${extraChargeSelection.has(s.id) ? 'checked' : ''} onchange="toggleExtraChargeStudent(${s.id}, this.checked)" style="width:16px; height:16px; margin:0;">
+                <span style="font-weight:600; font-size:0.9em;">${escapeHtml(s.name)}</span>
+                <span style="color:var(--ink-faint); font-size:0.8em; margin-left:auto;">${escapeHtml(getBatchDisplayLabel(s.batch))}</span>
+            </label>`).join('')
+        : `<div style="color:var(--ink-faint); font-size:0.85em;">No students found.</div>`;
+    updateExtraChargeCount();
+}
+let extraChargeSaveInProgress = false;
+async function confirmExtraCharge() {
+    if (extraChargeSaveInProgress) return;
+    const name = document.getElementById('extraChargeName').value.trim();
+    const amount = Number(document.getElementById('extraChargeAmount').value);
+    const dateValue = document.getElementById('extraChargeDate').value;
+    const ids = [...extraChargeSelection];
+    if (!name) { alert('Enter what the charge is for (e.g. Costume).'); return; }
+    if (!Number.isFinite(amount) || amount <= 0) { alert('Enter an amount greater than €0.'); return; }
+    if (!dateValue) { alert('Pick a date.'); return; }
+    if (dateValue > formatLocalDate(new Date())) { alert("Can't record a charge for a future date."); return; }
+    if (ids.length === 0) { alert('Tick at least one student.'); return; }
+    if (!confirm(`Charge €${amount} for "${name}" to ${ids.length} student${ids.length === 1 ? '' : 's'}?`)) return;
+
+    extraChargeSaveInProgress = true;
+    const saveBtn = document.getElementById('extraChargeSaveBtn');
+    saveBtn.disabled = true;
+    try {
+        const createdAt = new Date(dateValue + 'T12:00:00').toISOString();
+        const failedIds = [];
+        for (const id of ids) {
+            const { data: inserted, error } = await supabaseClient
+                .from('v2_credit_transactions')
+                .insert({ student_id: id, type: 'extra_charge', amount: -amount, note: name, created_at: createdAt })
+                .select().single();
+            if (error) { console.error('Error adding extra charge for student', id, error); failedIds.push(id); continue; }
+            v2CreditTransactions.push(inserted);
+            await recomputeV2Balance(id);
+        }
+        closeExtraChargeModal();
+        renderStudentsList();
+        renderPaymentsList();
+        if (failedIds.length > 0) {
+            const names = failedIds.map((id) => students.find((s) => s.id === id)?.name || `#${id}`).join(', ');
+            alert(`Charged ${ids.length - failedIds.length} students, but could NOT charge: ${names}. Try those again.`);
+        } else {
+            alert(`"${name}" — €${amount} charged to ${ids.length} student${ids.length === 1 ? '' : 's'}.`);
+        }
+    } finally {
+        extraChargeSaveInProgress = false;
+        saveBtn.disabled = false;
+    }
+}
+
 // ===== Pending attendance requests (member portal's "couldn't check in,
 // mark me present manually" fallback — request_manual_checkin_by_phone) ====
 async function loadCheckinRequests() {
@@ -6069,22 +6616,24 @@ function renderStudentViewModal(s) {
     // today. _effectiveDate picks the field that actually means "the date
     // this transaction is for" per type, for both display and ordering.
     const txAscending = [...v2CreditTransactions.filter((t) => t.student_id === s.id && !t.deleted_at), ...demoEntries]
-        .map((t) => ({ ...t, _effectiveDate: t.type === 'class_deduction' ? t.attendance_date : t.created_at }))
+        .map((t) => ({ ...t, _effectiveDate: t.type === 'class_deduction' || t.type === 'practice_fee' ? t.attendance_date : t.created_at }))
         .sort((a, b) => String(a._effectiveDate).localeCompare(String(b._effectiveDate)));
     let runningBalance = 0;
     const withRunningBalance = txAscending.map((t) => { runningBalance += Number(t.amount || 0); return { ...t, _runningBalance: runningBalance }; });
     const rows = withRunningBalance.slice().reverse();
     document.getElementById('svmDocuments').innerHTML = rows.length
         ? rows.map((t) => {
-            const clickable = t.type !== 'class_deduction' && t.type !== 'demo_class';
-            const label = t.type === 'recharge' ? 'Recharge' : t.type === 'class_deduction' ? 'Class attended' : t.type === 'demo_class' ? 'Demo class' : 'Adjustment';
+            const isCharge = t.type === 'class_deduction' || t.type === 'practice_fee' || t.type === 'extra_charge';
+            const clickable = !isCharge && t.type !== 'demo_class';
+            const label = t.type === 'recharge' ? 'Recharge' : t.type === 'class_deduction' ? 'Class attended' : t.type === 'practice_fee' ? 'Competition practice' : t.type === 'extra_charge' ? escapeHtml(t.note || 'Charge') : t.type === 'demo_class' ? 'Demo class' : 'Adjustment';
+            const showNote = t.note && t.type !== 'practice_fee' && t.type !== 'extra_charge';
             return `
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;${clickable ? ' cursor:pointer;' : ''}"${clickable ? ` onclick="openEditRechargeModal(${t.id})"` : ''}>
-                <span>${label}${t.note ? ' — ' + escapeHtml(t.note) : ''} · ${String(t._effectiveDate).slice(0,10)}</span>
+                <span>${label}${showNote ? ' — ' + escapeHtml(t.note) : ''} · ${String(t._effectiveDate).slice(0,10)}</span>
                 <span style="display:flex; align-items:center; gap:8px; text-align:right; white-space:nowrap;">
                     <strong style="color:${Number(t.amount) > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${Number(t.amount) > 0 ? '+' : ''}€${t.amount}</strong>
                     <span style="color:var(--ink-faint);"> (bal €${t._runningBalance})</span>
-                    ${t.type === 'class_deduction' ? `<button type="button" class="icon-btn-close" style="color:var(--danger);" title="Delete this transaction" onclick="event.stopPropagation(); deleteClassDeductionTransaction(${t.id})">${icon('trash', 14)}</button>` : ''}
+                    ${isCharge ? `<button type="button" class="icon-btn-close" style="color:var(--danger);" title="Delete this transaction" onclick="event.stopPropagation(); deleteClassDeductionTransaction(${t.id})">${icon('trash', 14)}</button>` : ''}
                 </span>
             </div>`;
         }).join('')
@@ -6199,7 +6748,10 @@ async function deleteRechargeTransaction() {
 async function deleteClassDeductionTransaction(txId) {
     const tx = v2CreditTransactions.find((t) => t.id === txId);
     if (!tx) return;
-    if (!confirm('Delete this class charge and refund the credit?')) return;
+    const confirmText = tx.type === 'practice_fee' ? 'Delete this competition practice charge and refund the credit?'
+        : tx.type === 'extra_charge' ? `Delete this "${tx.note || 'Charge'}" charge and refund it?`
+        : 'Delete this class charge and refund the credit?';
+    if (!confirm(confirmText)) return;
     const deletedAt = new Date().toISOString();
     const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', txId);
     if (error) { alert('Could not delete: ' + error.message); return; }
@@ -6477,6 +7029,11 @@ function applyIcons() {
     document.getElementById('captureBtnLabel').innerHTML = iconLabel('camera', 'Capture', 15);
     document.getElementById('zoomIconLabel').innerHTML = icon('zoom-in', 15);
     document.getElementById('saveAttendanceBtnLabel').innerHTML = iconLabel('check', 'Save Attendance', 15);
+    document.getElementById('savePracticeBtnLabel').innerHTML = iconLabel('check', 'Save Practice', 15);
+    document.getElementById('editPracticeListBtnLabel').innerHTML = iconLabel('users', 'Edit practice list', 15);
+    document.getElementById('practiceListCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('chargeStudentsBtnLabel').innerHTML = iconLabel('plus', 'Charge students', 14);
+    document.getElementById('extraChargeCloseBtn').innerHTML = icon('x', 16);
 
     const tabIcons = { students: 'users', attendance: 'calendar', payments: 'credit-card', batches: 'filter', fees: 'file-text', reports: 'chevron-right', website: 'edit', performances: 'user' };
     const tabLabels = { students: 'Students', attendance: 'Attendance', payments: 'Payments', batches: 'Batches', fees: 'Income & Expense', reports: 'Reports', website: 'Website', performances: 'Performances' };
