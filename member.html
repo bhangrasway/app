@@ -791,6 +791,7 @@ async function loadDashboard(member) {
     if (report?.status !== 'ok') { backToPhoneEntry('Verification failed.'); return; }
 
     lastReport = report;
+    if (report.student?.location_id) await loadMyLocation(report.student.location_id);
     renderReport(report);
     renderSiblingRow();
     show('dashboard');
@@ -963,7 +964,10 @@ function toggleCreditLedger() {
 
 async function renderBatchBlock(student) {
     document.getElementById('currentBatchLabel').textContent = student.batch || 'No batch assigned';
-    const { data: allBatches } = await supabaseClient.from('batches').select('name').eq('active', true).order('sort_order', { ascending: true });
+    // Only batches at the student's own location — a student belongs to
+    // exactly one location, so there's no reason to offer a cross-location
+    // batch here (request_batch_change_by_phone also refuses it server-side).
+    const { data: allBatches } = await supabaseClient.from('batches').select('name').eq('active', true).eq('location_id', student.location_id).order('sort_order', { ascending: true });
     const select = document.getElementById('batchRequestSelect');
     select.innerHTML = '';
     (allBatches || []).forEach((b) => {
@@ -1000,7 +1004,7 @@ async function requestBatchMove() {
         p_student_id: selectedMember.id, p_phone: enteredPhone, p_requested_batch: target, p_passcode: enteredPasscode
     });
     if (error || status !== 'sent') { alert('Something went wrong.'); return; }
-    renderBatchBlock({ id: selectedMember.id, batch: lastReport?.student?.batch });
+    renderBatchBlock({ id: selectedMember.id, batch: lastReport?.student?.batch, location_id: lastReport?.student?.location_id });
 }
 
 async function renderCertificateStatus(student) {
@@ -1241,12 +1245,15 @@ function renderHistoricalRecord(student, report) {
 }
 
 // ===== Attendance tab (self check-in) =====
-// Corso XX Settembre 39, 26100 Cremona CR — the shared pin (Plus Code
-// 42MH+HJ) is the venue's entry gate, ~600-700m from the practice hall, so
-// the radius is deliberately wide.
-const STUDIO_LAT = 45.133938;
-const STUDIO_LNG = 10.029063;
-const STUDIO_RADIUS_METERS = 1000;
+// Each location now has its own address/geofence/check-in window, looked up
+// by the logged-in student's own location_id (set once per login in
+// loadMyLocation(), called from loadDashboard()) rather than a single
+// hardcoded studio.
+let myLocation = null;
+async function loadMyLocation(locationId) {
+    const { data } = await supabaseClient.from('locations').select('*').eq('id', locationId).single();
+    myLocation = data || null;
+}
 let attnLocStatus = 'too-far';
 let attnClosedMsg = null;
 
@@ -1264,10 +1271,10 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
     return 2 * R * Math.asin(Math.sqrt(a));
 }
 async function checkLocationStatus() {
-    if (!navigator.geolocation) return 'unknown';
+    if (!navigator.geolocation || !myLocation) return 'unknown';
     return await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-            (pos) => resolve(haversineMeters(pos.coords.latitude, pos.coords.longitude, STUDIO_LAT, STUDIO_LNG) <= STUDIO_RADIUS_METERS ? 'confirmed' : 'too-far'),
+            (pos) => resolve(haversineMeters(pos.coords.latitude, pos.coords.longitude, myLocation.lat, myLocation.lng) <= myLocation.radius_meters ? 'confirmed' : 'too-far'),
             () => resolve('unknown'),
             { timeout: 8000, maximumAge: 60000 }
         );
@@ -1276,14 +1283,20 @@ async function checkLocationStatus() {
 async function confirmBranchSilently() {
     const status = await checkLocationStatus();
     const branchLine = document.getElementById('branchLine');
-    branchLine.textContent = status === 'confirmed' ? 'You are at the studio' : 'Checking in at Bhangra Sway';
+    branchLine.textContent = status === 'confirmed' ? `You are at ${myLocation ? myLocation.name : 'the studio'}` : 'Checking in at Bhangra Sway';
     return status;
 }
 async function initAttendance() {
     showAttn('attnLoading');
     document.getElementById('branchLine').textContent = 'Checking in…';
 
-    const { data: settings, error: settingsError } = await supabaseClient.from('checkin_settings').select('*').eq('id', 1).single();
+    if (!myLocation && lastReport?.student?.location_id) {
+        await loadMyLocation(lastReport.student.location_id);
+    }
+
+    const { data: settings, error: settingsError } = myLocation
+        ? await supabaseClient.from('checkin_settings').select('*').eq('location_id', myLocation.id).single()
+        : { data: null, error: true };
     if (settingsError || !settings) {
         attnClosedMsg = 'Check-in is not set up yet. Please ask your instructor.';
         document.getElementById('attnClosedMessage').textContent = attnClosedMsg;
@@ -1317,10 +1330,11 @@ async function initAttendance() {
 }
 function renderAttnLocBlock() {
     const unknown = attnLocStatus === 'unknown';
+    const radiusKm = myLocation ? (myLocation.radius_meters / 1000).toFixed(myLocation.radius_meters % 1000 ? 1 : 0) : '1';
     document.getElementById('attnLocHeading').textContent = unknown ? "We couldn't verify your location" : 'You seem far from the studio';
     document.getElementById('attnLocBody').textContent = unknown
         ? "Self check-in needs your phone's location to confirm you're at the studio. Allow location access and try again, or send a request instead."
-        : "Your phone's location says you're more than 1km from the studio. Maybe location wasn't shared correctly, you can notify your instructor instead.";
+        : `Your phone's location says you're more than ${radiusKm}km from the studio. Maybe location wasn't shared correctly, you can notify your instructor instead.`;
     document.getElementById('attnLocRetryBtn').textContent = "I've enabled location, try again";
 }
 async function handleAttnConfirm() {

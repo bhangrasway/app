@@ -269,6 +269,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             Bhangra Sway
             <button class="btn btn-ghost btn-sm" onclick="handleRefreshData()" id="refreshDataBtn" title="Reload data"></button>
         </div>
+        <select id="locationSwitcher" onchange="handleLocationSwitch(this.value)" style="padding:6px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; font-weight:700;"></select>
         <button class="btn btn-ghost btn-sm" onclick="openSecurityModal()" id="securityBtnIcon"></button>
         <button class="btn btn-ghost btn-sm" onclick="handleLogout()" id="logoutBtnIcon"></button>
     </div>
@@ -329,6 +330,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <div class="field"><label>Gender</label>
                         <select id="studentGender"><option value="">—</option><option value="M">Male</option><option value="F">Female</option></select>
                     </div>
+                    <div class="field"><label>Location</label><select id="studentLocation" onchange="populateStudentBatchDropdown()" required></select></div>
                     <div class="field"><label>Batch</label><select id="studentBatch"></select></div>
                     <div class="field"><label>Codice Fiscale</label><input type="text" id="codiceFiscale"></div>
                     <div class="field"><label>Join Date</label><input type="date" id="joinDate"></div>
@@ -1152,7 +1154,8 @@ const ICONS = {
     'music-note': '<path d="M9 18V5.5l10-2v12.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
     play: '<path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor" stroke="none"/>',
     pause: '<rect x="7" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/>',
-    video: '<rect x="3" y="6.5" width="13" height="11" rx="1.8"/><path d="M16 10.5l4.5-2.8v8.6l-4.5-2.8z"/>'
+    video: '<rect x="3" y="6.5" width="13" height="11" rx="1.8"/><path d="M16 10.5l4.5-2.8v8.6l-4.5-2.8z"/>',
+    'map-pin': '<path d="M12 21s7-7.5 7-12a7 7 0 1 0-14 0c0 4.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>'
 };
 function icon(name, size, color) {
     size = size || 18;
@@ -1200,6 +1203,12 @@ let paymentsActiveFilter = 'active'; // Payments tab: 'active' | 'inactive' | 'a
 let incomeActiveFilter = 'active'; // Income & Expense tab: 'active' | 'inactive' | 'all'
 let feesPeriodMode = 'month'; // 'month' | 'lastWeek' | 'lastMonth' | 'custom'
 let batchList = [];
+let locations = [];
+// Persisted across reloads like other view preferences — 'all' means
+// combined, otherwise a locations.id (as a string, matches select option
+// values). Attendance requires one specific location to be picked; other
+// tabs accept 'all' for a combined view.
+let currentLocationFilter = localStorage.getItem('bs_admin_location_filter') || 'all';
 let expenses = [];
 let oldPayments = []; // raw fees_paid rows — read-only reference, never affects the live balance
 
@@ -1407,8 +1416,11 @@ async function loadAllData() {
             onCreditPlan: !!(s.on_credit_plan),
             oldCreditBalance: Number(s.credit_balance) || 0,
             activeOverride: s.active_override === null || s.active_override === undefined ? null : !!s.active_override,
-            perClassRate: s.per_class_rate === null || s.per_class_rate === undefined ? null : Number(s.per_class_rate)
+            perClassRate: s.per_class_rate === null || s.per_class_rate === undefined ? null : Number(s.per_class_rate),
+            locationId: s.location_id ?? s.locationId ?? null
         }));
+
+        await loadLocations();
 
         const attendanceRows = await fetchAllRows('attendance');
         attendance = {};
@@ -1586,8 +1598,10 @@ function renderStudentsList() {
     const base = studentsActiveFilter === 'all' ? students
         : studentsActiveFilter === 'inactive' ? students.filter((s) => !isStudentActive(s))
         : students.filter(isStudentActive);
+    const locationFilterId = getLocationIdFilter();
     const filtered = base.filter((s) =>
-        !term || s.name.toLowerCase().includes(term) || (s.parentName || '').toLowerCase().includes(term)
+        (locationFilterId === null || s.locationId === locationFilterId)
+        && (!term || s.name.toLowerCase().includes(term) || (s.parentName || '').toLowerCase().includes(term))
     ).sort((a, b) => String(b.joinDate || '').localeCompare(String(a.joinDate || '')));
     document.getElementById('studentsCountLabel').textContent = `${filtered.length} of ${students.length} students`;
 
@@ -1668,9 +1682,11 @@ function renderPaymentsList() {
     // "Real" totals: inactive students don't count toward the headline
     // boxes by default, but they're never hidden entirely — the filter
     // brings them back for balance reconciliation without touching data.
-    const activeStudents = paymentsActiveFilter === 'all' ? students
+    const locationFilterId = getLocationIdFilter();
+    const inLocation = (s) => locationFilterId === null || s.locationId === locationFilterId;
+    const activeStudents = (paymentsActiveFilter === 'all' ? students
         : paymentsActiveFilter === 'inactive' ? students.filter((s) => !isStudentActive(s))
-        : students.filter(isStudentActive);
+        : students.filter(isStudentActive)).filter(inLocation);
 
     const counts = { all: activeStudents.length, positive: 0, zero: 0, negative: 0 };
     activeStudents.forEach((s) => {
@@ -1769,6 +1785,39 @@ function timeAgo(isoString) {
 }
 
 // ===== Batches tab (Part D) =====
+async function loadLocations() {
+    const { data, error } = await supabaseClient.from('locations').select('*').order('id', { ascending: true });
+    if (!error) locations = data || [];
+    renderLocationSwitcher();
+}
+function renderLocationSwitcher() {
+    const el = document.getElementById('locationSwitcher');
+    if (!el) return;
+    const options = locations.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+    el.innerHTML = `<option value="all">All Locations</option>${options}`;
+    el.value = currentLocationFilter;
+}
+function handleLocationSwitch(value) {
+    currentLocationFilter = value;
+    try { localStorage.setItem('bs_admin_location_filter', value); } catch {}
+    renderStudentsList();
+    renderPaymentsList();
+    renderBatchRoster();
+    populateStudentBatchDropdown();
+    populateAttendanceBatchFilter();
+    displayAttendanceTab();
+    displayFeesTab();
+    displayReports();
+}
+// null = "All Locations" selected (combined view); otherwise the selected
+// locations.id, for tabs that filter by it.
+function getLocationIdFilter() {
+    return currentLocationFilter === 'all' ? null : Number(currentLocationFilter);
+}
+function getLocationName(id) {
+    const l = locations.find((x) => x.id === id);
+    return l ? l.name : '—';
+}
 async function loadBatchesData() {
     const { data, error } = await supabaseClient.from('batches').select('*').order('sort_order', { ascending: true });
     if (!error) batchList = data || [];
@@ -1817,12 +1866,24 @@ function getBatchCapacityInfo(count, b) {
 // could drift from what's actually offered. `selected` keeps whatever the
 // student currently has even if it no longer matches a configured batch
 // (renamed/deactivated) — edits should never silently wipe it.
+function populateStudentLocationDropdown(selected) {
+    const select = document.getElementById('studentLocation');
+    if (!select) return;
+    const current = selected !== undefined ? selected : select.value;
+    select.innerHTML = locations.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+    select.value = current || (locations[0] && locations[0].id) || '';
+}
 function populateStudentBatchDropdown(selected) {
     const select = document.getElementById('studentBatch');
     if (!select) return;
     const current = selected !== undefined ? selected : select.value;
+    // Only offer batches at the location currently chosen in this form —
+    // not the admin's global location switcher, since you might be adding a
+    // student to a different location than the one you're currently viewing.
+    const formLocationId = Number(document.getElementById('studentLocation')?.value || 0) || null;
+    const batchesHere = formLocationId === null ? batchList : batchList.filter((b) => b.location_id === formLocationId);
     const options = ['<option value="">— Batch to be selected —</option>']
-        .concat(batchList.filter((b) => b.active !== false).map((b) => `<option value="${escapeHtml(b.name)}">${escapeHtml(getBatchDisplayLabel(b.name))}</option>`));
+        .concat(batchesHere.filter((b) => b.active !== false).map((b) => `<option value="${escapeHtml(b.name)}">${escapeHtml(getBatchDisplayLabel(b.name))}</option>`));
     if (current && !batchList.some((b) => b.name === current)) {
         options.push(`<option value="${escapeHtml(current)}">${escapeHtml(current)} (not currently configured)</option>`);
     }
@@ -1833,7 +1894,8 @@ function populateStudentBatchDropdown(selected) {
 function renderBatchRoster() {
     const container = document.getElementById('batchRosterList');
     if (!container) return;
-    const activeBatches = batchList.filter((b) => b.active !== false);
+    const locationFilterId = getLocationIdFilter();
+    const activeBatches = batchList.filter((b) => b.active !== false && (locationFilterId === null || b.location_id === locationFilterId));
     if (activeBatches.length === 0) {
         container.innerHTML = `<div class="placeholder-card">${icon('filter', 26)}<h3>No batches yet</h3></div>`;
         return;
@@ -1845,6 +1907,11 @@ function renderBatchRoster() {
         const roster = students.filter((s) => s.batch === b.name && isStudentActive(s));
         const count = roster.length;
         const capacity = getBatchCapacityInfo(count, b);
+        // Only batches at this same location are valid move targets — a
+        // student belongs to exactly one location, so a cross-location batch
+        // move isn't offered here (move the student's Location in Edit
+        // Student first if they're genuinely switching sites).
+        const sameLocationBatches = batchList.filter((x) => x.active !== false && x.location_id === b.location_id);
         const studentRows = roster.length
             ? roster.map((s) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.88em; gap:10px;">
@@ -1853,7 +1920,7 @@ function renderBatchRoster() {
                         <div style="font-size:0.85em; color:var(--ink-soft);">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Age ${s.age == null ? '<span>—</span>' : `<span style="color:${s.age < 12 ? 'var(--danger)' : 'var(--success)'}; font-weight:700;">${s.age}</span>`}</div>
                     </div>
                     <select data-move-student="${s.id}" style="padding:5px 8px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; flex-shrink:0;">
-                        ${activeBatches.map((x) => `<option value="${escapeHtml(x.name)}" ${x.name === b.name ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}
+                        ${sameLocationBatches.map((x) => `<option value="${escapeHtml(x.name)}" ${x.name === b.name ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}
                         <option value="">— Batch to be selected —</option>
                     </select>
                 </div>`).join('')
@@ -1862,7 +1929,7 @@ function renderBatchRoster() {
             <div class="card" style="padding:16px 18px;">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
                     <div>
-                        <div style="font-weight:700; font-size:1.02em;">${escapeHtml(b.name)}</div>
+                        <div style="font-weight:700; font-size:1.02em;">${escapeHtml(b.name)} <span class="badge badge-neutral" style="font-weight:600;">${escapeHtml(getLocationName(b.location_id))}</span></div>
                         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; font-size:0.85em;">
                             <select id="batchDay_${b.id}" style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border);">
                                 <option value="Saturday" ${b.day === 'Saturday' ? 'selected' : ''}>Sabato</option>
@@ -3707,19 +3774,21 @@ function normalizeExpense(expense) {
         ...expense,
         description: expense.description ?? '',
         amount: Number(expense.amount ?? 0),
-        expenseDate: String(expense.expenseDate ?? expense.expense_date ?? expense.expensedate ?? expense.date ?? '').slice(0, 10)
+        expenseDate: String(expense.expenseDate ?? expense.expense_date ?? expense.expensedate ?? expense.date ?? '').slice(0, 10),
+        location_id: expense.location_id ?? null
     };
 }
 function buildExpensePayloadForSchema(expense, variant) {
     const base = {
         description: expense.description,
         amount: expense.amount,
-        expenseDate: expense.expenseDate
+        expenseDate: expense.expenseDate,
+        location_id: expense.location_id
     };
-    if (variant === 'legacy') return { description: base.description, amount: base.amount, date: base.expenseDate };
-    if (variant === 'snake') return { description: base.description, amount: base.amount, expense_date: base.expenseDate };
-    if (variant === 'compact') return { description: base.description, amount: base.amount, expensedate: base.expenseDate };
-    return { description: base.description, amount: base.amount, expenseDate: base.expenseDate };
+    if (variant === 'legacy') return { description: base.description, amount: base.amount, date: base.expenseDate, location_id: base.location_id };
+    if (variant === 'snake') return { description: base.description, amount: base.amount, expense_date: base.expenseDate, location_id: base.location_id };
+    if (variant === 'compact') return { description: base.description, amount: base.amount, expensedate: base.expenseDate, location_id: base.location_id };
+    return { description: base.description, amount: base.amount, expenseDate: base.expenseDate, location_id: base.location_id };
 }
 async function insertExpensesWithSchemaFallback(expensesToInsert) {
     const variants = ['legacy', 'snake', 'compact', 'camel'];
@@ -3809,18 +3878,23 @@ function displayFeesTab() {
     // silently mix into "new system" totals. Anything dated before
     // CUTOVER_DATE — including something added today for testing, before
     // real cutover — is invisible here on purpose (see Add Expense note).
-    const v2Expenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= CUTOVER_DATE);
+    const locationFilterId = getLocationIdFilter();
+    const v2Expenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= CUTOVER_DATE && (locationFilterId === null || e.location_id === locationFilterId));
     const totalExpenseAllTime = v2Expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
     document.getElementById('inactiveIncomeCount').textContent = students.filter((s) => !isStudentActive(s)).length;
 
-    // Expenses are studio-wide, not tied to a student, so the filter never
-    // touches them — only recharges (real income), which DO belong to a
-    // student, respect it. Inactive students' recharges are still real
-    // money once received, but excluded by default to match "proper" /
+    // Expenses carry their own location_id directly (filtered above, since
+    // they're studio-wide, not tied to a student) — recharges (real income)
+    // DO belong to a student, so location is applied by intersecting with
+    // that location's student ids here, same mechanism as the active/
+    // inactive filter already used. Inactive students' recharges are still
+    // real money once received, but excluded by default to match "proper" /
     // active-only totals, same as Payments — "All" brings them back.
-    const incomeIdsInScope = incomeActiveFilter === 'all' ? null
-        : new Set(students.filter((s) => incomeActiveFilter === 'inactive' ? !isStudentActive(s) : isStudentActive(s)).map((s) => s.id));
-    const rechargeInScope = (t) => t.type === 'recharge' && !t.deleted_at && (incomeIdsInScope === null || incomeIdsInScope.has(t.student_id));
+    const studentsInLocationScope = locationFilterId === null ? students : students.filter((s) => s.locationId === locationFilterId);
+    const incomeIdsInScope = new Set((incomeActiveFilter === 'all' ? studentsInLocationScope
+        : incomeActiveFilter === 'inactive' ? studentsInLocationScope.filter((s) => !isStudentActive(s))
+        : studentsInLocationScope.filter(isStudentActive)).map((s) => s.id));
+    const rechargeInScope = (t) => t.type === 'recharge' && !t.deleted_at && incomeIdsInScope.has(t.student_id);
 
     const grid = document.getElementById('feesStatsGrid');
     if (grid) {
@@ -3858,9 +3932,9 @@ function displayFeesTab() {
     // records, but "Show inactive" reveals everyone here too.
     const balanceGrid = document.getElementById('feesBalanceStatsGrid');
     if (balanceGrid) {
-        const activeForBalance = incomeActiveFilter === 'all' ? students
-            : incomeActiveFilter === 'inactive' ? students.filter((s) => !isStudentActive(s))
-            : students.filter(isStudentActive);
+        const activeForBalance = incomeActiveFilter === 'all' ? studentsInLocationScope
+            : incomeActiveFilter === 'inactive' ? studentsInLocationScope.filter((s) => !isStudentActive(s))
+            : studentsInLocationScope.filter(isStudentActive);
         const totalCredit = activeForBalance.filter((s) => s.v2CreditBalance > 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
         const totalOwed = activeForBalance.filter((s) => s.v2CreditBalance < 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
         const netBalance = totalCredit + totalOwed;
@@ -3977,10 +4051,13 @@ function renderPaymentHistory() {
 
 async function addExpense(event) {
     event.preventDefault();
+    const locationFilterId = getLocationIdFilter();
+    if (locationFilterId === null) { alert('Pick a specific location above before adding an expense — expenses belong to one location each.'); return; }
     const expenseData = {
         description: document.getElementById('expenseDesc').value,
         amount: parseFloat(document.getElementById('expenseAmount').value),
-        expenseDate: document.getElementById('expenseDate').value
+        expenseDate: document.getElementById('expenseDate').value,
+        location_id: locationFilterId
     };
     try {
         await insertExpensesWithSchemaFallback([expenseData]);
@@ -4043,10 +4120,18 @@ function displayReports() {
         return;
     }
 
+    // Location scope: expenses carry location_id directly; everything else
+    // (attendance, v2_credit_transactions) is keyed by student, so scope
+    // those through the student's own location_id. "All" = no filtering,
+    // combined view.
+    const locationFilterId = getLocationIdFilter();
+    const studentLocationById = new Map(students.map((s) => [s.id, s.locationId]));
+    const studentInScope = (sid) => locationFilterId === null || studentLocationById.get(Number(sid)) === locationFilterId;
+
     const reportAttendance = Object.entries(attendance).filter(([date]) => date >= fromDate && date <= toDate);
-    const reportExpenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= fromDate && e.expenseDate <= toDate);
+    const reportExpenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= fromDate && e.expenseDate <= toDate && (locationFilterId === null || e.location_id === locationFilterId));
     const reportRecharges = v2CreditTransactions.filter((t) => {
-        if (t.type !== 'recharge' || t.deleted_at) return false;
+        if (t.type !== 'recharge' || t.deleted_at || !studentInScope(t.student_id)) return false;
         const d = String(t.created_at).slice(0, 10);
         return d >= fromDate && d <= toDate;
     });
@@ -4059,12 +4144,12 @@ function displayReports() {
     // counting it again would double-count), they're purely for visibility
     // into everything that happened in the period, same as a passbook.
     const reportClassDeductions = v2CreditTransactions.filter((t) => {
-        if (t.type !== 'class_deduction' || t.deleted_at) return false;
+        if (t.type !== 'class_deduction' || t.deleted_at || !studentInScope(t.student_id)) return false;
         const d = String(t.attendance_date).slice(0, 10);
         return d >= fromDate && d <= toDate;
     });
     const reportAdjustments = v2CreditTransactions.filter((t) => {
-        if (t.type !== 'adjustment' || t.deleted_at) return false;
+        if (t.type !== 'adjustment' || t.deleted_at || !studentInScope(t.student_id)) return false;
         const d = String(t.created_at).slice(0, 10);
         return d >= fromDate && d <= toDate;
     });
@@ -4073,13 +4158,18 @@ function displayReports() {
     const uniqueStudentIds = new Set();
     let totalStudentAttendance = 0;
     reportAttendance.forEach(([date, dayAttendance]) => {
-        totalClassesHeld += 1;
+        let anyInScopeToday = false;
         Object.entries(dayAttendance).forEach(([sid, isPresent]) => {
-            if (isPresent) {
+            if (isPresent && studentInScope(sid)) {
                 totalStudentAttendance += 1;
                 uniqueStudentIds.add(sid);
+                anyInScopeToday = true;
             }
         });
+        // Only counts as "a class held" for this scope if someone from the
+        // selected location actually attended that day — a class at the
+        // other location on the same calendar date shouldn't inflate this.
+        if (anyInScopeToday) totalClassesHeld += 1;
     });
 
     const totalExpenses = reportExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -4970,7 +5060,9 @@ function populateAttendanceBatchFilter() {
     const select = document.getElementById('attendanceBatchFilter');
     if (!select) return;
     const current = select.value;
-    const batches = [...new Set(students.map((s) => s.batch).filter(Boolean))].sort();
+    const locationFilterId = getLocationIdFilter();
+    const studentsForFilter = locationFilterId === null ? students : students.filter((s) => s.locationId === locationFilterId);
+    const batches = [...new Set(studentsForFilter.map((s) => s.batch).filter(Boolean))].sort();
     select.innerHTML = '<option value="All">All Batches</option>' + batches.map((b) => `<option value="${escapeHtml(b)}">${escapeHtml(getBatchDisplayLabel(b))}</option>`).join('');
     if (batches.includes(current)) select.value = current;
 }
@@ -4999,6 +5091,19 @@ function displayAttendanceTab() {
         return;
     }
 
+    const locationFilterId = getLocationIdFilter();
+    if (locationFilterId === null) {
+        // "All Locations" can't mark attendance for two physical classes at
+        // once — pick a specific location in the switcher at the top first.
+        modeBadge.innerHTML = '';
+        liveBar.classList.add('hidden');
+        historicalNotice.classList.add('hidden');
+        grid.innerHTML = '';
+        emptyMsg.classList.remove('hidden');
+        emptyMsg.innerHTML = `${icon('map-pin', 26)}<h3>Pick a specific location above to take attendance</h3>`;
+        return;
+    }
+
     const isHistorical = attendanceDate < CUTOVER_DATE;
     modeBadge.innerHTML = isHistorical
         ? `<span class="badge badge-neutral">${icon('clock', 13)} Historical — read only</span>`
@@ -5006,7 +5111,8 @@ function displayAttendanceTab() {
 
     const batchFilter = document.getElementById('attendanceBatchFilter').value;
     const searchTerm = (document.getElementById('attendanceSearch').value || '').toLowerCase();
-    let filtered = batchFilter === 'All' ? students : students.filter((s) => s.batch === batchFilter);
+    const studentsHere = students.filter((s) => s.locationId === locationFilterId);
+    let filtered = batchFilter === 'All' ? studentsHere : studentsHere.filter((s) => s.batch === batchFilter);
     if (searchTerm) {
         filtered = filtered.filter((s) => s.name.toLowerCase().includes(searchTerm) || (s.parentName || '').toLowerCase().includes(searchTerm));
     }
@@ -5576,6 +5682,7 @@ async function saveStudent(event) {
         phone: document.getElementById('studentPhone').value.trim(),
         age: parseInt(document.getElementById('studentAge').value) || null,
         gender: document.getElementById('studentGender').value || null,
+        location_id: Number(document.getElementById('studentLocation').value) || null,
         batch: document.getElementById('studentBatch').value.trim(),
         codiceFiscale: document.getElementById('codiceFiscale').value.trim(),
         joinDate: document.getElementById('joinDate').value || null,
@@ -5587,6 +5694,7 @@ async function saveStudent(event) {
         monthlyFees: 0
     };
     if (!payload.name) { alert('Name is required.'); return; }
+    if (!payload.location_id) { alert('Location is required.'); return; }
 
     const isNewStudent = !currentEditingStudentId;
     // "Direct join" unticked (default) = first class is a free demo, no
@@ -5666,6 +5774,7 @@ function editStudent(studentId) {
     document.getElementById('studentPhone').value = s.phone || '';
     document.getElementById('studentAge').value = s.age || '';
     document.getElementById('studentGender').value = s.gender || '';
+    populateStudentLocationDropdown(s.locationId || '');
     populateStudentBatchDropdown(s.batch || '');
     document.getElementById('codiceFiscale').value = s.codiceFiscale || '';
     document.getElementById('joinDate').value = s.joinDate ? String(s.joinDate).slice(0, 10) : '';
@@ -5702,6 +5811,11 @@ function resetStudentForm() {
     document.getElementById('studentPhone').value = '';
     document.getElementById('studentAge').value = '';
     document.getElementById('studentGender').value = '';
+    // Default the new-student form to whichever location is currently
+    // selected in the global switcher, falling back to the first location
+    // when "All" is selected (there's no single sensible default then).
+    const defaultLocationId = getLocationIdFilter() || (locations[0] && locations[0].id) || '';
+    populateStudentLocationDropdown(defaultLocationId);
     populateStudentBatchDropdown('');
     document.getElementById('codiceFiscale').value = '';
     document.getElementById('joinDate').valueAsDate = new Date();
