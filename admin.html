@@ -121,7 +121,20 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 .student-info{ display:flex; align-items:center; gap:12px; flex:1 1 200px; min-width:0; }
 .student-info > div:last-child{ min-width:0; }
 .student-balance-block{ text-align:right; flex-shrink:0; }
-.student-actions{ display:flex; gap:6px; flex-shrink:0; }
+.student-actions{ display:flex; gap:6px; flex-shrink:0; align-items:center; }
+/* ---- on/off switch (Students list: Active / Inactive) ---- */
+.status-switch{ position:relative; display:inline-flex; align-items:center; width:92px; height:30px; flex-shrink:0; cursor:pointer; user-select:none; }
+.status-switch input{ position:absolute; opacity:0; width:0; height:0; }
+.status-switch .track{ position:absolute; inset:0; border-radius:999px; background:#cbd5e1; box-shadow:inset 0 1px 3px rgba(15,23,42,0.18); transition:background 0.2s; }
+.status-switch .knob{ position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.3); transition:transform 0.2s; }
+.status-switch .txt{ position:absolute; top:0; bottom:0; display:flex; align-items:center; font-size:0.74em; font-weight:700; letter-spacing:0.02em; color:#fff; transition:opacity 0.15s; }
+.status-switch .txt-on{ left:11px; opacity:0; }
+.status-switch .txt-off{ right:9px; color:#64748b; }
+.status-switch input:checked ~ .track{ background:var(--success); }
+.status-switch input:checked ~ .knob{ transform:translateX(62px); }
+.status-switch input:checked ~ .txt-on{ opacity:1; }
+.status-switch input:checked ~ .txt-off{ opacity:0; }
+.status-switch input:focus-visible ~ .track{ outline:2px solid var(--accent); outline-offset:2px; }
 .student-avatar{
     width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff; flex-shrink:0;
     display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.82em; background-size:cover; background-position:center;
@@ -440,6 +453,9 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                         <option value="All">All Batches</option>
                     </select>
                 </div>
+                <label class="day-chip" style="height:37px; box-sizing:border-box;">
+                    <input type="checkbox" id="attendanceShowInactive" onchange="displayAttendanceTab()"> Show inactive
+                </label>
             </div>
         </div>
 
@@ -1681,6 +1697,18 @@ async function setStudentActiveOverride(studentId, value) {
     if (currentViewingStudentId === studentId) renderStudentViewModal(student);
 }
 
+// Students-list shortcut for the same override as the Student View Modal's
+// status dropdown. Unticking forces inactive. Ticking goes back to "Auto"
+// when attendance alone would already make them active (so they can still
+// drop off automatically later), and only forces active otherwise.
+function toggleStudentActiveFromList(studentId, checked) {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+    if (!checked) { setStudentActiveOverride(studentId, false); return; }
+    const autoActive = isStudentActive({ ...student, activeOverride: null });
+    setStudentActiveOverride(studentId, autoActive ? null : true);
+}
+
 // ===== Per-class rate =====
 // What one class costs this student. A missing/blank/invalid override falls
 // back to the standard rate rather than producing NaN or a free class —
@@ -1760,6 +1788,10 @@ function renderStudentsList() {
                     ${badge}
                 </div>
                 <div class="student-actions">
+                    <label class="status-switch" title="Switch off to mark this student inactive">
+                        <input type="checkbox" role="switch" aria-label="Active" ${isStudentActive(s) ? 'checked' : ''} onchange="toggleStudentActiveFromList(${s.id}, this.checked)">
+                        <span class="track"></span><span class="txt txt-on">Active</span><span class="txt txt-off">Inactive</span><span class="knob"></span>
+                    </label>
                     <button class="btn btn-outline btn-sm" onclick="openStudentViewModal(${s.id})">${icon('chevron-right', 15)}</button>
                     <button class="btn btn-outline btn-sm" onclick="editStudent(${s.id})">${icon('edit', 15)}</button>
                     ${renderWaActionsMenu(s, `waMenu-list-${s.id}`)}
@@ -1903,6 +1935,14 @@ async function loadLocations() {
     const { data, error } = await supabaseClient.from('locations').select('*').order('id', { ascending: true });
     if (!error) locations = data || [];
     renderLocationSwitcher();
+    // The Add Student form is visible on page load, but its Location
+    // dropdown used to be filled only by resetStudentForm()/edit — so the
+    // first admission after a fresh load had no options and the required
+    // field blocked saving. Fill it here; keep any choice already made
+    // (loadAllData re-runs after every save), else default like
+    // resetStudentForm does.
+    const formLocation = document.getElementById('studentLocation');
+    populateStudentLocationDropdown(formLocation && formLocation.value ? undefined : (getLocationIdFilter() || ''));
 }
 function renderLocationSwitcher() {
     const el = document.getElementById('locationSwitcher');
@@ -1984,8 +2024,13 @@ function populateStudentLocationDropdown(selected) {
     const select = document.getElementById('studentLocation');
     if (!select) return;
     const current = selected !== undefined ? selected : select.value;
-    select.innerHTML = locations.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
-    select.value = current || (locations[0] && locations[0].id) || '';
+    // Every location is always offered, whatever the global switcher is on.
+    // No pre-chosen location (switcher on "All Locations") = a "Select"
+    // placeholder, so a new student's branch is a deliberate choice rather
+    // than silently defaulting to the first one.
+    select.innerHTML = '<option value="">— Select location —</option>'
+        + locations.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+    select.value = current || '';
 }
 function populateStudentBatchDropdown(selected) {
     const select = document.getElementById('studentBatch');
@@ -5265,7 +5310,16 @@ function displayAttendanceTab() {
 
     const batchFilter = document.getElementById('attendanceBatchFilter').value;
     const searchTerm = (document.getElementById('attendanceSearch').value || '').toLowerCase();
-    const studentsHere = students.filter((s) => s.locationId === locationFilterId);
+    // Inactive students are hidden from the list — unless "Show inactive"
+    // is ticked, or they're already marked present (or ticked, unsaved) on
+    // this date, so a saved attendance never seems to vanish, or they're
+    // matched by Search, so a returning student (inactive after months
+    // away) can still be found and marked present.
+    const showInactive = !!document.getElementById('attendanceShowInactive')?.checked;
+    const dateAttendanceForFilter = attendance[attendanceDate] || {};
+    const pendingForFilter = pendingAttendanceChanges[attendanceDate] || {};
+    const studentsHere = students.filter((s) => s.locationId === locationFilterId
+        && (showInactive || searchTerm || isStudentActive(s) || dateAttendanceForFilter[s.id] || s.id in pendingForFilter));
     let filtered = batchFilter === 'All' ? studentsHere : studentsHere.filter((s) => s.batch === batchFilter);
     if (searchTerm) {
         filtered = filtered.filter((s) => s.name.toLowerCase().includes(searchTerm) || (s.parentName || '').toLowerCase().includes(searchTerm));
@@ -5321,7 +5375,7 @@ function displayAttendanceTab() {
                 <div class="student-info">
                     ${renderAvatarHtml(s)}
                     <div>
-                        <div style="font-weight:700;">${escapeHtml(s.name)}${isDemo ? ` <span class="badge badge-neutral">${icon('check-circle', 12)} Demo</span>` : ''}</div>
+                        <div style="font-weight:700;">${escapeHtml(s.name)}${isDemo ? ` <span class="badge badge-neutral">${icon('check-circle', 12)} Demo</span>` : ''}${isStudentActive(s) ? '' : ` <span class="badge badge-neutral">Inactive</span>`}</div>
                         <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; ${escapeHtml(getBatchDisplayLabel(s.batch))}</div>
                     </div>
                 </div>
@@ -6241,7 +6295,7 @@ async function saveStudent(event) {
         monthlyFees: 0
     };
     if (!payload.name) { alert('Name is required.'); return; }
-    if (!payload.location_id) { alert('Location is required.'); return; }
+    if (!payload.location_id) { alert('Please select a location.'); return; }
 
     const isNewStudent = !currentEditingStudentId;
     // "Direct join" unticked (default) = first class is a free demo, no
@@ -6359,9 +6413,9 @@ function resetStudentForm() {
     document.getElementById('studentAge').value = '';
     document.getElementById('studentGender').value = '';
     // Default the new-student form to whichever location is currently
-    // selected in the global switcher, falling back to the first location
-    // when "All" is selected (there's no single sensible default then).
-    const defaultLocationId = getLocationIdFilter() || (locations[0] && locations[0].id) || '';
+    // selected in the global switcher; "All" leaves it on "Select location"
+    // (there's no single sensible default then).
+    const defaultLocationId = getLocationIdFilter() || '';
     populateStudentLocationDropdown(defaultLocationId);
     populateStudentBatchDropdown('');
     document.getElementById('codiceFiscale').value = '';
