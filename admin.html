@@ -122,18 +122,13 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 .student-info > div:last-child{ min-width:0; }
 .student-balance-block{ text-align:right; flex-shrink:0; }
 .student-actions{ display:flex; gap:6px; flex-shrink:0; align-items:center; }
-/* ---- on/off switch (Students list: Active / Inactive) ---- */
-.status-switch{ position:relative; display:inline-flex; align-items:center; width:92px; height:30px; flex-shrink:0; cursor:pointer; user-select:none; }
+/* ---- on/off switch (Students list: Active / Inactive) — green = active, grey = inactive ---- */
+.status-switch{ position:relative; display:inline-flex; width:36px; height:20px; flex-shrink:0; cursor:pointer; }
 .status-switch input{ position:absolute; opacity:0; width:0; height:0; }
-.status-switch .track{ position:absolute; inset:0; border-radius:999px; background:#cbd5e1; box-shadow:inset 0 1px 3px rgba(15,23,42,0.18); transition:background 0.2s; }
-.status-switch .knob{ position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.3); transition:transform 0.2s; }
-.status-switch .txt{ position:absolute; top:0; bottom:0; display:flex; align-items:center; font-size:0.74em; font-weight:700; letter-spacing:0.02em; color:#fff; transition:opacity 0.15s; }
-.status-switch .txt-on{ left:11px; opacity:0; }
-.status-switch .txt-off{ right:9px; color:#64748b; }
+.status-switch .track{ position:absolute; inset:0; border-radius:999px; background:#cbd5e1; transition:background 0.2s; }
+.status-switch .knob{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,0.3); transition:transform 0.2s; }
 .status-switch input:checked ~ .track{ background:var(--success); }
-.status-switch input:checked ~ .knob{ transform:translateX(62px); }
-.status-switch input:checked ~ .txt-on{ opacity:1; }
-.status-switch input:checked ~ .txt-off{ opacity:0; }
+.status-switch input:checked ~ .knob{ transform:translateX(16px); }
 .status-switch input:focus-visible ~ .track{ outline:2px solid var(--accent); outline-offset:2px; }
 .student-avatar{
     width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff; flex-shrink:0;
@@ -205,8 +200,10 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     .app-header{ padding:0 14px; }
     .tab-row{ padding:0 14px; }
     .form-grid-3{ grid-template-columns:1fr; gap:0; }
-    .student-balance-block{ flex-basis:100%; text-align:left; order:3; }
-    .student-actions{ flex-basis:100%; order:4; }
+    /* Name on its own line; balance and actions share the line under it: price left, buttons right. */
+    .student-info{ flex-basis:100%; }
+    .student-balance-block{ text-align:left; order:3; }
+    .student-actions{ order:4; margin-left:auto; }
     .attendance-checkbox-label{ margin-left:0; flex-basis:100%; }
     .pay-summary-grid{ grid-template-columns:1fr 1fr; }
     .fees-summary-grid{ grid-template-columns:1fr; }
@@ -1780,7 +1777,7 @@ function renderStudentsList() {
                     <div class="student-avatar" style="${avatarStyle}">${s.photo_path ? '' : initials}</div>
                     <div>
                         <div class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</div>
-                        <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; ${escapeHtml(s.phone || '—')} &nbsp;·&nbsp; ${escapeHtml(getBatchDisplayLabel(s.batch))} ${inactiveBadge} ${rateBadge}</div>
+                        <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; ${escapeHtml(getStudentPlace(s) || 'No address')} &nbsp;·&nbsp; ${escapeHtml(getBatchDisplayLabel(s.batch))} ${inactiveBadge} ${rateBadge}</div>
                     </div>
                 </div>
                 <div class="student-balance-block">
@@ -1788,17 +1785,37 @@ function renderStudentsList() {
                     ${badge}
                 </div>
                 <div class="student-actions">
-                    <label class="status-switch" title="Switch off to mark this student inactive">
+                    <label class="status-switch" title="${isStudentActive(s) ? 'Active — switch off to mark inactive' : 'Inactive — switch on to mark active'}">
                         <input type="checkbox" role="switch" aria-label="Active" ${isStudentActive(s) ? 'checked' : ''} onchange="toggleStudentActiveFromList(${s.id}, this.checked)">
-                        <span class="track"></span><span class="txt txt-on">Active</span><span class="txt txt-off">Inactive</span><span class="knob"></span>
+                        <span class="track"></span><span class="knob"></span>
                     </label>
-                    <button class="btn btn-outline btn-sm" onclick="openStudentViewModal(${s.id})">${icon('chevron-right', 15)}</button>
                     <button class="btn btn-outline btn-sm" onclick="editStudent(${s.id})">${icon('edit', 15)}</button>
                     ${renderWaActionsMenu(s, `waMenu-list-${s.id}`)}
                     <button class="btn btn-danger btn-sm" onclick="deleteStudent(${s.id})">${icon('trash', 15)}</button>
                 </div>
             </div>`;
     }).join('');
+}
+
+// "Comune, Provincia" from students.address (Via|N.Civico|CAP|Comune|
+// Provincia). Older rows were saved with empty slots dropped, so positions
+// can be shifted — with fewer than 5 pieces, the 5-digit CAP is used as the
+// anchor (comune and provincia follow it). '' when it can't be worked out.
+function getStudentPlace(s) {
+    const parts = String(s.address || '').split('|').map((p) => p.trim());
+    let comune = '';
+    let provincia = '';
+    if (parts.length === 5) {
+        comune = parts[3];
+        provincia = parts[4];
+    } else {
+        const capIdx = parts.findIndex((p) => /^\d{5}$/.test(p));
+        if (capIdx >= 0) {
+            comune = parts[capIdx + 1] || '';
+            provincia = parts[capIdx + 2] || '';
+        }
+    }
+    return [comune, provincia].filter(Boolean).join(', ');
 }
 
 // ===== Payments tab (Part C) =====
@@ -1939,10 +1956,9 @@ async function loadLocations() {
     // dropdown used to be filled only by resetStudentForm()/edit — so the
     // first admission after a fresh load had no options and the required
     // field blocked saving. Fill it here; keep any choice already made
-    // (loadAllData re-runs after every save), else default like
-    // resetStudentForm does.
-    const formLocation = document.getElementById('studentLocation');
-    populateStudentLocationDropdown(formLocation && formLocation.value ? undefined : (getLocationIdFilter() || ''));
+    // (loadAllData re-runs after every save), else start on "Select
+    // location" like resetStudentForm does.
+    populateStudentLocationDropdown();
 }
 function renderLocationSwitcher() {
     const el = document.getElementById('locationSwitcher');
@@ -5344,7 +5360,7 @@ function displayAttendanceTab() {
                         ${renderAvatarHtml(s)}
                         <div>
                             <div style="font-weight:700;">${escapeHtml(s.name)}</div>
-                            <div class="student-meta">${escapeHtml(s.parentName || '—')}</div>
+                            <div class="student-meta">${escapeHtml(s.parentName || '—')}${getStudentPlace(s) ? ` &nbsp;·&nbsp; ${escapeHtml(getStudentPlace(s))}` : ''}</div>
                         </div>
                     </div>
                     <span class="badge badge-success" style="margin-left:auto;">${icon('check', 13)} Present</span>
@@ -5376,7 +5392,7 @@ function displayAttendanceTab() {
                     ${renderAvatarHtml(s)}
                     <div>
                         <div style="font-weight:700;">${escapeHtml(s.name)}${isDemo ? ` <span class="badge badge-neutral">${icon('check-circle', 12)} Demo</span>` : ''}${isStudentActive(s) ? '' : ` <span class="badge badge-neutral">Inactive</span>`}</div>
-                        <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; ${escapeHtml(getBatchDisplayLabel(s.batch))}</div>
+                        <div class="student-meta">${escapeHtml(s.parentName || '—')}${getStudentPlace(s) ? ` &nbsp;·&nbsp; ${escapeHtml(getStudentPlace(s))}` : ''} &nbsp;·&nbsp; ${escapeHtml(getBatchDisplayLabel(s.batch))}</div>
                     </div>
                 </div>
                 <label class="attendance-checkbox-label">
@@ -5775,7 +5791,7 @@ function displayPracticeTab() {
                     ${renderAvatarHtml(s)}
                     <div>
                         <div style="font-weight:700;">${escapeHtml(s.name)}</div>
-                        <div class="student-meta">${escapeHtml(s.parentName || '—')}</div>
+                        <div class="student-meta">${escapeHtml(s.parentName || '—')}${getStudentPlace(s) ? ` &nbsp;·&nbsp; ${escapeHtml(getStudentPlace(s))}` : ''}</div>
                     </div>
                 </div>
                 <label class="attendance-checkbox-label">
@@ -6287,7 +6303,10 @@ async function saveStudent(event) {
         batch: document.getElementById('studentBatch').value.trim(),
         codiceFiscale: document.getElementById('codiceFiscale').value.trim(),
         joinDate: document.getElementById('joinDate').value || null,
-        address: addressParts.filter(Boolean).join('|'),
+        // Keep all five slots (empty ones too) so each piece stays in its
+        // own position — filtering out blanks used to shift e.g. the CAP
+        // into the N.Civico slot whenever the house number was left empty.
+        address: addressParts.some(Boolean) ? addressParts.join('|') : '',
         // Legacy pre-v2 column, not used for anything real anymore (v2
         // billing runs entirely on credit balance) — the table still has a
         // not-null constraint on it though, so a bare 0 satisfies that
@@ -6361,6 +6380,11 @@ async function saveStudent(event) {
 
         resetStudentForm();
         await loadAllData();
+        const savedLocation = getLocationName(payload.location_id);
+        const savedBatch = payload.batch ? getBatchDisplayLabel(payload.batch) : 'no batch yet';
+        alert(isNewStudent
+            ? `New student added: ${payload.name}\n\n${savedLocation} · ${savedBatch}`
+            : `${payload.name} updated.`);
     } catch (error) {
         alert('Error saving student: ' + error.message);
     }
@@ -6379,7 +6403,17 @@ function editStudent(studentId) {
     populateStudentBatchDropdown(s.batch || '');
     document.getElementById('codiceFiscale').value = s.codiceFiscale || '';
     document.getElementById('joinDate').value = s.joinDate ? String(s.joinDate).slice(0, 10) : '';
-    const addrParts = (s.address || '').split('|').map((p) => p.trim());
+    let addrParts = (s.address || '').split('|').map((p) => p.trim());
+    // Older rows dropped empty slots (see saveStudent), shifting positions.
+    // Re-anchor on the 5-digit CAP: street (+ house no.) before it, comune
+    // and provincia after — same rule as getStudentPlace().
+    if (addrParts.length > 1 && addrParts.length < 5) {
+        const capIdx = addrParts.findIndex((p) => /^\d{5}$/.test(p));
+        if (capIdx >= 0) {
+            const before = addrParts.slice(0, capIdx);
+            addrParts = [before[0] || '', before.slice(1).join(' '), addrParts[capIdx], addrParts[capIdx + 1] || '', addrParts[capIdx + 2] || ''];
+        }
+    }
     document.getElementById('addrIndirizzo').value = addrParts[0] || '';
     document.getElementById('addrHouse').value = addrParts[1] || '';
     document.getElementById('addrCap').value = addrParts[2] || '';
@@ -6412,11 +6446,9 @@ function resetStudentForm() {
     document.getElementById('studentPhone').value = '';
     document.getElementById('studentAge').value = '';
     document.getElementById('studentGender').value = '';
-    // Default the new-student form to whichever location is currently
-    // selected in the global switcher; "All" leaves it on "Select location"
-    // (there's no single sensible default then).
-    const defaultLocationId = getLocationIdFilter() || '';
-    populateStudentLocationDropdown(defaultLocationId);
+    // Always starts on "Select location" — the branch is a deliberate
+    // choice per student, never copied from the global switcher.
+    populateStudentLocationDropdown('');
     populateStudentBatchDropdown('');
     document.getElementById('codiceFiscale').value = '';
     document.getElementById('joinDate').valueAsDate = new Date();
