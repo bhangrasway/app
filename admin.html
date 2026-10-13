@@ -18,6 +18,9 @@
   window.Mediabunny = { Output, Mp4OutputFormat, WebMOutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality };
 </script>
 <script src="membership.js?v=2"></script>
+<script src="anagrafica.js?v=2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="fatture.js?v=8"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -194,6 +197,8 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 .login-error.show{ display:block; }
 
 .form-grid-3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+.cf-status{ font-size:0.76em; font-weight:600; margin-top:4px; min-height:1em; }
+.cf-status.ok{ color:var(--success); } .cf-status.bad{ color:var(--danger); } .cf-status.warn{ color:var(--warning); }
 
 @media (max-width:640px){
     .tab-panel{ padding:16px 14px 60px; }
@@ -287,9 +292,9 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <button class="tab-btn active" data-tab="students" onclick="switchTab('students')"></button>
         <button class="tab-btn" data-tab="attendance" onclick="switchTab('attendance')"></button>
         <button class="tab-btn" data-tab="payments" onclick="switchTab('payments')"></button>
+        <button class="tab-btn" data-tab="fatture" onclick="switchTab('fatture')"></button>
         <button class="tab-btn" data-tab="batches" onclick="switchTab('batches')"></button>
         <button class="tab-btn" data-tab="fees" onclick="switchTab('fees')"></button>
-        <button class="tab-btn" data-tab="reports" onclick="switchTab('reports')"></button>
         <button class="tab-btn" data-tab="website" onclick="switchTab('website')"></button>
         <button class="tab-btn" data-tab="performances" onclick="switchTab('performances')"></button>
     </div>
@@ -314,62 +319,102 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div id="passcodeReqList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
 
+        <div class="card hidden" id="birthdayCard" style="padding:18px 20px; margin-bottom:20px; border-color:#f5c6e0; background:linear-gradient(160deg, #fff7fb, var(--surface));">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+                <h3 style="font-size:0.95em; display:flex; align-items:center; gap:8px;" id="birthdayHeading">Compleanni</h3>
+                <button class="btn btn-primary btn-sm hidden" id="birthdayGroupBtn" onclick="sendBirthdayGroupMessage()">Messaggio per il gruppo</button>
+            </div>
+            <div id="birthdayList" style="display:flex; flex-direction:column; gap:6px;"></div>
+        </div>
+
+        <div class="card hidden" id="certSubmissionsCard" style="padding:18px 20px; margin-bottom:20px; border-color:#fbdca0;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <h3 style="font-size:0.95em;">Certificati medici da controllare</h3>
+                <span class="badge badge-warning" id="certSubmissionsCountBadge"></span>
+            </div>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">Un allievo ha caricato il certificato medico dal portale. Guardalo, poi «Usa» per archiviarlo come suo certificato, oppure «Rifiuta».</p>
+            <div id="certSubmissionsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+            <div id="noCertSubmissionsMsg" class="hidden"></div>
+        </div>
+
+        <div class="card hidden" id="detailReqCard" style="padding:18px 20px; margin-bottom:20px; border-color:#fbdca0;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <h3 style="font-size:0.95em;">Richieste di correzione dati</h3>
+                <span class="badge badge-warning" id="detailReqCountBadge"></span>
+            </div>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">Un allievo ha corretto i propri dati dal portale. Controlla prima → dopo: «Approva» li salva, «Rifiuta» li scarta.</p>
+            <div id="detailReqList" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+
         <div class="card" style="padding:18px 20px; margin-bottom:20px;">
-            <h3 id="formHeading" style="font-size:0.95em; margin-bottom:14px;">Add Student</h3>
+            <h3 id="formHeading" style="font-size:0.95em; margin-bottom:6px;">Nuovo allievo</h3>
+            <div id="studentFormNote" style="font-size:0.82em; color:var(--warning); font-weight:600; margin-bottom:12px; min-height:0;"></div>
             <form onsubmit="saveStudent(event)">
                 <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius-md); padding:10px 14px;">
                     <div id="studentPhotoPreview" style="width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;background-size:cover;background-position:center;flex-shrink:0;"></div>
                     <div>
-                        <div class="section-label" style="margin:0 0 6px;">Profile Photo</div>
+                        <div class="section-label" style="margin:0 0 6px;">Foto profilo</div>
                         <div style="display:flex; gap:8px; align-items:center;">
                             <button type="button" class="btn btn-outline btn-sm" onclick="openCameraCapture(uploadStudentPhotoBlob)" id="cameraBtnLabel"></button>
                             <label class="btn btn-outline btn-sm" style="cursor:pointer;" id="uploadBtnLabel">
+                                <span id="uploadBtnText" style="display:inline-flex; align-items:center; gap:6px;"></span>
                                 <input type="file" accept="image/*" style="display:none;" onchange="handleStudentPhotoInput(this)">
                             </label>
-                            <span id="studentPhotoRemoveBtn" onclick="removeStudentPhotoInput()" style="display:none;cursor:pointer;font-size:0.8em;color:var(--danger);font-weight:700;">Remove</span>
+                            <span id="studentPhotoRemoveBtn" onclick="removeStudentPhotoInput()" style="display:none;cursor:pointer;font-size:0.8em;color:var(--danger);font-weight:700;">Rimuovi</span>
                         </div>
                     </div>
                     <input type="hidden" id="studentPhotoPath">
                 </div>
 
                 <div class="form-grid-3">
-                    <div class="field"><label>Full Name</label><input type="text" id="studentName" required></div>
-                    <div class="field"><label>Parent Name</label><input type="text" id="parentName"></div>
-                    <div class="field"><label>Phone</label><input type="text" id="studentPhone"></div>
-                    <div class="field"><label>Age</label><input type="number" id="studentAge"></div>
-                    <div class="field"><label>Gender</label>
-                        <select id="studentGender"><option value="">—</option><option value="M">Male</option><option value="F">Female</option></select>
+                    <div class="section-label" style="grid-column:1/-1; margin:0;">Allievo</div>
+                    <div class="field"><label>Nome</label><input type="text" id="studentNome" required oninput="updateCfStatus()"></div>
+                    <div class="field"><label>Cognome</label><input type="text" id="studentCognome" required oninput="updateCfStatus()"></div>
+                    <div class="field"><label>Codice fiscale</label><input type="text" id="codiceFiscale" maxlength="16" style="text-transform:uppercase;" oninput="updateCfStatus()"><div id="codiceFiscaleStatus" class="cf-status"></div></div>
+                    <div class="field"><label>Telefono</label><input type="text" id="studentPhone"></div>
+                    <div class="field"><label>Età <span style="text-transform:none; letter-spacing:normal; font-weight:500; color:var(--ink-faint);">(dal codice fiscale)</span></label><input type="number" id="studentAge"></div>
+                    <div class="field"><label>Sesso</label>
+                        <select id="studentGender"><option value="">—</option><option value="M">Maschio</option><option value="F">Femmina</option></select>
                     </div>
-                    <div class="field"><label>Location</label><select id="studentLocation" onchange="populateStudentBatchDropdown()" required></select></div>
-                    <div class="field"><label>Batch</label><select id="studentBatch"></select></div>
-                    <div class="field"><label>Codice Fiscale</label><input type="text" id="codiceFiscale"></div>
-                    <div class="field"><label>Join Date</label><input type="date" id="joinDate"></div>
-                    <div class="field"><label>Via / Strada</label><input type="text" id="addrIndirizzo" placeholder="Via Roma"></div>
-                    <div class="field"><label>N. Civico</label><input type="text" id="addrHouse" placeholder="5"></div>
-                    <div class="field"><label>CAP</label><input type="text" id="addrCap" placeholder="26100" maxlength="10"></div>
-                    <div class="field"><label>Comune</label><input type="text" id="addrComune" placeholder="Cremona"></div>
-                    <div class="field"><label>Provincia</label><input type="text" id="addrProvincia" placeholder="Piacenza (PC)" maxlength="30"></div>
+
+                    <div class="section-label" style="grid-column:1/-1; margin:6px 0 0;">Genitore <span id="parentRequiredHint" style="text-transform:none; letter-spacing:normal; font-weight:600;"></span></div>
+                    <div class="field"><label>Nome genitore</label><input type="text" id="parentNome" oninput="updateCfStatus()"></div>
+                    <div class="field"><label>Cognome genitore</label><input type="text" id="parentCognome" oninput="updateCfStatus()"></div>
+                    <div class="field"><label>Codice fiscale genitore</label><input type="text" id="parentCodiceFiscale" maxlength="16" style="text-transform:uppercase;" oninput="updateCfStatus()"><div id="parentCodiceFiscaleStatus" class="cf-status"></div></div>
+
+                    <div class="section-label" style="grid-column:1/-1; margin:6px 0 0;">Indirizzo <span id="addressStatus" style="text-transform:none; letter-spacing:normal; font-weight:600;"></span></div>
+                    <div class="field"><label>Via / Piazza</label><input type="text" id="addrIndirizzo" placeholder="Via Trento" oninput="updateAddressStatus()"></div>
+                    <div class="field"><label>N. civico</label><input type="text" id="addrHouse" placeholder="5"></div>
+                    <div class="field"><label>Comune</label><input type="text" id="addrComune" placeholder="Scrivi e scegli dall'elenco…"><div style="font-size:0.72em; color:var(--ink-faint); margin-top:3px;">Frazione? Scegli il comune e scrivi la frazione nella via.</div></div>
+                    <div class="field"><label>Provincia</label><input type="text" id="addrProvincia" maxlength="2"></div>
+                    <div class="field"><label>CAP</label><input type="text" id="addrCap" placeholder="26100"></div>
+
+                    <div class="section-label" style="grid-column:1/-1; margin:6px 0 0;">Iscrizione</div>
+                    <div class="field"><label>Sede</label><select id="studentLocation" onchange="populateStudentBatchDropdown()" required></select></div>
+                    <div class="field"><label>Gruppo</label><select id="studentBatch"></select></div>
+                    <div class="field"><label>Data iscrizione</label><input type="date" id="joinDate"></div>
                     <div class="field" id="directJoinRow">
-                        <label>Direct Join</label>
+                        <label>Iscrizione diretta</label>
                         <label style="display:flex; align-items:center; gap:8px; margin:0; font-weight:600; text-transform:none; letter-spacing:normal; color:var(--ink); cursor:pointer; background:var(--accent-soft); border:1px solid #c7d9fb; border-radius:var(--radius-sm); padding:8px 11px; font-size:0.86em; box-sizing:border-box; height:37px;" title="First class counts and deducts credit immediately">
                             <input type="checkbox" id="directJoin" style="width:16px; height:16px; margin:0;">
-                            First class counts
+                            Prima lezione a pagamento
                         </label>
                     </div>
                     <div class="field" id="initialRechargeRow">
-                        <label>Initial Recharge (€)</label>
+                        <label>Ricarica iniziale (€)</label>
                         <input type="number" id="initialRechargeInput" step="1" value="0">
                     </div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" class="btn btn-primary" id="submitStudentBtn">Add Student</button>
-                    <button type="button" class="btn btn-outline hidden" id="cancelEditBtn" onclick="cancelEditStudent()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitStudentBtn">Aggiungi allievo</button>
+                    <button type="button" class="btn btn-outline hidden" id="cancelEditBtn" onclick="cancelEditStudent()">Annulla</button>
                 </div>
             </form>
         </div>
 
         <div style="display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap;">
             <input id="studentSearch" placeholder="Search by name or parent…" oninput="renderStudentsList()" style="flex:1; max-width:360px; padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em;">
+            <button class="btn btn-outline btn-sm" onclick="openDataCheckModal()" id="dataCheckBtn">Controllo dati <span class="badge badge-warning hidden" id="dataCheckCount" style="margin-left:4px;"></span></button>
             <select id="studentsActiveFilterSelect" onchange="setStudentsActiveFilter(this.value)" style="padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em; font-weight:600; color:var(--ink-soft); background:var(--bg);">
                 <option value="active">Active only</option>
                 <option value="inactive">Inactive only</option>
@@ -473,6 +518,20 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         </div>
     </div>
     <!-- PAYMENTS TAB (Part C) -->
+    <!-- FATTURE TAB (fatture.js / fatture_xml.sql) -->
+    <div class="tab-panel" data-panel="fatture">
+        <div class="page-head">
+            <h2>Fatture</h2>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" onclick="openManualFattura()">Aggiungi fattura già emessa</button>
+                <button class="btn btn-outline btn-sm" onclick="exportFattureCsv()">Esporta CSV</button>
+                <button class="btn btn-outline btn-sm" onclick="openFatturaSettings()">Impostazioni</button>
+            </div>
+        </div>
+        <p style="font-size:0.84em; color:var(--ink-soft); margin:-6px 0 14px;">Per fare una fattura: apri l'allievo e premi «Fattura» sulla ricarica. Scarica l'XML, caricalo su Fatture e Corrispettivi, poi segna qui l'esito.</p>
+        <div id="fattureTabContent"></div>
+    </div>
+
     <div class="tab-panel" data-panel="payments">
         <div class="page-head">
             <h2>Payments</h2>
@@ -521,7 +580,11 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     <div class="tab-panel" data-panel="batches">
         <div class="page-head">
             <h2>Batches</h2>
-            <button class="btn btn-outline btn-sm" onclick="downloadBatchesPdf()" id="downloadBatchesPdfBtnLabel"></button>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-primary btn-sm" onclick="openNewBatchModal()">+ Nuovo gruppo</button>
+                <button class="btn btn-outline btn-sm" onclick="openManageLocations()">Gestisci sedi</button>
+                <button class="btn btn-outline btn-sm" onclick="downloadBatchesPdf()" id="downloadBatchesPdfBtnLabel"></button>
+            </div>
         </div>
         <p style="color:var(--ink-soft); font-size:0.88em; margin:-8px 0 18px;">Roster and schedule for each batch, plus student requests to move batches. Editing a batch's day/time here never touches any student record.</p>
 
@@ -586,6 +649,11 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <p style="color:var(--ink-soft); font-size:0.88em; margin:0 0 12px; font-weight:700;">Student Balances</p>
         <div class="pay-summary-grid" id="feesBalanceStatsGrid" style="margin-bottom:20px;"></div>
 
+        <!-- Activity in the same period (was the Reports tab) -->
+        <div class="section-label">Activity in this period</div>
+        <div class="pay-summary-grid" id="feesActivityGrid" style="margin-bottom:10px;"></div>
+        <div id="feesActivitySummary" style="margin-bottom:20px;"></div>
+
         <div class="card" style="padding:18px 20px; margin-bottom:20px;">
             <h3 style="font-size:0.95em; margin-bottom:14px;">Add Expense</h3>
             <form onsubmit="addExpense(event)">
@@ -601,56 +669,17 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="section-label" id="feesExpensesListLabel">Expenses</div>
         <div id="expensesList" style="margin-bottom:26px;"></div>
 
-        <div class="card" style="padding:18px 20px;">
-            <h3 style="font-size:0.95em; margin-bottom:10px;">Transaction History</h3>
-            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+        <details class="card" style="padding:18px 20px;">
+            <summary style="cursor:pointer; font-size:0.95em; font-weight:700;">Recharge History <span id="rechargeHistoryCount" style="font-weight:600; color:var(--ink-faint);"></span></summary>
+            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin:14px 0;">
                 <div class="field" style="margin-bottom:0;"><label>From</label><input type="date" id="payHistFrom" onchange="renderPaymentHistory()"></div>
                 <div class="field" style="margin-bottom:0;"><label>To</label><input type="date" id="payHistTo" onchange="renderPaymentHistory()"></div>
+                <button class="btn btn-outline btn-sm" onclick="setPaymentHistoryLastMonth();">Last month</button>
                 <button class="btn btn-outline btn-sm" onclick="document.getElementById('payHistFrom').value='';document.getElementById('payHistTo').value='';renderPaymentHistory();">Show All</button>
             </div>
             <div id="paymentHistoryList"></div>
-        </div>
+        </details>
     </div>
-    <!-- REPORTS TAB (Part D) -->
-    <div class="tab-panel" data-panel="reports">
-        <div class="page-head"><h2>Reports</h2></div>
-
-        <div class="card" style="padding:16px 18px; margin-bottom:20px;">
-            <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-                <div class="field" style="margin-bottom:0;"><label>From</label><input type="date" id="reportFrom" onchange="displayReports()"></div>
-                <div class="field" style="margin-bottom:0;"><label>To</label><input type="date" id="reportTo" onchange="displayReports()"></div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <button class="btn btn-outline btn-sm" onclick="setReportRange('today')">Today</button>
-                    <button class="btn btn-outline btn-sm" onclick="setReportRange('week')">This Week</button>
-                    <button class="btn btn-outline btn-sm" onclick="setReportRange('month')">This Month</button>
-                    <button class="btn btn-primary btn-sm" onclick="displayReports()">Refresh</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="fees-summary-grid" id="reportsStatsGrid"></div>
-        <div id="reportsSummary"></div>
-        <div id="noReportsMsg" class="placeholder-card hidden"></div>
-
-        <div class="card" style="padding:18px 20px; margin:24px 0 20px;">
-            <h3 style="font-size:0.95em; margin-bottom:4px;">Pending Certificate Submissions</h3>
-            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 14px;">A student uploaded their medical certificate from the member portal. Preview it, then use it to file it as their official doctor certificate — or reject it if it doesn't check out.</p>
-            <div id="certSubmissionsList" style="display:flex; flex-direction:column; gap:8px;"></div>
-            <div id="noCertSubmissionsMsg" class="hidden" style="color:var(--ink-faint); font-size:0.88em;">No pending submissions.</div>
-        </div>
-
-        <div class="card" style="padding:18px 20px;">
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
-                <div>
-                    <h3 style="font-size:0.95em;">Tax Records</h3>
-                    <p style="font-size:0.84em; color:var(--ink-soft); margin:4px 0 0;">Click a student to view or add tax payments and their doctor certificate. PDFs stored in Supabase.</p>
-                </div>
-                <input id="taxSearch" placeholder="Search student…" oninput="renderTaxRecords()" style="padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); min-width:200px; font-size:0.88em;">
-            </div>
-            <div id="taxRecordsList"></div>
-        </div>
-    </div>
-
     <!-- TAX MODAL -->
     <div id="taxModal" class="modal-backdrop" onclick="if(event.target===this) closeTaxModal()">
         <div class="modal-box" style="max-width:640px;">
@@ -947,6 +976,12 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div class="section-label" id="svmOldPaymentsLabel"></div>
             <div id="svmOldPaymentsList" style="margin-bottom:6px;"></div>
 
+            <div class="section-label" id="svmDoctorLabel"></div>
+            <div id="svmDoctorCard"></div>
+
+            <div class="section-label" id="svmFattureLabel"></div>
+            <div id="svmFatture"></div>
+
             <div class="section-label" id="svmDocsLabel"></div>
             <div id="svmDocuments"></div>
         </div>
@@ -1046,6 +1081,132 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closeExtraChargeModal()">Cancel</button>
             <button class="btn btn-primary" onclick="confirmExtraCharge()" id="extraChargeSaveBtn">Charge</button>
+        </div>
+    </div>
+</div>
+
+<!-- FATTURA MODAL (fatture.js) -->
+<div id="fatturaModal" class="modal-backdrop" onclick="if(event.target===this) closeFatturaModal()">
+    <div class="modal-box" style="max-width:520px;">
+        <div class="modal-header">
+            <div>
+                <h3 id="fatturaModalTitle" style="font-size:1em;">Fattura</h3>
+                <div id="fatturaModalSubtitle" style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;"></div>
+            </div>
+            <button class="icon-btn-close" onclick="closeFatturaModal()" id="fatturaCloseBtn"></button>
+        </div>
+        <div class="modal-body" id="fatturaModalBody"></div>
+        <div class="modal-footer" id="fatturaModalFooter"></div>
+    </div>
+</div>
+
+<!-- FATTURA SETTINGS MODAL (fatture.js) -->
+<div id="fatturaSettingsModal" class="modal-backdrop" onclick="if(event.target===this) closeFatturaSettings()">
+    <div class="modal-box" style="max-width:560px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;">Impostazioni fattura</h3>
+            <button class="icon-btn-close" onclick="closeFatturaSettings()" id="fatturaSettingsCloseBtn"></button>
+        </div>
+        <div class="modal-body" id="fatturaSettingsBody"></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeFatturaSettings()">Annulla</button>
+            <button class="btn btn-primary" onclick="saveFatturaSettings()">Salva</button>
+        </div>
+    </div>
+</div>
+
+<!-- NUOVO GRUPPO (batch) MODAL -->
+<div id="newBatchModal" class="modal-backdrop" onclick="if(event.target===this) closeNewBatchModal()">
+    <div class="modal-box" style="max-width:440px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;">Nuovo gruppo</h3>
+            <button class="icon-btn-close" onclick="closeNewBatchModal()" id="newBatchCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <div class="field"><label>Sede</label><select id="nbLocation"></select></div>
+            <div class="field"><label>Nome del gruppo</label><input id="nbName" maxlength="40" placeholder="es. Principianti Castelvetro">
+                <div style="font-size:0.74em; color:var(--ink-faint); margin-top:3px;">Deve essere diverso dai gruppi di tutte le sedi (es. aggiungi il nome della sede).</div></div>
+            <div class="field"><label>Livello</label>
+                <select id="nbCategory"><option value="beginner">Principianti</option><option value="intermediate">Intermedio</option><option value="advance">Avanzato</option></select></div>
+            <div class="field"><label>Giorno</label><select id="nbDay"></select></div>
+            <div style="display:flex; gap:10px;">
+                <div class="field" style="flex:1;"><label>Inizio</label><input id="nbStart" type="time" value="16:00"></div>
+                <div class="field" style="flex:1;"><label>Fine</label><input id="nbEnd" type="time" value="18:00"></div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="field" style="flex:1;"><label>Capienza massima</label><input id="nbMax" type="number" min="1" value="30"></div>
+                <div class="field" style="flex:1;"><label>Minimo (facoltativo)</label><input id="nbMin" type="number" min="0" placeholder="—"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeNewBatchModal()">Annulla</button>
+            <button class="btn btn-primary" onclick="saveNewBatch()" id="nbSaveBtn">Crea gruppo</button>
+        </div>
+    </div>
+</div>
+
+<!-- GESTISCI SEDI MODAL -->
+<div id="manageLocationsModal" class="modal-backdrop" onclick="if(event.target===this) closeManageLocations()">
+    <div class="modal-box" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;">Sedi</h3>
+            <button class="icon-btn-close" onclick="closeManageLocations()" id="manageLocationsCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <div id="manageLocationsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="closeManageLocations(); openNewLocationModal();">+ Nuova sede</button>
+        </div>
+    </div>
+</div>
+
+<!-- NUOVA SEDE (location) MODAL -->
+<div id="newLocationModal" class="modal-backdrop" onclick="if(event.target===this) closeNewLocationModal()">
+    <div class="modal-box" style="max-width:460px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;" id="nlTitle">Nuova sede</h3>
+            <button class="icon-btn-close" onclick="closeNewLocationModal()" id="newLocationCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <div class="field"><label>Nome della sede</label><input id="nlName" maxlength="60" placeholder="es. Piacenza"></div>
+            <div class="field"><label>Indirizzo</label><input id="nlAddress" maxlength="160" placeholder="Via Roma 1, 29121 Piacenza PC"></div>
+            <div class="field"><label>Posizione (per il check-in degli allievi)</label>
+                <div style="display:flex; gap:6px;">
+                    <input id="nlCoords" placeholder="45.106313, 9.990563" style="flex:1;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="useCurrentPositionForLocation()">Posizione attuale</button>
+                </div>
+                <div style="font-size:0.74em; color:var(--ink-faint); margin-top:3px;">Su Google Maps tieni premuto sul posto e copia i numeri (latitudine, longitudine). Oppure, se sei lì, premi «Posizione attuale».</div></div>
+            <div class="field"><label>Raggio check-in (metri)</label><input id="nlRadius" type="number" min="50" value="1000"></div>
+            <div class="field"><label>Giorni di lezione</label><div id="nlDays" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
+            <div style="display:flex; gap:10px;">
+                <div class="field" style="flex:1;"><label>Check-in da</label><input id="nlStart" type="time" value="15:45"></div>
+                <div class="field" style="flex:1;"><label>a</label><input id="nlEnd" type="time" value="18:15"></div>
+            </div>
+            <div style="font-size:0.78em; color:var(--ink-faint);">Dopo aver creato la sede, aggiungi i suoi gruppi con «Nuovo gruppo».</div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeNewLocationModal()">Annulla</button>
+            <button class="btn btn-primary" onclick="saveNewLocation()" id="nlSaveBtn">Crea sede</button>
+        </div>
+    </div>
+</div>
+
+<!-- CONTROLLO DATI MODAL -->
+<div id="dataCheckModal" class="modal-backdrop" onclick="if(event.target===this) closeDataCheckModal()">
+    <div class="modal-box" style="max-width:640px;">
+        <div class="modal-header">
+            <div>
+                <h3 style="font-size:1em;">Controllo dati</h3>
+                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">Allievi con dati da completare o correggere prima di fare una fattura.</div>
+            </div>
+            <button class="icon-btn-close" onclick="closeDataCheckModal()" id="dataCheckCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.84em; font-weight:600; margin-bottom:12px; cursor:pointer;">
+                <input type="checkbox" id="dataCheckIncludeInactive" onchange="renderDataCheck()" style="width:16px; height:16px; margin:0;"> Includi allievi inattivi
+            </label>
+            <div id="dataCheckList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
     </div>
 </div>
@@ -1506,7 +1667,20 @@ function startPendingRequestsPolling() {
         loadBatchChangeRequests();
         loadCheckinRequests();
         loadPasscodeResetRequests();
+        loadDetailRequests();
+        loadCertSubmissions();
     }, 30000);
+}
+
+function studentAgeFromCf(cf, storedAge) {
+    const A = window.Anagrafica;
+    if (!A) return storedAge;
+    const age = A.ageOnDate(cf, null);
+    return age === null ? storedAge : age;
+}
+function studentBirthDateFromCf(cf) {
+    const v = window.Anagrafica ? window.Anagrafica.validateCodiceFiscale(cf) : { valid: false };
+    return v.valid ? v.birthDate : '';
 }
 
 async function loadAllData() {
@@ -1525,6 +1699,23 @@ async function loadAllData() {
             activeOverride: s.active_override === null || s.active_override === undefined ? null : !!s.active_override,
             perClassRate: s.per_class_rate === null || s.per_class_rate === undefined ? null : Number(s.per_class_rate),
             inPracticeGroup: !!s.in_practice_group,
+            // student_details.sql — separate anagrafica fields (null until filled)
+            nome: s.nome || '',
+            cognome: s.cognome || '',
+            parentNome: s.parent_nome || '',
+            parentCognome: s.parent_cognome || '',
+            parentCodiceFiscale: s.parent_codice_fiscale || '',
+            // Real age today, read from the codice fiscale (birth date is in
+            // it), so it never goes stale like the typed number does. Falls
+            // back to the stored age when there's no valid CF.
+            ageStored: s.age,
+            age: studentAgeFromCf(s.codiceFiscale ?? s.codice_fiscale ?? s.codicefiscale, s.age),
+            birthDate: studentBirthDateFromCf(s.codiceFiscale ?? s.codice_fiscale ?? s.codicefiscale),
+            addrVia: s.addr_via || '',
+            addrCivico: s.addr_civico || '',
+            addrCap: s.addr_cap || '',
+            addrComune: s.addr_comune || '',
+            addrProvincia: s.addr_provincia || '',
             locationId: s.location_id ?? s.locationId ?? null
         }));
 
@@ -1548,6 +1739,7 @@ async function loadAllData() {
         });
 
         v2CreditTransactions = await fetchAllRows('v2_credit_transactions');
+        await loadFattureData();
 
         // Own try/catch: if practice_sessions.sql hasn't been run yet, the
         // rest of the admin must still load — only practice mode is blocked.
@@ -1571,6 +1763,8 @@ async function loadAllData() {
         oldPayments = await fetchAllRows('fees_paid');
 
         renderStudentsList();
+        renderBirthdayCard();
+        window.Anagrafica.loadComuni().then(updateDataCheckCount).catch(updateDataCheckCount);
         populateAttendanceBatchFilter();
         const dateInput = document.getElementById('attendanceDate');
         if (dateInput && !dateInput.value) dateInput.valueAsDate = new Date();
@@ -1578,31 +1772,16 @@ async function loadAllData() {
         const practiceDateInput = document.getElementById('practiceDate');
         if (practiceDateInput && !practiceDateInput.value) practiceDateInput.value = getDefaultPracticeDate();
         displayPracticeTab();
+        renderFattureTab();
         renderPaymentsList();
         await loadBatchesData();
         await loadPerformancesTab();
         displayFeesTab();
-        const reportFromInput = document.getElementById('reportFrom');
-        const reportToInput = document.getElementById('reportTo');
-        // Default to "This Month" — same default window as the Income &
-        // Expenses tab (getFeesPeriodRange()'s default). This used to default
-        // to today-only, so a fresh look at Reports right after Income &
-        // Expenses (which shows the whole month) looked like income/expenses
-        // had vanished, when it was really just looking at a single day.
-        if (reportFromInput && !reportFromInput.value) {
-            const today = new Date();
-            // .value (a plain "YYYY-MM-DD" string via formatLocalDate) —
-            // NOT .valueAsDate, which interprets the Date object as UTC and
-            // silently rolls back to the previous day whenever the browser's
-            // local timezone is ahead of UTC (e.g. Italy in CEST: local
-            // midnight on the 1st is still 10pm UTC on the 31st).
-            reportFromInput.value = formatLocalDate(new Date(today.getFullYear(), today.getMonth(), 1));
-        }
-        if (reportToInput && !reportToInput.value) reportToInput.value = formatLocalDate(new Date());
         displayReports();
         await loadWebsiteTab();
         await loadTaxRecords();
-        renderTaxRecords();
+        await loadCertSubmissions();
+        renderFattureTab(); // old Tax Records entries to import are known only now
         // Must run before the request-count badges below: it rebuilds every
         // tab button's innerHTML from scratch (icon + label + a fresh, empty
         // badge span), so calling it after would silently wipe out whatever
@@ -1612,6 +1791,7 @@ async function loadAllData() {
         await loadBatchChangeRequests();
         await loadCheckinRequests();
         await loadPasscodeResetRequests();
+        await loadDetailRequests();
         startPendingRequestsPolling();
     } catch (error) {
         console.error('Error loading data:', error);
@@ -1769,7 +1949,8 @@ function renderStudentsList() {
         const badge = balance > 0
             ? `<span class="badge badge-success">${icon('check-circle', 13)} Has balance</span>`
             : `<span class="badge badge-warning">${icon('warning', 13)} Needs recharge</span>`;
-        const inactiveBadge = isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`;
+        const inactiveBadge = (isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`)
+            + (isBirthdayToday(s) ? ` <span class="badge" style="background:#fde7f3; color:#be185d;">${icon('calendar', 13)} Compleanno oggi</span>` : '');
         const rateBadge = hasCustomPerClassRate(s) ? `<span class="badge badge-neutral">${icon('credit-card', 13)} €${getPerClassRate(s)}/class</span>` : '';
         return `
             <div class="student-row">
@@ -1802,6 +1983,8 @@ function renderStudentsList() {
 // can be shifted — with fewer than 5 pieces, the 5-digit CAP is used as the
 // anchor (comune and provincia follow it). '' when it can't be worked out.
 function getStudentPlace(s) {
+    // New separate fields (student_details.sql) win when filled.
+    if (s.addrComune) return [s.addrComune, s.addrProvincia].filter(Boolean).join(', ');
     const parts = String(s.address || '').split('|').map((p) => p.trim());
     let comune = '';
     let provincia = '';
@@ -1911,7 +2094,8 @@ function renderPaymentsList() {
             .filter((t) => t.student_id === s.id && t.type === 'recharge' && !t.deleted_at)
             .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
         const lastRechargeLabel = lastRecharge ? String(lastRecharge.created_at).slice(0, 10) : 'Never';
-        const inactiveBadge = isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`;
+        const inactiveBadge = (isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`)
+            + (isBirthdayToday(s) ? ` <span class="badge" style="background:#fde7f3; color:#be185d;">${icon('calendar', 13)} Compleanno oggi</span>` : '');
         const rateBadge = hasCustomPerClassRate(s) ? `<span class="badge badge-neutral">${icon('credit-card', 13)} €${getPerClassRate(s)}/class</span>` : '';
         return `
             <div class="student-row">
@@ -1969,7 +2153,13 @@ function renderLocationSwitcher() {
 }
 function handleLocationSwitch(value) {
     currentLocationFilter = value;
+    loadCheckinRequests();
+    loadBatchChangeRequests();
+    loadPasscodeResetRequests();
+    loadDetailRequests();
+    loadCertSubmissions();
     try { localStorage.setItem('bs_admin_location_filter', value); } catch {}
+    renderBirthdayCard();
     renderStudentsList();
     renderPaymentsList();
     renderBatchRoster();
@@ -2001,7 +2191,14 @@ async function loadBatchesData() {
 // Stored value stays the English "Saturday"/"Sunday" (matches existing
 // batches.day rows, no migration needed) — only ever translated here, at
 // display time, to the Italian the studio actually uses.
-const BATCH_DAY_LABELS_IT = { Saturday: 'Sab', Sunday: 'Dom' };
+// Stored as the English day name (existing rows), shown in Italian.
+const BATCH_DAYS = [
+    { en: 'Monday', it: 'Lunedì', short: 'Lun', dow: 1 }, { en: 'Tuesday', it: 'Martedì', short: 'Mar', dow: 2 },
+    { en: 'Wednesday', it: 'Mercoledì', short: 'Mer', dow: 3 }, { en: 'Thursday', it: 'Giovedì', short: 'Gio', dow: 4 },
+    { en: 'Friday', it: 'Venerdì', short: 'Ven', dow: 5 }, { en: 'Saturday', it: 'Sabato', short: 'Sab', dow: 6 },
+    { en: 'Sunday', it: 'Domenica', short: 'Dom', dow: 0 }
+];
+const BATCH_DAY_LABELS_IT = Object.fromEntries(BATCH_DAYS.map((d) => [d.en, d.short]));
 function getBatchTimingLabel(batchName) {
     const b = batchList.find((x) => x.name === batchName);
     if (!b) return '';
@@ -2044,7 +2241,7 @@ function populateStudentLocationDropdown(selected) {
     // No pre-chosen location (switcher on "All Locations") = a "Select"
     // placeholder, so a new student's branch is a deliberate choice rather
     // than silently defaulting to the first one.
-    select.innerHTML = '<option value="">— Select location —</option>'
+    select.innerHTML = '<option value="">— Seleziona sede —</option>'
         + locations.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
     select.value = current || '';
 }
@@ -2057,7 +2254,7 @@ function populateStudentBatchDropdown(selected) {
     // student to a different location than the one you're currently viewing.
     const formLocationId = Number(document.getElementById('studentLocation')?.value || 0) || null;
     const batchesHere = formLocationId === null ? batchList : batchList.filter((b) => b.location_id === formLocationId);
-    const options = ['<option value="">— Batch to be selected —</option>']
+    const options = ['<option value="">— Gruppo da assegnare —</option>']
         .concat(batchesHere.filter((b) => b.active !== false).map((b) => `<option value="${escapeHtml(b.name)}">${escapeHtml(getBatchDisplayLabel(b.name))}</option>`));
     if (current && !batchList.some((b) => b.name === current)) {
         options.push(`<option value="${escapeHtml(current)}">${escapeHtml(current)} (not currently configured)</option>`);
@@ -2079,7 +2276,7 @@ function renderBatchRoster() {
         // Inactive students don't count toward roster or capacity — they're
         // still on the batch on their own record, so they reappear here
         // automatically the moment they become active again.
-        const roster = students.filter((s) => s.batch === b.name && isStudentActive(s));
+        const roster = students.filter((s) => s.batch === b.name && s.locationId === b.location_id && isStudentActive(s));
         const count = roster.length;
         const capacity = getBatchCapacityInfo(count, b);
         // Only batches at this same location are valid move targets — a
@@ -2107,8 +2304,7 @@ function renderBatchRoster() {
                         <div style="font-weight:700; font-size:1.02em;">${escapeHtml(b.name)} <span class="badge badge-neutral" style="font-weight:600;">${escapeHtml(getLocationName(b.location_id))}</span></div>
                         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; font-size:0.85em;">
                             <select id="batchDay_${b.id}" style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border);">
-                                <option value="Saturday" ${b.day === 'Saturday' ? 'selected' : ''}>Sabato</option>
-                                <option value="Sunday" ${b.day === 'Sunday' ? 'selected' : ''}>Domenica</option>
+                                ${BATCH_DAYS.map((d) => `<option value="${d.en}" ${b.day === d.en ? 'selected' : ''}>${d.it}</option>`).join('')}
                             </select>
                             <input id="batchStart_${b.id}" value="${escapeHtml(b.start_time || '')}" placeholder="1:30 PM" style="width:90px; padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border);">
                             <span style="color:var(--ink-faint);">–</span>
@@ -2139,11 +2335,20 @@ function renderBatchRoster() {
 // NAME that no longer exists (a real string, just an unrecognized one) — an
 // empty batch is falsy, so it was silently excluded from that list entirely
 // and had nowhere to surface until this card existed.
+// Batches tab lists follow the location switcher, and a student can only be
+// moved into a batch of their OWN location (never Castelvetro <-> Cremona).
+function studentInBatchLocationScope(s) {
+    const loc = getLocationIdFilter();
+    return loc === null || s.locationId === loc;
+}
+function batchesForStudentLocation(s) {
+    return batchList.filter((b) => b.active !== false && b.location_id === s.locationId);
+}
 function renderNoBatchList(activeBatches) {
     const card = document.getElementById('noBatchCard');
     const container = document.getElementById('noBatchList');
     if (!card || !container) return;
-    const unassigned = students.filter((s) => !s.batch && isStudentActive(s));
+    const unassigned = students.filter((s) => !s.batch && isStudentActive(s) && studentInBatchLocationScope(s));
     card.classList.toggle('hidden', unassigned.length === 0);
     if (unassigned.length === 0) return;
     document.getElementById('noBatchCountBadge').textContent = unassigned.length;
@@ -2158,7 +2363,7 @@ function renderNoBatchList(activeBatches) {
             </div>
             <select data-move-student="${s.id}" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
                 <option value="" disabled selected>Move to…</option>
-                ${activeBatches.map((x) => `<option value="${escapeHtml(x.name)}">${escapeHtml(getBatchDisplayLabel(x.name))}</option>`).join('')}
+                ${batchesForStudentLocation(s).map((x) => `<option value="${escapeHtml(x.name)}">${escapeHtml(getBatchDisplayLabel(x.name))}</option>`).join('')}
             </select>
         </div>`).join('');
     container.querySelectorAll('[data-move-student]').forEach((sel) => {
@@ -2181,7 +2386,10 @@ function renderUnmatchedBatchList(activeBatches) {
     // Inactive students don't count here either — same rule as the roster
     // cards above. If they become active again with a stale batch name,
     // they'll reappear on this list at that point.
-    const unmatched = students.filter((s) => s.batch && isStudentActive(s) && !activeBatches.some((b) => b.name === s.batch));
+    // Also catches a student sitting in another location's batch (e.g. a
+    // Castelvetro student in Cremona's "Principianti").
+    const unmatched = students.filter((s) => s.batch && isStudentActive(s) && studentInBatchLocationScope(s)
+        && !batchList.some((b) => b.active !== false && b.name === s.batch && b.location_id === s.locationId));
     card.classList.toggle('hidden', unmatched.length === 0);
     if (unmatched.length === 0) return;
     document.getElementById('unmatchedBatchCountBadge').textContent = unmatched.length;
@@ -2191,12 +2399,12 @@ function renderUnmatchedBatchList(activeBatches) {
                 ${renderAvatarHtml(s)}
                 <div>
                     <div class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</div>
-                    <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Age ${s.age ?? '—'} &nbsp;·&nbsp; Currently: "${escapeHtml(s.batch)}"</div>
+                    <div class="student-meta">${escapeHtml(s.parentName || '—')} &nbsp;·&nbsp; Age ${s.age ?? '—'} &nbsp;·&nbsp; Currently: "${escapeHtml(s.batch)}"${batchList.some((b) => b.name === s.batch && b.location_id !== s.locationId) ? ` <span class="badge badge-warning">batch of ${escapeHtml(getLocationName(batchList.find((b) => b.name === s.batch).location_id))}</span>` : ''}</div>
                 </div>
             </div>
             <select data-move-student="${s.id}" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
                 <option value="" disabled selected>Move to…</option>
-                ${activeBatches.map((x) => `<option value="${escapeHtml(x.name)}">${escapeHtml(getBatchDisplayLabel(x.name))}</option>`).join('')}
+                ${batchesForStudentLocation(s).map((x) => `<option value="${escapeHtml(x.name)}">${escapeHtml(getBatchDisplayLabel(x.name))}</option>`).join('')}
                 <option value="__no_batch__">— Batch to be selected —</option>
             </select>
         </div>`).join('');
@@ -2219,6 +2427,139 @@ async function moveStudentToBatch(studentId, newBatch) {
     renderBatchRoster();
     renderStudentsList();
     populateAttendanceBatchFilter();
+}
+
+// ===== Nuovo gruppo / Nuova sede =====
+// "16:00" -> "4:00 PM" — the text format every existing batch row uses.
+function timeTo12h(hhmm) {
+    const [h, m] = String(hhmm || '').split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+    const suffix = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+function openNewBatchModal() {
+    const locSel = document.getElementById('nbLocation');
+    locSel.innerHTML = locations.map((l) => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+    const current = getLocationIdFilter();
+    if (current !== null) locSel.value = String(current);
+    const dayDefault = (() => { const l = locations.find((x) => x.id === Number(locSel.value)); const d = l && l.active_days && l.active_days[0]; return BATCH_DAYS.find((x) => x.dow === d)?.en || 'Saturday'; })();
+    document.getElementById('nbDay').innerHTML = BATCH_DAYS.map((d) => `<option value="${d.en}" ${d.en === dayDefault ? 'selected' : ''}>${d.it}</option>`).join('');
+    document.getElementById('nbName').value = '';
+    document.getElementById('nbMin').value = '';
+    document.getElementById('nbMax').value = 30;
+    document.getElementById('newBatchModal').style.display = 'flex';
+}
+function closeNewBatchModal() { document.getElementById('newBatchModal').style.display = 'none'; }
+async function saveNewBatch() {
+    const name = document.getElementById('nbName').value.trim().replace(/\s+/g, ' ');
+    const locationId = Number(document.getElementById('nbLocation').value) || null;
+    const start = timeTo12h(document.getElementById('nbStart').value);
+    const end = timeTo12h(document.getElementById('nbEnd').value);
+    const maxCap = Number(document.getElementById('nbMax').value) || 30;
+    const minRaw = document.getElementById('nbMin').value;
+    if (!name) { alert('Scrivi il nome del gruppo.'); return; }
+    if (!locationId) { alert('Scegli la sede.'); return; }
+    if (!start || !end) { alert('Scegli orario di inizio e fine.'); return; }
+    // students.batch stores the NAME, so it must be unique across all sedi.
+    if (batchList.some((b) => b.name.toLowerCase() === name.toLowerCase())) { alert(`Esiste già un gruppo "${name}". Scegli un nome diverso (es. aggiungi la sede).`); return; }
+    const row = {
+        name, location_id: locationId,
+        day: document.getElementById('nbDay').value,
+        start_time: start, end_time: end,
+        category: document.getElementById('nbCategory').value,
+        max_capacity: maxCap,
+        min_capacity: minRaw === '' ? null : Number(minRaw),
+        sort_order: Math.max(0, ...batchList.map((b) => Number(b.sort_order) || 0)) + 1,
+        active: true
+    };
+    const { error } = await supabaseClient.from('batches').insert(row);
+    if (error) { alert('Impossibile creare il gruppo: ' + error.message); return; }
+    closeNewBatchModal();
+    await loadBatchesData();
+    alert(`Gruppo "${name}" creato (${getLocationName(locationId)}).`);
+}
+
+let editingLocationId = null;
+function openNewLocationModal(locationId) {
+    const l = locationId ? locations.find((x) => x.id === locationId) : null;
+    editingLocationId = l ? l.id : null;
+    document.getElementById('nlTitle').textContent = l ? `Modifica sede: ${l.name}` : 'Nuova sede';
+    document.getElementById('nlSaveBtn').textContent = l ? 'Salva' : 'Crea sede';
+    document.getElementById('nlName').value = l ? l.name : '';
+    document.getElementById('nlAddress').value = l ? l.address || '' : '';
+    document.getElementById('nlCoords').value = l && l.lat != null ? `${l.lat}, ${l.lng}` : '';
+    document.getElementById('nlRadius').value = l ? l.radius_meters || 1000 : 1000;
+    document.getElementById('nlStart').value = l ? String(l.start_time).slice(0, 5) : '15:45';
+    document.getElementById('nlEnd').value = l ? String(l.end_time).slice(0, 5) : '18:15';
+    const days = l ? (l.active_days || []).map(Number) : [];
+    document.getElementById('nlDays').innerHTML = BATCH_DAYS.map((d) => `<label class="day-chip"><input type="checkbox" class="nlDay" value="${d.dow}" ${days.includes(d.dow) ? 'checked' : ''}> ${d.short}</label>`).join('');
+    document.getElementById('newLocationModal').style.display = 'flex';
+}
+function openManageLocations() {
+    const list = document.getElementById('manageLocationsList');
+    // Sedi are never deleted or archived (everything points at them) — only
+    // renamed or given a new position / check-in window here.
+    const sorted = locations.slice().sort((a, b) => a.name.localeCompare(b.name));
+    list.innerHTML = sorted.map((l) => {
+        const n = students.filter((st) => st.locationId === l.id && isStudentActive(st)).length;
+        const days = BATCH_DAYS.filter((d) => (l.active_days || []).map(Number).includes(d.dow)).map((d) => d.short).join(', ');
+        return `
+        <div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                <div>
+                    <div style="font-weight:700;">${escapeHtml(l.name)}</div>
+                    <div style="font-size:0.8em; color:var(--ink-soft);">${escapeHtml(l.address || '—')}</div>
+                    <div style="font-size:0.78em; color:var(--ink-faint);">${n} allievi attivi · ${days || '—'} · check-in ${String(l.start_time).slice(0, 5)}–${String(l.end_time).slice(0, 5)}</div>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn btn-outline btn-sm" onclick="closeManageLocations(); openNewLocationModal(${l.id});">Modifica</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+    document.getElementById('manageLocationsModal').style.display = 'flex';
+}
+function closeManageLocations() { document.getElementById('manageLocationsModal').style.display = 'none'; }
+function closeNewLocationModal() { document.getElementById('newLocationModal').style.display = 'none'; }
+function useCurrentPositionForLocation() {
+    if (!navigator.geolocation) { alert('Questo dispositivo non può leggere la posizione.'); return; }
+    navigator.geolocation.getCurrentPosition(
+        (pos) => { document.getElementById('nlCoords').value = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`; },
+        () => alert('Posizione non disponibile. Copia le coordinate da Google Maps.'),
+        { enableHighAccuracy: true, timeout: 15000 }
+    );
+}
+async function saveNewLocation() {
+    const name = document.getElementById('nlName').value.trim().replace(/\s+/g, ' ');
+    const address = document.getElementById('nlAddress').value.trim();
+    const m = document.getElementById('nlCoords').value.match(/(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)/);
+    const days = Array.from(document.querySelectorAll('.nlDay:checked')).map((cb) => Number(cb.value));
+    const startTime = document.getElementById('nlStart').value;
+    const endTime = document.getElementById('nlEnd').value;
+    if (!name) { alert('Scrivi il nome della sede.'); return; }
+    if (locations.some((l) => l.id !== editingLocationId && l.name.toLowerCase() === name.toLowerCase())) { alert(`Esiste già una sede "${name}".`); return; }
+    if (!address) { alert('Scrivi l\'indirizzo.'); return; }
+    const lat = m ? Number(m[1]) : NaN, lng = m ? Number(m[2]) : NaN;
+    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) { alert('Coordinate non valide. Esempio: 45.106313, 9.990563'); return; }
+    if (days.length === 0) { alert('Scegli almeno un giorno di lezione.'); return; }
+    if (!startTime || !endTime || endTime <= startTime) { alert('Controlla l\'orario del check-in.'); return; }
+    const fields = {
+        name, address, lat, lng,
+        radius_meters: Number(document.getElementById('nlRadius').value) || 1000,
+        active_days: days, start_time: startTime, end_time: endTime
+    };
+    const { error } = editingLocationId
+        ? await supabaseClient.from('locations').update(fields).eq('id', editingLocationId)
+        : await supabaseClient.from('locations').insert(fields);
+    if (error) { alert('Impossibile salvare la sede: ' + error.message); return; }
+    const wasEdit = !!editingLocationId;
+    closeNewLocationModal();
+    await loadLocations();
+    populateStudentLocationDropdown();
+    renderStudentsList();
+    if (wasEdit) { alert(`Sede "${name}" aggiornata.`); openManageLocations(); }
+    else alert(`Sede "${name}" creata. Ora aggiungi i suoi gruppi con «Nuovo gruppo».`);
 }
 
 async function saveBatchSchedule(batchId) {
@@ -3805,7 +4146,7 @@ async function downloadBatchesPdf() {
     const generatedOn = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
     const sections = activeBatches.map((b) => {
-        const roster = students.filter((s) => s.batch === b.name && isStudentActive(s))
+        const roster = students.filter((s) => s.batch === b.name && s.locationId === b.location_id && isStudentActive(s))
             .slice().sort((a, c) => a.name.localeCompare(c.name));
         const capacity = getBatchCapacityInfo(roster.length, b);
         const rows = roster.length
@@ -3883,11 +4224,12 @@ async function downloadBatchesPdf() {
 }
 
 async function loadBatchChangeRequests() {
-    const { data, error } = await supabaseClient
+    const { data: rawRows, error } = await supabaseClient
         .from('batch_change_requests')
         .select('*')
         .eq('status', 'pending')
         .order('requested_at', { ascending: false });
+    const data = requestsInLocationScope(rawRows);
 
     const list = document.getElementById('batchRequestsList');
     const emptyMsg = document.getElementById('noBatchRequestsMsg');
@@ -4045,7 +4387,10 @@ function displayFeesTab() {
     document.getElementById('feesCustomDateRow').classList.toggle('hidden', feesPeriodMode !== 'custom');
 
     const { from, to, label } = getFeesPeriodRange();
-    document.getElementById('feesPeriodSubtitle').textContent = `Cash flow for ${label} (${formatShortDate(from)} – ${formatShortDate(to)}) — recharges collected and expenses recorded.`;
+    displayReports();
+    const feesLocationId = getLocationIdFilter();
+    const feesLocationLabel = feesLocationId === null ? 'all locations' : getLocationName(feesLocationId);
+    document.getElementById('feesPeriodSubtitle').innerHTML = `<strong style="color:var(--ink);">${escapeHtml(feesLocationId === null ? 'All locations' : feesLocationLabel)}</strong> · Cash flow for ${label} (${formatShortDate(from)} – ${formatShortDate(to)}) — recharges collected and expenses recorded. Switch location at the top to see each one separately.`;
 
     // Same isolation as v2_credit_balance/v2_credit_transactions: expenses
     // is the SAME table admin.html already recorded into pre-cutover, so
@@ -4056,7 +4401,7 @@ function displayFeesTab() {
     const locationFilterId = getLocationIdFilter();
     const v2Expenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= CUTOVER_DATE && (locationFilterId === null || e.location_id === locationFilterId));
     const totalExpenseAllTime = v2Expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    document.getElementById('inactiveIncomeCount').textContent = students.filter((s) => !isStudentActive(s)).length;
+    document.getElementById('inactiveIncomeCount').textContent = students.filter((s) => !isStudentActive(s) && (locationFilterId === null || s.locationId === locationFilterId)).length;
 
     // Expenses carry their own location_id directly (filtered above, since
     // they're studio-wide, not tied to a student) — recharges (real income)
@@ -4154,9 +4499,24 @@ function displayFeesTab() {
     renderPaymentHistory();
 }
 
+// Default window: the last month (same day a month ago -> today). Set once,
+// so "Show All" (empty dates) stays empty instead of snapping back.
+let paymentHistoryDefaultsSet = false;
+function setPaymentHistoryLastMonth() {
+    const today = formatLocalDate(new Date());
+    document.getElementById('payHistFrom').value = addMonthsToDate(today, -1);
+    document.getElementById('payHistTo').value = today;
+    renderPaymentHistory();
+}
 function renderPaymentHistory() {
     const container = document.getElementById('paymentHistoryList');
     if (!container) return;
+    if (!paymentHistoryDefaultsSet) {
+        paymentHistoryDefaultsSet = true;
+        const today = formatLocalDate(new Date());
+        document.getElementById('payHistFrom').value = addMonthsToDate(today, -1);
+        document.getElementById('payHistTo').value = today;
+    }
     const from = document.getElementById('payHistFrom')?.value || '';
     const to = document.getElementById('payHistTo')?.value || '';
 
@@ -4164,8 +4524,15 @@ function renderPaymentHistory() {
     // class_deduction, which belongs to the per-student Transaction Ledger
     // instead, since surfacing every class charge here would bury the
     // income-tracking purpose of this card under routine attendance entries.
+    // Recharges only (money received). Adjustments and every deduction are
+    // in "Show every charge in this period" above.
+    // Same location scope as the rest of the tab: a recharge belongs to the
+    // location of the student who paid it.
+    const historyLocationId = getLocationIdFilter();
+    const studentLocation = new Map(students.map((s) => [s.id, s.locationId]));
     const records = v2CreditTransactions.filter((t) => {
-        if (t.type !== 'recharge' && t.type !== 'adjustment') return false;
+        if (t.type !== 'recharge') return false;
+        if (historyLocationId !== null && studentLocation.get(t.student_id) !== historyLocationId) return false;
         const d = String(t.created_at).slice(0, 10);
         if (!d) return false;
         if (from && d < from) return false;
@@ -4173,8 +4540,10 @@ function renderPaymentHistory() {
         return true;
     });
 
+    const countEl = document.getElementById('rechargeHistoryCount');
+    if (countEl) countEl.textContent = `(${records.filter((t) => !t.deleted_at).length}${from || to ? '' : ', all time'})`;
     if (records.length === 0) {
-        container.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em; padding:12px 0;">No transactions found for this period.</div>`;
+        container.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em; padding:12px 0;">No recharges in this period.</div>`;
         return;
     }
 
@@ -4280,20 +4649,15 @@ function setReportRange(range) {
     displayReports();
 }
 
+// Formerly the Reports tab — now the "Activity in this period" block of the
+// Income & Expense tab, using that tab's own period (getFeesPeriodRange).
+// Income / expenses / profit are already shown there, so only attendance
+// figures and the per-student charge breakdown are rendered here.
 function displayReports() {
-    const fromDate = document.getElementById('reportFrom').value;
-    const toDate = document.getElementById('reportTo').value;
-    const grid = document.getElementById('reportsStatsGrid');
-    const summary = document.getElementById('reportsSummary');
-    const emptyMsg = document.getElementById('noReportsMsg');
-    if (!grid || !summary || !emptyMsg) return;
-
-    if (!fromDate || !toDate) {
-        grid.innerHTML = '';
-        emptyMsg.classList.add('hidden');
-        summary.innerHTML = `<div style="color:var(--ink-soft); font-size:0.9em;">Select a From and To date.</div>`;
-        return;
-    }
+    const { from: fromDate, to: toDate } = getFeesPeriodRange();
+    const grid = document.getElementById('feesActivityGrid');
+    const summary = document.getElementById('feesActivitySummary');
+    if (!grid || !summary) return;
 
     // Location scope: expenses carry location_id directly; everything else
     // (attendance, v2_credit_transactions) is keyed by student, so scope
@@ -4364,55 +4728,25 @@ function displayReports() {
         && reportClassDeductions.length === 0 && reportPracticeFees.length === 0 && reportExtraCharges.length === 0 && reportAdjustments.length === 0;
     if (noData) {
         grid.innerHTML = '';
-        summary.innerHTML = '';
-        emptyMsg.classList.remove('hidden');
-        emptyMsg.innerHTML = `${icon('file-text', 26)}<h3>No data for this period</h3>`;
+        summary.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em;">No classes or charges in this period.</div>`;
         return;
     }
-    emptyMsg.classList.add('hidden');
 
     const profitColor = profit >= 0 ? 'var(--accent-ink)' : 'var(--danger)';
     const profitBg = profit >= 0 ? 'var(--accent-soft)' : 'var(--danger-soft)';
     const profitBorder = profit >= 0 ? '#c7d9fb' : '#f7c2c2';
+    const chargesTotal = (list) => list.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
     grid.innerHTML = `
-        <div class="stat-tile hero" style="background:var(--success-soft); border-color:#bbf0d1;"><div class="label" style="color:var(--success);">Income</div><div class="value" style="color:var(--success);">€${Math.round(totalIncome)}</div></div>
-        <div class="stat-tile hero" style="background:var(--danger-soft); border-color:#f7c2c2;"><div class="label" style="color:var(--danger);">Expenses</div><div class="value" style="color:var(--danger);">€${Math.round(totalExpenses)}</div></div>
-        <div class="stat-tile hero" style="background:${profitBg}; border-color:${profitBorder};"><div class="label" style="color:${profitColor};">Profit</div><div class="value" style="color:${profitColor};">€${Math.round(profit)}</div></div>
         <div class="stat-tile hero"><div class="label">Classes Held</div><div class="value">${totalClassesHeld}</div></div>
         <div class="stat-tile hero"><div class="label">Students Present</div><div class="value">${uniqueStudentIds.size}</div></div>
         <div class="stat-tile hero"><div class="label">Total Attendances</div><div class="value">${totalStudentAttendance}</div></div>
+        <div class="stat-tile hero"><div class="label">Class charges</div><div class="value">€${Math.round(chargesTotal(reportClassDeductions))}</div></div>
+        <div class="stat-tile hero"><div class="label">Practice + other charges</div><div class="value">€${Math.round(chargesTotal(reportPracticeFees) + chargesTotal(reportExtraCharges))}</div></div>
     `;
 
-    let breakdownHtml = `<div class="section-label">Report Period: ${fromDate} to ${toDate}</div>`;
-
-    if (reportRecharges.length > 0) {
-        breakdownHtml += `<div style="font-weight:700; color:var(--success); margin:14px 0 8px; font-size:0.9em;">Recharges Received (${reportRecharges.length})</div>`;
-        const grouped = {};
-        reportRecharges.forEach((t) => {
-            const d = String(t.created_at).slice(0, 10);
-            if (!grouped[d]) grouped[d] = [];
-            grouped[d].push(t);
-        });
-        Object.keys(grouped).sort((a, b) => b.localeCompare(a)).forEach((date) => {
-            grouped[date].forEach((t) => {
-                const s = students.find((x) => x.id === t.student_id);
-                breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 14px; background:var(--bg); border-left:3px solid var(--success); border-radius:var(--radius-sm); margin-bottom:5px; font-size:0.9em;">
-                    <span>${escapeHtml(s?.name || 'Unknown')} <span style="color:var(--ink-faint); font-size:0.85em;">(${date})</span></span>
-                    <strong style="color:var(--success);">€${t.amount}</strong>
-                </div>`;
-            });
-        });
-    }
-
-    if (reportExpenses.length > 0) {
-        breakdownHtml += `<div style="font-weight:700; color:var(--danger); margin:14px 0 8px; font-size:0.9em;">Expenses (${reportExpenses.length})</div>`;
-        reportExpenses.forEach((e) => {
-            breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 14px; background:var(--bg); border-left:3px solid var(--danger); border-radius:var(--radius-sm); margin-bottom:5px; font-size:0.9em;">
-                <span>${escapeHtml(e.description)} <span style="color:var(--ink-faint); font-size:0.85em;">(${e.expenseDate})</span></span>
-                <strong style="color:var(--danger);">€${Math.round(e.amount || 0)}</strong>
-            </div>`;
-        });
-    }
+    // Recharges and expenses are already listed in this tab (Transaction
+    // History / Expenses), so the breakdown only covers what's deducted.
+    let breakdownHtml = '';
 
     if (reportClassDeductions.length > 0) {
         breakdownHtml += `<div style="font-weight:700; color:var(--ink-soft); margin:14px 0 8px; font-size:0.9em;">Class Charges (${reportClassDeductions.length})</div>`;
@@ -4472,7 +4806,10 @@ function displayReports() {
             });
     }
 
-    summary.innerHTML = breakdownHtml;
+    const chargeCount = reportClassDeductions.length + reportPracticeFees.length + reportExtraCharges.length + reportAdjustments.length;
+    summary.innerHTML = chargeCount
+        ? `<details><summary style="cursor:pointer; font-size:0.86em; font-weight:700; color:var(--ink-soft);">Show every charge in this period (${chargeCount})</summary>${breakdownHtml}</details>`
+        : '';
 }
 
 // ===== Tax Records + Doctor Certificate (Reports tab) =====
@@ -4562,8 +4899,13 @@ function setTaxRecord(studentId, record) {
     _upsertTaxRecord(studentId, record);
 }
 
+// The Reports tab's Tax Records list is gone: doctor certificates live in
+// each student's view now (renderStudentDoctorCard) and fatture in the
+// Fatture tab. Kept as the refresh hook the certificate helpers call.
 function renderTaxRecords() {
     loadCertSubmissions();
+    refreshStudentDoctorCard();
+    return;
     const container = document.getElementById('taxRecordsList');
     if (!container) return;
     const term = (document.getElementById('taxSearch')?.value || '').toLowerCase();
@@ -4615,6 +4957,8 @@ function closeTaxModal() {
     renderTaxRecords();
 }
 function renderTaxModal() {
+    refreshStudentDoctorCard();
+    if (document.getElementById('taxModal')?.style.display !== 'flex') return;
     const s = students.find((x) => x.id === currentTaxStudentId);
     if (!s) return;
     const rec = getTaxRecord(s.id);
@@ -4765,6 +5109,64 @@ function setDoctorCertExpiry(dateValue) {
     rec.doctorCertExpiresAt = dateValue || '';
     setTaxRecord(currentTaxStudentId, rec);
 }
+// ===== Doctor certificate card (student view) =====
+// Same data and helpers as before (tax_records.has_doctor / doctor_pdf_* /
+// doctor_cert_expires_at, upload/view/remove/expiry functions above), now
+// shown in every student's view instead of the removed Reports tab. The
+// helpers act on currentTaxStudentId, so the card sets it to this student.
+function renderStudentDoctorCard(s) {
+    const label = document.getElementById('svmDoctorLabel');
+    const box = document.getElementById('svmDoctorCard');
+    if (!label || !box || !s) return;
+    currentTaxStudentId = s.id;
+    const rec = getTaxRecord(s.id);
+    const today = formatLocalDate(new Date());
+    const exp = rec.doctorCertExpiresAt ? String(rec.doctorCertExpiresAt).slice(0, 10) : '';
+    let statusBadge;
+    if (!rec.hasDoctor && !rec.doctorPdfPath) statusBadge = `<span class="badge badge-danger">Mancante</span>`;
+    else if (exp && exp < today) statusBadge = `<span class="badge badge-danger">Scaduto il ${formatShortDate(exp)}</span>`;
+    else if (exp && exp <= addMonthsToDate(today, 1)) statusBadge = `<span class="badge badge-warning">Scade il ${formatShortDate(exp)}</span>`;
+    else if (exp) statusBadge = `<span class="badge badge-success">Valido fino al ${formatShortDate(exp)}</span>`;
+    else statusBadge = `<span class="badge badge-success">In archivio</span>`;
+    const pending = (certSubmissionsCache || []).filter((x) => x.student_id === s.id);
+    label.innerHTML = iconLabel('file-text', 'Certificato medico', 13);
+    box.innerHTML = `
+        <div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:10px; font-size:0.86em;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer;">
+                    <input type="checkbox" ${rec.hasDoctor ? 'checked' : ''} onchange="toggleDoctorCertificate(this.checked); refreshStudentDoctorCard();" style="width:16px; height:16px; margin:0;"> Certificato in archivio
+                </label>
+                ${statusBadge}
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                ${rec.doctorPdfPath
+                    ? `<button class="btn btn-outline btn-sm" onclick="viewDoctorPdf()">Guarda</button><button class="btn btn-outline btn-sm" onclick="deleteDoctorPdf()">Rimuovi file</button>`
+                    : `<label class="btn btn-outline btn-sm" style="cursor:pointer;"><span id="uploadDoctorPdfBtnText">Carica certificato</span><input type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="uploadDoctorPdf(this)"></label>`}
+                <label style="display:flex; align-items:center; gap:5px; color:var(--ink-soft); font-weight:600;">Scadenza
+                    <input type="date" value="${exp}" onchange="setDoctorCertExpiry(this.value); refreshStudentDoctorCard();" style="padding:4px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em;">
+                </label>
+            </div>
+            <div id="certDeletionNote" style="font-size:0.85em; color:var(--warning); margin-top:6px;"></div>
+            ${pending.map((sub) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:8px 10px; background:var(--warning-soft); border-radius:var(--radius-sm);">
+                    <span><strong>Nuovo certificato dal portale</strong> · ${formatShortDate(sub.submitted_at)}</span>
+                    <span style="display:flex; gap:6px;">
+                        <button class="btn btn-outline btn-sm" onclick="previewCertSubmission('${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Guarda</button>
+                        <button class="btn btn-success btn-sm" onclick="useCertificateSubmission(${sub.id}, ${sub.student_id}, '${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Usa</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectCertificateSubmission(${sub.id})">Rifiuta</button>
+                    </span>
+                </div>`).join('')}
+        </div>`;
+    loadCertDeletionNote(s.id);
+}
+function refreshStudentDoctorCard() {
+    if (typeof currentViewingStudentId === 'undefined' || !currentViewingStudentId) return;
+    const modal = document.getElementById('studentViewModal');
+    if (modal && modal.style.display === 'none') return;
+    const s = students.find((x) => x.id === currentViewingStudentId);
+    if (s) renderStudentDoctorCard(s);
+}
+
 async function loadCertDeletionNote(studentId) {
     const note = document.getElementById('certDeletionNote');
     if (!note) return;
@@ -4780,18 +5182,23 @@ async function loadCertDeletionNote(studentId) {
 }
 
 async function loadCertSubmissions() {
-    const { data, error } = await supabaseClient
+    const { data: rawRows, error } = await supabaseClient
         .from('medical_certificate_submissions')
         .select('*')
         .eq('status', 'pending')
         .order('submitted_at', { ascending: false });
+    const data = requestsInLocationScope(rawRows);
     certSubmissionsCache = (!error && data) ? data : [];
     const list = document.getElementById('certSubmissionsList');
-    const emptyMsg = document.getElementById('noCertSubmissionsMsg');
-    if (!list || !emptyMsg) return;
+    const card = document.getElementById('certSubmissionsCard');
+    if (!list || !card) return;
+    certPendingCount = certSubmissionsCache.length;
+    card.classList.toggle('hidden', certPendingCount === 0);
+    document.getElementById('certSubmissionsCountBadge').textContent = certPendingCount;
+    updateStudentsTabBadge();
+    refreshStudentDoctorCard();
     list.innerHTML = '';
-    if (certSubmissionsCache.length === 0) { emptyMsg.classList.remove('hidden'); return; }
-    emptyMsg.classList.add('hidden');
+    if (certSubmissionsCache.length === 0) return;
     certSubmissionsCache.forEach((sub) => {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; flex-wrap:wrap; gap:8px;';
@@ -4801,9 +5208,9 @@ async function loadCertSubmissions() {
                 <div style="font-size:0.8em; color:var(--ink-soft);">${formatShortDate(sub.submitted_at)}</div>
             </div>
             <div style="display:flex; gap:6px;">
-                <button class="btn btn-outline btn-sm">Preview</button>
-                <button class="btn btn-success btn-sm">Use this submission</button>
-                <button class="btn btn-danger btn-sm">Reject</button>
+                <button class="btn btn-outline btn-sm">Guarda</button>
+                <button class="btn btn-success btn-sm">Usa</button>
+                <button class="btn btn-danger btn-sm">Rifiuta</button>
             </div>`;
         const [previewBtn, useBtn, rejectBtn] = row.querySelectorAll('button');
         previewBtn.addEventListener('click', () => previewCertSubmission(sub.file_path));
@@ -4846,6 +5253,7 @@ async function useCertificateSubmission(submissionId, studentId, filePath) {
     }
 }
 async function rejectCertificateSubmission(submissionId) {
+    if (!confirm('Rifiutare questo certificato?')) return;
     await supabaseClient.from('medical_certificate_submissions').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', submissionId);
     loadCertSubmissions();
 }
@@ -5540,18 +5948,32 @@ const STUDENT_FIELD_CASINGS = {
     joinDate: ['joinDate', 'join_date', 'joindate'],
     monthlyFees: ['monthlyFees', 'monthly_fees', 'monthlyfees']
 };
+const OPTIONAL_STUDENT_COLUMNS = [
+    'nome', 'cognome', 'parent_nome', 'parent_cognome', 'parent_codice_fiscale',
+    'addr_via', 'addr_civico', 'addr_cap', 'addr_comune', 'addr_provincia'
+];
+let droppedOptionalColumns = [];
 async function writeStudentWithSchemaFallback(payload, studentId) {
     let attemptPayload = { ...payload };
     const keyMap = {};
     Object.keys(STUDENT_FIELD_CASINGS).forEach((f) => { keyMap[f] = f; });
 
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    // 25, not 10: up to 10 optional columns may be dropped one by one, on
+    // top of the casing retries.
+    for (let attempt = 0; attempt < 25; attempt += 1) {
         const { data, error } = studentId
             ? await supabaseClient.from('students').update(attemptPayload).eq('id', studentId)
             : await supabaseClient.from('students').insert(attemptPayload).select('id').single();
         if (!error) return { data };
         if (!isMissingColumnError(error)) return { error };
         const badColumn = getMissingColumnName(error);
+        // Columns from a later migration (student_details.sql) that may not
+        // have been run yet — drop them rather than fail the whole save.
+        if (OPTIONAL_STUDENT_COLUMNS.includes(badColumn) && badColumn in attemptPayload) {
+            delete attemptPayload[badColumn];
+            droppedOptionalColumns.push(badColumn);
+            continue;
+        }
         const originalField = badColumn && Object.keys(keyMap).find((f) => keyMap[f] === badColumn);
         if (!originalField) return { error };
         const candidates = STUDENT_FIELD_CASINGS[originalField];
@@ -6088,12 +6510,24 @@ async function confirmExtraCharge() {
 
 // ===== Pending attendance requests (member portal's "couldn't check in,
 // mark me present manually" fallback — request_manual_checkin_by_phone) ====
+// Request lists follow the location switcher like the rest of the admin: on a
+// specific location, only requests from that location's students are shown
+// (and counted in the tab badges); "All Locations" shows everyone's.
+function requestsInLocationScope(rows) {
+    const loc = getLocationIdFilter();
+    if (!rows || loc === null) return rows;
+    return rows.filter((r) => {
+        const st = students.find((x) => x.id === Number(r.student_id));
+        return !st || st.locationId === loc;
+    });
+}
 async function loadCheckinRequests() {
-    const { data, error } = await supabaseClient
+    const { data: rawRows, error } = await supabaseClient
         .from('checkin_requests')
         .select('*')
         .eq('status', 'pending')
         .order('requested_at', { ascending: false });
+    const data = requestsInLocationScope(rawRows);
 
     const list = document.getElementById('checkinReqList');
     const card = document.getElementById('checkinReqCard');
@@ -6253,6 +6687,84 @@ function sendStudentWelcomeMessage(studentId) {
     openWhatsApp(s.phone, generateWelcomeMessage(s));
 }
 
+// ===== Compleanni (birth date from the codice fiscale) =====
+// Next birthday of a student as 'YYYY-MM-DD' on/after `fromDate`; 29 Feb is
+// celebrated on 28 Feb in non-leap years. null without a valid CF.
+function nextBirthdayOf(s, fromDate) {
+    if (!s.birthDate) return null;
+    const [, m, d] = s.birthDate.split('-').map(Number);
+    const from = parseLocalDate(fromDate);
+    for (const y of [from.getFullYear(), from.getFullYear() + 1]) {
+        const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+        const day = m === 2 && d === 29 && !leap ? 28 : d;
+        const iso = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        if (iso >= fromDate) return iso;
+    }
+    return null;
+}
+function isBirthdayToday(s) {
+    const today = formatLocalDate(new Date());
+    return nextBirthdayOf(s, today) === today;
+}
+function birthdayFirstName(s) {
+    return (s.nome || String(s.name || '').trim().split(/\s+/)[0] || '').trim();
+}
+function upcomingBirthdays(days) {
+    const today = formatLocalDate(new Date());
+    const limit = addDaysToDate(today, days);
+    const loc = getLocationIdFilter();
+    return students
+        .filter((s) => isStudentActive(s) && (loc === null || s.locationId === loc))
+        .map((s) => ({ s, date: nextBirthdayOf(s, today) }))
+        .filter((x) => x.date && x.date <= limit)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.s.name.localeCompare(b.s.name));
+}
+function generateBirthdayMessage(s) {
+    const name = birthdayFirstName(s);
+    return `🎉🎂 Tanti auguri di buon compleanno, ${name}! 🎂🎉\n\n`
+        + `Ti auguriamo un anno pieno di gioia, salute e tanta energia… e di ballare sempre con il cuore! 💃🕺🥁\n\n`
+        + `Con affetto,\nil team e tutto il gruppo Bhangra Sway 💛`;
+}
+function sendBirthdayWish(studentId) {
+    const s = students.find((x) => x.id === studentId);
+    if (!s) return;
+    if (!s.phone) { alert('Nessun numero di telefono per questo allievo.'); return; }
+    openWhatsApp(s.phone, generateBirthdayMessage(s));
+}
+// One message naming everyone celebrating today — WhatsApp opens without a
+// recipient, so the admin picks the batch / studio group to post it in.
+function sendBirthdayGroupMessage() {
+    const today = upcomingBirthdays(0).filter((x) => x.date === formatLocalDate(new Date())).map((x) => x.s);
+    if (!today.length) return;
+    const names = today.map(birthdayFirstName);
+    const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
+    const msg = `🎉 Oggi festeggiamo il compleanno di ${list}! 🎂\n\n`
+        + `Tantissimi auguri da tutto il team e da tutto il gruppo Bhangra Sway! 💃🕺🥁🎊`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+}
+function renderBirthdayCard() {
+    const card = document.getElementById('birthdayCard');
+    const list = document.getElementById('birthdayList');
+    if (!card || !list) return;
+    const items = upcomingBirthdays(7);
+    card.classList.toggle('hidden', items.length === 0);
+    if (!items.length) return;
+    const today = formatLocalDate(new Date());
+    const todayCount = items.filter((x) => x.date === today).length;
+    document.getElementById('birthdayHeading').innerHTML = iconLabel('calendar', todayCount ? `Compleanni oggi (${todayCount})` : 'Compleanni in arrivo', 16);
+    document.getElementById('birthdayGroupBtn').classList.toggle('hidden', todayCount === 0);
+    const dayLabel = (d) => d === today ? 'Oggi' : d === addDaysToDate(today, 1) ? 'Domani' : formatShortDate(d);
+    list.innerHTML = items.map(({ s, date }) => {
+        const turning = Number(date.slice(0, 4)) - Number(s.birthDate.slice(0, 4));
+        const isToday = date === today;
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 10px; border-radius:var(--radius-sm); ${isToday ? 'background:#fde7f3; font-weight:700;' : 'background:var(--surface); border:1px solid var(--border-soft);'}">
+                <span><span class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</span> <span style="color:var(--ink-soft); font-weight:500;">· ${dayLabel(date)} · compie ${turning} anni</span></span>
+                ${s.phone ? `<button class="btn ${isToday ? 'btn-success' : 'btn-outline'} btn-sm" onclick="sendBirthdayWish(${s.id})">${iconLabel('message', 'Auguri', 13)}</button>` : '<span style="font-size:0.8em; color:var(--ink-faint);">senza telefono</span>'}
+            </div>`;
+    }).join('');
+}
+
 // One shared dropdown per student — Send Report / Open Empty Chat / Welcome
 // Message. openUpward: pass true when the button sits at the bottom of a
 // container that clips overflow (the Student View Modal footer).
@@ -6270,6 +6782,7 @@ function renderWaActionsMenu(student, menuId, openUpward, fullWidth) {
                 <button onclick="sendStudentWhatsAppReport(${student.id}); toggleWaMenu('${menuId}');" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em;">${icon('file-text', 15)} Send Report</button>
                 <button onclick="openEmptyWhatsAppChat('${student.phone}'); toggleWaMenu('${menuId}');" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em; border-top:1px solid var(--border-soft);">${icon('message', 15)} Open Chat</button>
                 <button onclick="sendStudentWelcomeMessage(${student.id}); toggleWaMenu('${menuId}');" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em; border-top:1px solid var(--border-soft);">${icon('check-circle', 15)} Welcome Message</button>
+                <button onclick="sendBirthdayWish(${student.id}); toggleWaMenu('${menuId}');" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em; border-top:1px solid var(--border-soft);">${icon('calendar', 15)} Auguri di compleanno</button>
             </div>
         </div>`;
 }
@@ -6283,38 +6796,75 @@ document.addEventListener('click', () => { document.querySelectorAll('.wa-menu')
 
 async function saveStudent(event) {
     event.preventDefault();
-    // Address is stored as pipe-separated sub-fields (Via/Strada|N.Civico|CAP|
-    // Comune|Provincia), same as admin.html, so both admin pages read/write
-    // the same shared students.address column compatibly.
-    const addressParts = [
-        document.getElementById('addrIndirizzo').value.trim(),
-        document.getElementById('addrHouse').value.trim(),
-        document.getElementById('addrCap').value.trim(),
-        document.getElementById('addrComune').value.trim(),
-        document.getElementById('addrProvincia').value.trim()
-    ];
+    const A = window.Anagrafica;
+    const val = (id) => document.getElementById(id).value.trim();
+    const nome = A.titleCase(val('studentNome'));
+    const cognome = A.titleCase(val('studentCognome'));
+    const cf = A.normalizeCf(val('codiceFiscale'));
+    const parentNome = A.titleCase(val('parentNome'));
+    const parentCognome = A.titleCase(val('parentCognome'));
+    const parentCf = A.normalizeCf(val('parentCodiceFiscale'));
+    const addr = {
+        via: val('addrIndirizzo'),
+        civico: val('addrHouse'),
+        cap: val('addrCap'),
+        comune: val('addrComune'),
+        provincia: val('addrProvincia').toUpperCase()
+    };
+    if (!nome || !cognome) { alert('Nome e cognome sono obbligatori.'); return; }
+    const locationId = Number(document.getElementById('studentLocation').value) || null;
+    if (!locationId) { alert('Seleziona la sede.'); return; }
+
+    // Problems never block saving (an incomplete record is still better than
+    // none) — but they're shown once, so nothing wrong goes in unnoticed.
+    const warnings = [];
+    if (cf) {
+        const v = A.validateCodiceFiscale(cf);
+        if (!v.valid) warnings.push(`Codice fiscale allievo: ${v.reason}`);
+        else if (A.cfMatchesName(cf, nome, cognome) === false) warnings.push('Il codice fiscale non corrisponde a nome e cognome (forse sono invertiti?)');
+    }
+    if (parentCf) {
+        const v = A.validateCodiceFiscale(parentCf);
+        if (!v.valid) warnings.push(`Codice fiscale genitore: ${v.reason}`);
+        else if (A.cfMatchesName(parentCf, parentNome, parentCognome) === false) warnings.push('Il codice fiscale del genitore non corrisponde al suo nome e cognome');
+    }
+    const anyAddress = Object.values(addr).some(Boolean);
+    if (anyAddress) {
+        const av = A.validateAddress(addr);
+        if (av.problems.length || av.warnings.length) warnings.push('Indirizzo: ' + av.problems.concat(av.warnings).join(', '));
+    }
+    if (warnings.length && !confirm('Attenzione:\n\n- ' + warnings.join('\n- ') + '\n\nSalvare comunque?')) return;
+
     const payload = {
-        name: document.getElementById('studentName').value.trim(),
-        parentName: document.getElementById('parentName').value.trim(),
-        phone: document.getElementById('studentPhone').value.trim(),
+        name: `${nome} ${cognome}`.trim(),
+        parentName: [parentNome, parentCognome].filter(Boolean).join(' '),
+        nome,
+        cognome,
+        parent_nome: parentNome || null,
+        parent_cognome: parentCognome || null,
+        parent_codice_fiscale: parentCf || null,
+        phone: val('studentPhone'),
         age: parseInt(document.getElementById('studentAge').value) || null,
         gender: document.getElementById('studentGender').value || null,
-        location_id: Number(document.getElementById('studentLocation').value) || null,
-        batch: document.getElementById('studentBatch').value.trim(),
-        codiceFiscale: document.getElementById('codiceFiscale').value.trim(),
+        location_id: locationId,
+        batch: val('studentBatch'),
+        codiceFiscale: cf,
         joinDate: document.getElementById('joinDate').value || null,
-        // Keep all five slots (empty ones too) so each piece stays in its
-        // own position — filtering out blanks used to shift e.g. the CAP
-        // into the N.Civico slot whenever the house number was left empty.
-        address: addressParts.some(Boolean) ? addressParts.join('|') : '',
+        addr_via: addr.via || null,
+        addr_civico: addr.civico || null,
+        addr_cap: addr.cap || null,
+        addr_comune: addr.comune || null,
+        addr_provincia: addr.provincia || null,
+        // Legacy single column, kept in sync (all five slots, empty ones too,
+        // so positions never shift) for everything that still reads it.
+        address: anyAddress ? [addr.via, addr.civico, addr.cap, addr.comune, addr.provincia].join('|') : '',
         // Legacy pre-v2 column, not used for anything real anymore (v2
         // billing runs entirely on credit balance) — the table still has a
         // not-null constraint on it though, so a bare 0 satisfies that
         // without resurrecting the old monthly-fee billing concept.
         monthlyFees: 0
     };
-    if (!payload.name) { alert('Name is required.'); return; }
-    if (!payload.location_id) { alert('Please select a location.'); return; }
+    droppedOptionalColumns = [];
 
     const isNewStudent = !currentEditingStudentId;
     // "Direct join" unticked (default) = first class is a free demo, no
@@ -6381,46 +6931,138 @@ async function saveStudent(event) {
         resetStudentForm();
         await loadAllData();
         const savedLocation = getLocationName(payload.location_id);
-        const savedBatch = payload.batch ? getBatchDisplayLabel(payload.batch) : 'no batch yet';
-        alert(isNewStudent
-            ? `New student added: ${payload.name}\n\n${savedLocation} · ${savedBatch}`
-            : `${payload.name} updated.`);
+        const savedBatch = payload.batch ? getBatchDisplayLabel(payload.batch) : 'nessun gruppo';
+        const missingNote = droppedOptionalColumns.length
+            ? '\n\nNota: nome/cognome separati, genitore e indirizzo NON sono stati salvati — esegui student_details.sql in Supabase.'
+            : '';
+        alert((isNewStudent
+            ? `Nuovo allievo aggiunto: ${payload.name}\n\n${savedLocation} · ${savedBatch}`
+            : `${payload.name} aggiornato.`) + missingNote);
     } catch (error) {
         alert('Error saving student: ' + error.message);
     }
+}
+
+// A student's anagrafica in the new separate fields — or, for rows saved
+// before student_details.sql, a suggestion derived from the old single
+// columns (name / parentName / address). Suggestions are only ever shown
+// for confirmation; nothing here writes to the database.
+function getStudentAnagrafica(s) {
+    const A = window.Anagrafica;
+    const cf = A.normalizeCf(s.codiceFiscale);
+    const parentCf = A.normalizeCf(s.parentCodiceFiscale);
+    let nome = s.nome, cognome = s.cognome, nameSuggested = false, nameConfirmed = true;
+    if (!nome && !cognome) {
+        const sug = A.suggestNameSplit(s.name, cf);
+        nome = sug.nome; cognome = sug.cognome; nameSuggested = true; nameConfirmed = sug.confirmed;
+    }
+    let parentNome = s.parentNome, parentCognome = s.parentCognome, parentSuggested = false;
+    if (!parentNome && !parentCognome && s.parentName) {
+        const sug = A.suggestNameSplit(s.parentName, parentCf);
+        parentNome = sug.nome; parentCognome = sug.cognome; parentSuggested = !sug.confirmed;
+    }
+    let addr = { via: s.addrVia, civico: s.addrCivico, cap: s.addrCap, comune: s.addrComune, provincia: s.addrProvincia };
+    let addrSuggested = false;
+    if (!Object.values(addr).some(Boolean) && s.address) {
+        addr = A.parseLegacyAddress(s.address);
+        addr.provincia = A.siglaFromText(addr.provincia);
+        addrSuggested = true;
+    }
+    return { nome: nome || '', cognome: cognome || '', cf, parentNome: parentNome || '', parentCognome: parentCognome || '', parentCf, addr, nameSuggested, nameConfirmed, parentSuggested, addrSuggested };
+}
+
+// Live tick / cross / warning under both codice fiscale fields, and whether
+// the parent block is needed (only for a minor, from the student's own CF).
+function updateCfStatus() {
+    const A = window.Anagrafica;
+    if (!A) return;
+    const paint = (statusId, cf, nome, cognome) => {
+        const el = document.getElementById(statusId);
+        if (!el) return;
+        if (!cf) { el.className = 'cf-status'; el.textContent = ''; return; }
+        const v = A.validateCodiceFiscale(cf);
+        if (!v.valid) { el.className = 'cf-status bad'; el.textContent = '✗ Non valido: ' + v.reason; return; }
+        const born = v.birthDate.split('-').reverse().join('/');
+        const match = A.cfMatchesName(cf, nome, cognome);
+        if (match === false) {
+            const swapped = A.cfMatchesName(cf, cognome, nome);
+            el.className = 'cf-status warn';
+            el.textContent = swapped ? '⚠ Nome e cognome sono invertiti' : '⚠ Non corrisponde a nome e cognome';
+            return;
+        }
+        el.className = 'cf-status ok';
+        el.textContent = `✓ Valido · nato/a il ${born}`;
+    };
+    const val = (id) => (document.getElementById(id)?.value || '');
+    paint('codiceFiscaleStatus', A.normalizeCf(val('codiceFiscale')), val('studentNome'), val('studentCognome'));
+    // A valid CF fills Età (real age today) and Sesso automatically.
+    const cfv = A.validateCodiceFiscale(val('codiceFiscale'));
+    if (cfv.valid) {
+        const ageEl = document.getElementById('studentAge');
+        const genderEl = document.getElementById('studentGender');
+        const age = A.ageOnDate(val('codiceFiscale'), null);
+        if (ageEl && age !== null && String(ageEl.value) !== String(age)) ageEl.value = age;
+        if (genderEl && !genderEl.value) genderEl.value = cfv.sex;
+    }
+    paint('parentCodiceFiscaleStatus', A.normalizeCf(val('parentCodiceFiscale')), val('parentNome'), val('parentCognome'));
+    const hint = document.getElementById('parentRequiredHint');
+    if (hint) {
+        const minor = A.isMinorOnDate(val('codiceFiscale'), val('studentAge'));
+        hint.style.color = minor ? 'var(--warning)' : 'var(--ink-faint)';
+        hint.textContent = minor ? '— obbligatorio (minorenne): la fattura va al genitore' : '— facoltativo per maggiorenni';
+    }
+}
+
+function updateAddressStatus() {
+    const A = window.Anagrafica;
+    const el = document.getElementById('addressStatus');
+    if (!A || !el) return;
+    const addr = {
+        via: document.getElementById('addrIndirizzo').value.trim(),
+        civico: document.getElementById('addrHouse').value.trim(),
+        cap: document.getElementById('addrCap').value.trim(),
+        comune: document.getElementById('addrComune').value.trim(),
+        provincia: document.getElementById('addrProvincia').value.trim()
+    };
+    if (!Object.values(addr).some(Boolean)) { el.textContent = ''; return; }
+    const v = A.validateAddress(addr);
+    const all = v.problems.concat(v.warnings);
+    el.style.color = all.length ? 'var(--warning)' : 'var(--success)';
+    el.textContent = all.length ? '⚠ ' + all.join(', ') : '✓ completo';
 }
 
 function editStudent(studentId) {
     const s = students.find((x) => x.id === studentId);
     if (!s) return;
     currentEditingStudentId = studentId;
-    document.getElementById('studentName').value = s.name || '';
-    document.getElementById('parentName').value = s.parentName || '';
+    const an = getStudentAnagrafica(s);
+    document.getElementById('studentNome').value = an.nome;
+    document.getElementById('studentCognome').value = an.cognome;
+    document.getElementById('parentNome').value = an.parentNome;
+    document.getElementById('parentCognome').value = an.parentCognome;
+    document.getElementById('parentCodiceFiscale').value = an.parentCf;
     document.getElementById('studentPhone').value = s.phone || '';
     document.getElementById('studentAge').value = s.age || '';
     document.getElementById('studentGender').value = s.gender || '';
     populateStudentLocationDropdown(s.locationId || '');
     populateStudentBatchDropdown(s.batch || '');
-    document.getElementById('codiceFiscale').value = s.codiceFiscale || '';
+    document.getElementById('codiceFiscale').value = an.cf;
     document.getElementById('joinDate').value = s.joinDate ? String(s.joinDate).slice(0, 10) : '';
-    let addrParts = (s.address || '').split('|').map((p) => p.trim());
-    // Older rows dropped empty slots (see saveStudent), shifting positions.
-    // Re-anchor on the 5-digit CAP: street (+ house no.) before it, comune
-    // and provincia after — same rule as getStudentPlace().
-    if (addrParts.length > 1 && addrParts.length < 5) {
-        const capIdx = addrParts.findIndex((p) => /^\d{5}$/.test(p));
-        if (capIdx >= 0) {
-            const before = addrParts.slice(0, capIdx);
-            addrParts = [before[0] || '', before.slice(1).join(' '), addrParts[capIdx], addrParts[capIdx + 1] || '', addrParts[capIdx + 2] || ''];
-        }
-    }
-    document.getElementById('addrIndirizzo').value = addrParts[0] || '';
-    document.getElementById('addrHouse').value = addrParts[1] || '';
-    document.getElementById('addrCap').value = addrParts[2] || '';
-    document.getElementById('addrComune').value = addrParts[3] || '';
-    document.getElementById('addrProvincia').value = addrParts[4] || '';
-    document.getElementById('formHeading').textContent = 'Edit Student';
-    document.getElementById('submitStudentBtn').textContent = 'Update Student';
+    document.getElementById('addrIndirizzo').value = an.addr.via;
+    document.getElementById('addrHouse').value = an.addr.civico;
+    window.Anagrafica.setComuneValue(
+        document.getElementById('addrComune'), document.getElementById('addrProvincia'), document.getElementById('addrCap'),
+        an.addr.comune, an.addr.provincia, an.addr.cap
+    );
+    const notes = [];
+    if (an.nameSuggested) notes.push(an.nameConfirmed ? 'Nome e cognome separati automaticamente (confermati dal codice fiscale)' : 'Nome e cognome separati automaticamente — da verificare');
+    if (an.parentSuggested) notes.push('Nome e cognome del genitore da verificare');
+    if (an.addrSuggested) notes.push('Indirizzo letto dal vecchio formato — controlla');
+    document.getElementById('studentFormNote').textContent = notes.length ? notes.join(' · ') + '. Salva per confermare.' : '';
+    updateCfStatus();
+    window.Anagrafica.loadComuni().then(updateAddressStatus).catch(() => {});
+    document.getElementById('formHeading').textContent = 'Modifica allievo';
+    document.getElementById('submitStudentBtn').textContent = 'Aggiorna allievo';
     document.getElementById('cancelEditBtn').classList.remove('hidden');
     document.getElementById('directJoinRow').classList.add('hidden'); // only meaningful when creating a new student
     document.getElementById('initialRechargeRow').classList.add('hidden');
@@ -6441,8 +7083,8 @@ function editStudent(studentId) {
 function cancelEditStudent() { resetStudentForm(); }
 function resetStudentForm() {
     currentEditingStudentId = null;
-    document.getElementById('studentName').value = '';
-    document.getElementById('parentName').value = '';
+    ['studentNome', 'studentCognome', 'parentNome', 'parentCognome', 'parentCodiceFiscale'].forEach((id) => { document.getElementById(id).value = ''; });
+    document.getElementById('studentFormNote').textContent = '';
     document.getElementById('studentPhone').value = '';
     document.getElementById('studentAge').value = '';
     document.getElementById('studentGender').value = '';
@@ -6456,9 +7098,12 @@ function resetStudentForm() {
     document.getElementById('addrHouse').value = '';
     document.getElementById('addrCap').value = '';
     document.getElementById('addrComune').value = '';
+    document.getElementById('addrComune').dataset.valid = '';
     document.getElementById('addrProvincia').value = '';
-    document.getElementById('formHeading').textContent = 'Add Student';
-    document.getElementById('submitStudentBtn').textContent = 'Add Student';
+    document.getElementById('formHeading').textContent = 'Nuovo allievo';
+    document.getElementById('submitStudentBtn').textContent = 'Aggiungi allievo';
+    updateCfStatus();
+    updateAddressStatus();
     document.getElementById('cancelEditBtn').classList.add('hidden');
     document.getElementById('directJoinRow').classList.remove('hidden');
     document.getElementById('directJoin').checked = false;
@@ -6510,12 +7155,193 @@ async function confirmPermanentDelete() {
 
 // ===== Pending passcode reset requests (member portal's "Forgot passcode?"
 // flow — request_passcode_reset_by_phone) =====
+// ===== Controllo dati (student_details.sql) =====
+// Everything that would make a fattura wrong or "scartata", per student.
+// Uses the same rules as the form's live checks (anagrafica.js).
+function getStudentDataProblems(s) {
+    const A = window.Anagrafica;
+    const an = getStudentAnagrafica(s);
+    const problems = [];
+    if (!an.nome || !an.cognome) problems.push('Nome/cognome mancanti');
+    else if (an.nameSuggested) problems.push(an.nameConfirmed ? 'Nome/cognome da confermare' : 'Nome/cognome da separare');
+    if (!an.cf) problems.push('CF mancante');
+    else {
+        const v = A.validateCodiceFiscale(an.cf);
+        if (!v.valid) problems.push('CF non valido');
+        else if (A.cfMatchesName(an.cf, an.nome, an.cognome) === false) problems.push(A.cfMatchesName(an.cf, an.cognome, an.nome) ? 'Nome e cognome invertiti' : 'CF non corrisponde al nome');
+    }
+    if (!Object.values(an.addr).some(Boolean)) problems.push('Indirizzo mancante');
+    else {
+        const v = A.validateAddress(an.addr);
+        if (!v.ok) problems.push('Indirizzo: ' + v.problems.join(', '));
+        else if (v.warnings.length) problems.push('Via senza tipo (es. "Via")');
+        else if (an.addrSuggested) problems.push('Indirizzo nel vecchio formato');
+    }
+    // Parent details only matter for a minor (fattura goes to the parent).
+    if (A.isMinorOnDate(an.cf, s.age)) {
+        if (!an.parentCf) problems.push('Minorenne senza CF genitore');
+        else if (!A.validateCodiceFiscale(an.parentCf).valid) problems.push('CF genitore non valido');
+        if (!an.parentNome || !an.parentCognome) problems.push('Nome/cognome genitore mancanti');
+        else if (an.parentCf && A.cfMatchesName(an.parentCf, an.parentNome, an.parentCognome) === false) problems.push('CF genitore non corrisponde al nome');
+    }
+    return problems;
+}
+function getDataCheckStudents(includeInactive) {
+    return students
+        .filter((s) => includeInactive || isStudentActive(s))
+        .map((s) => ({ s, problems: getStudentDataProblems(s) }))
+        .filter((x) => x.problems.length > 0)
+        .sort((a, b) => b.problems.length - a.problems.length || a.s.name.localeCompare(b.s.name));
+}
+function updateDataCheckCount() {
+    const el = document.getElementById('dataCheckCount');
+    if (!el || !window.Anagrafica) return;
+    const n = getDataCheckStudents(false).length;
+    el.textContent = n;
+    el.classList.toggle('hidden', n === 0);
+}
+function openDataCheckModal() {
+    document.getElementById('dataCheckModal').style.display = 'flex';
+    document.getElementById('dataCheckList').innerHTML = '<div style="color:var(--ink-faint); font-size:0.85em;">Caricamento elenco comuni…</div>';
+    window.Anagrafica.loadComuni().then(renderDataCheck).catch(() => renderDataCheck());
+}
+function closeDataCheckModal() { document.getElementById('dataCheckModal').style.display = 'none'; }
+function renderDataCheck() {
+    const includeInactive = document.getElementById('dataCheckIncludeInactive').checked;
+    const rows = getDataCheckStudents(includeInactive);
+    document.getElementById('dataCheckList').innerHTML = rows.length
+        ? rows.map(({ s, problems }) => `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); flex-wrap:wrap;">
+                <div style="min-width:0; flex:1;">
+                    <div style="font-weight:700; font-size:0.9em;">${escapeHtml(s.name)}</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:5px;">${problems.map((p) => `<span class="badge badge-warning">${escapeHtml(p)}</span>`).join('')}</div>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="closeDataCheckModal(); editStudent(${s.id});">Correggi</button>
+            </div>`).join('')
+        : `<div class="placeholder-card">${icon('check-circle', 24)}<h3>Tutti i dati sono in ordine</h3></div>`;
+    updateDataCheckCount();
+}
+
+// ===== Richieste di correzione dati (from member.html "I miei dati") =====
+const DETAIL_FIELD_LABELS = {
+    nome: 'Nome', cognome: 'Cognome', codice_fiscale: 'Codice fiscale',
+    parent_nome: 'Nome genitore', parent_cognome: 'Cognome genitore', parent_codice_fiscale: 'CF genitore',
+    addr_via: 'Via', addr_civico: 'N. civico', addr_cap: 'CAP', addr_comune: 'Comune', addr_provincia: 'Provincia',
+    photo_path: 'Foto'
+};
+function detailRequestPhotoCell(path, faded) {
+    if (!path) return '<span style="color:var(--ink-faint);">—</span>';
+    const url = supabaseClient.storage.from('student-photos').getPublicUrl(path).data.publicUrl;
+    return `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="" style="width:64px; height:64px; object-fit:cover; border-radius:50%; border:1px solid var(--border);${faded ? ' opacity:0.55;' : ''}"></a>`;
+}
+let detailReqPendingCount = 0;
+let passcodeReqPendingCount = 0;
+let certPendingCount = 0;
+function updateStudentsTabBadge() {
+    const tabBadge = document.getElementById('passcodeReqTabBadge');
+    const total = detailReqPendingCount + passcodeReqPendingCount + certPendingCount;
+    if (tabBadge) { tabBadge.textContent = total; tabBadge.classList.toggle('hidden', total === 0); }
+}
+let detailRequestsCache = [];
+async function loadDetailRequests() {
+    const { data: rawRows, error } = await supabaseClient
+        .from('student_detail_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .order('requested_at', { ascending: false });
+    const data = requestsInLocationScope(rawRows);
+    const card = document.getElementById('detailReqCard');
+    const list = document.getElementById('detailReqList');
+    if (!card || !list) return;
+    detailRequestsCache = (!error && data) ? data : [];
+    detailReqPendingCount = detailRequestsCache.length;
+    card.classList.toggle('hidden', detailReqPendingCount === 0);
+    document.getElementById('detailReqCountBadge').textContent = detailReqPendingCount;
+    updateStudentsTabBadge();
+    list.innerHTML = detailRequestsCache.map((req) => {
+        const changes = req.changes || {};
+        const rows = Object.keys(changes).map((k) => k === 'photo_path' ? `
+            <tr>
+                <td style="padding:3px 8px 3px 0; color:var(--ink-soft); white-space:nowrap;">Foto</td>
+                <td style="padding:3px 8px;">${detailRequestPhotoCell(changes[k]?.old, true)}</td>
+                <td style="padding:3px 0;">${detailRequestPhotoCell(changes[k]?.new, false)}</td>
+            </tr>` : `
+            <tr>
+                <td style="padding:3px 8px 3px 0; color:var(--ink-soft); white-space:nowrap;">${escapeHtml(DETAIL_FIELD_LABELS[k] || k)}</td>
+                <td style="padding:3px 8px; color:var(--ink-faint); text-decoration:line-through;">${escapeHtml(changes[k]?.old || '—')}</td>
+                <td style="padding:3px 0; font-weight:700;">${escapeHtml(changes[k]?.new || '—')}</td>
+            </tr>`).join('');
+        return `
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <div style="font-weight:700; font-size:0.9em;">${escapeHtml(req.student_name || ('#' + req.student_id))} <span style="font-weight:400; color:var(--ink-faint); font-size:0.85em;">· ${timeAgo(req.requested_at)}</span></div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-success btn-sm" onclick="approveDetailRequest(${req.id})">${iconLabel('check', 'Approva', 14)}</button>
+                        <button class="btn btn-outline btn-sm" onclick="dismissDetailRequest(${req.id})">Rifiuta</button>
+                    </div>
+                </div>
+                <table style="margin-top:8px; font-size:0.84em; border-collapse:collapse;">${rows}</table>
+            </div>`;
+    }).join('');
+}
+async function approveDetailRequest(requestId) {
+    const req = detailRequestsCache.find((r) => r.id === requestId);
+    if (!req) return;
+    const s = students.find((x) => x.id === req.student_id);
+    if (!s) { alert('Allievo non trovato.'); return; }
+    const A = window.Anagrafica;
+    const an = getStudentAnagrafica(s);
+    const ch = req.changes || {};
+    const pick = (k, cur) => (k in ch ? String(ch[k]?.new ?? '').trim() : cur);
+    const nome = A.titleCase(pick('nome', an.nome));
+    const cognome = A.titleCase(pick('cognome', an.cognome));
+    const parentNome = A.titleCase(pick('parent_nome', an.parentNome));
+    const parentCognome = A.titleCase(pick('parent_cognome', an.parentCognome));
+    const addr = {
+        via: pick('addr_via', an.addr.via), civico: pick('addr_civico', an.addr.civico), cap: pick('addr_cap', an.addr.cap),
+        comune: pick('addr_comune', an.addr.comune), provincia: pick('addr_provincia', an.addr.provincia).toUpperCase()
+    };
+    // Write the whole anagrafica (approved values + current ones), with the
+    // legacy columns re-synced, exactly like saving the form would.
+    const payload = {
+        name: `${nome} ${cognome}`.trim(),
+        parentName: [parentNome, parentCognome].filter(Boolean).join(' '),
+        nome, cognome,
+        parent_nome: parentNome || null,
+        parent_cognome: parentCognome || null,
+        parent_codice_fiscale: A.normalizeCf(pick('parent_codice_fiscale', an.parentCf)) || null,
+        codiceFiscale: A.normalizeCf(pick('codice_fiscale', an.cf)),
+        addr_via: addr.via || null, addr_civico: addr.civico || null, addr_cap: addr.cap || null,
+        addr_comune: addr.comune || null, addr_provincia: addr.provincia || null,
+        address: Object.values(addr).some(Boolean) ? [addr.via, addr.civico, addr.cap, addr.comune, addr.provincia].join('|') : ''
+    };
+    // A new close-up photo (already uploaded by the student) becomes theirs now.
+    if (ch.photo_path && ch.photo_path.new) payload.photo_path = String(ch.photo_path.new);
+    droppedOptionalColumns = [];
+    const { error } = await writeStudentWithSchemaFallback(payload, s.id);
+    if (error) { alert('Impossibile salvare: ' + error.message); return; }
+    await supabaseClient.from('student_detail_requests').update({ status: 'approved', resolved_at: new Date().toISOString() }).eq('id', requestId);
+    await loadAllData();
+    await loadDetailRequests();
+    alert(`Dati di ${payload.name} aggiornati.` + (droppedOptionalColumns.length ? '\n\nNota: esegui student_details.sql — alcuni campi non sono stati salvati.' : ''));
+}
+async function dismissDetailRequest(requestId) {
+    if (!confirm('Rifiutare questa correzione? I dati dell\'allievo restano invariati.')) return;
+    // Clean up a rejected photo the student uploaded with the request.
+    const req = detailRequestsCache.find((r) => r.id === requestId);
+    const rejectedPhoto = req?.changes?.photo_path?.new;
+    if (rejectedPhoto) { try { await supabaseClient.storage.from('student-photos').remove([rejectedPhoto]); } catch (e) { /* not critical */ } }
+    await supabaseClient.from('student_detail_requests').update({ status: 'dismissed', resolved_at: new Date().toISOString() }).eq('id', requestId);
+    await loadDetailRequests();
+}
+
 async function loadPasscodeResetRequests() {
-    const { data, error } = await supabaseClient
+    const { data: rawRows, error } = await supabaseClient
         .from('passcode_reset_requests')
         .select('*')
         .eq('status', 'pending')
         .order('requested_at', { ascending: false });
+    const data = requestsInLocationScope(rawRows);
 
     const list = document.getElementById('passcodeReqList');
     const card = document.getElementById('passcodeReqCard');
@@ -6526,7 +7352,9 @@ async function loadPasscodeResetRequests() {
     const pendingCount = (!error && data) ? data.length : 0;
     card.classList.toggle('hidden', pendingCount === 0);
     if (countBadge) countBadge.textContent = pendingCount;
-    if (tabBadge) { tabBadge.textContent = pendingCount; tabBadge.classList.toggle('hidden', pendingCount === 0); }
+    // Students-tab dot is shared with detail-correction requests.
+    passcodeReqPendingCount = pendingCount;
+    if (tabBadge) updateStudentsTabBadge();
     if (pendingCount === 0) { list.innerHTML = ''; return; }
 
     list.innerHTML = data.map((req) => `
@@ -6587,7 +7415,11 @@ function renderStudentViewModal(s) {
         avatarEl.textContent = initials;
     }
     document.getElementById('svmName').textContent = s.name;
-    document.getElementById('svmMeta').textContent = [s.parentName, s.phone, s.age ? `Age ${s.age}` : null].filter(Boolean).join(' · ') || '—';
+    const born = s.birthDate ? s.birthDate.split('-').reverse().join('/') : '';
+    // Età from the codice fiscale when there is one (always current); the
+    // typed number otherwise, flagged so it's clear it won't update itself.
+    const ageText = s.age ? (born ? `Età ${s.age}` : `Età ${s.age} (senza CF)`) : null;
+    document.getElementById('svmMeta').textContent = [s.parentName, s.phone, ageText, born ? `nato/a il ${born}` : null].filter(Boolean).join(' · ') || '—';
 
     const balance = s.v2CreditBalance;
     const card = document.getElementById('svmBalanceCard');
@@ -6719,11 +7551,14 @@ function renderStudentViewModal(s) {
                 <span style="display:flex; align-items:center; gap:8px; text-align:right; white-space:nowrap;">
                     <strong style="color:${Number(t.amount) > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${Number(t.amount) > 0 ? '+' : ''}€${t.amount}</strong>
                     <span style="color:var(--ink-faint);"> (bal €${t._runningBalance})</span>
+                    ${fatturaLedgerButton(t)}
                     ${isCharge ? `<button type="button" class="icon-btn-close" style="color:var(--danger);" title="Delete this transaction" onclick="event.stopPropagation(); deleteClassDeductionTransaction(${t.id})">${icon('trash', 14)}</button>` : ''}
                 </span>
             </div>`;
         }).join('')
         : `<div style="color:var(--ink-faint); font-size:0.85em;">No transactions yet.</div>`;
+    renderStudentFatture(s);
+    renderStudentDoctorCard(s);
 
     // Grid, not flex: three flex items with mixed text/icon content never end
     // up equal-width (each claims at least its own content's min size before
@@ -7096,8 +7931,10 @@ function applyIcons() {
     document.getElementById('securityBtnIcon').innerHTML = iconLabel('shield', 'Security', 16);
     document.getElementById('securityCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('logoutBtnIcon').innerHTML = iconLabel('log-out', 'Sign Out', 16);
-    document.getElementById('cameraBtnLabel').innerHTML = iconLabel('camera', 'Camera', 15);
-    document.getElementById('uploadBtnLabel').innerHTML = iconLabel('upload', 'Upload', 15);
+    document.getElementById('cameraBtnLabel').innerHTML = iconLabel('camera', 'Fotocamera', 15);
+    // Only the inner span: the label also wraps the hidden file input, and
+    // replacing the label's innerHTML deleted it (Upload did nothing).
+    document.getElementById('uploadBtnText').innerHTML = iconLabel('upload', 'Carica', 15);
     document.getElementById('svmDeleteBtn').innerHTML = icon('trash', 16);
     document.getElementById('deleteWarnCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('deleteConfirmCloseBtn').innerHTML = icon('x', 16);
@@ -7118,11 +7955,17 @@ function applyIcons() {
     document.getElementById('savePracticeBtnLabel').innerHTML = iconLabel('check', 'Save Practice', 15);
     document.getElementById('editPracticeListBtnLabel').innerHTML = iconLabel('users', 'Edit practice list', 15);
     document.getElementById('practiceListCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('dataCheckCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('newBatchCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('newLocationCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('manageLocationsCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('fatturaCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('fatturaSettingsCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('chargeStudentsBtnLabel').innerHTML = iconLabel('plus', 'Charge students', 14);
     document.getElementById('extraChargeCloseBtn').innerHTML = icon('x', 16);
 
-    const tabIcons = { students: 'users', attendance: 'calendar', payments: 'credit-card', batches: 'filter', fees: 'file-text', reports: 'chevron-right', website: 'edit', performances: 'user' };
-    const tabLabels = { students: 'Students', attendance: 'Attendance', payments: 'Payments', batches: 'Batches', fees: 'Income & Expense', reports: 'Reports', website: 'Website', performances: 'Performances' };
+    const tabIcons = { fatture: 'file-text', students: 'users', attendance: 'calendar', payments: 'credit-card', batches: 'filter', fees: 'file-text', reports: 'chevron-right', website: 'edit', performances: 'user' };
+    const tabLabels = { fatture: 'Fatture', students: 'Students', attendance: 'Attendance', payments: 'Payments', batches: 'Batches', fees: 'Income & Expense', reports: 'Reports', website: 'Website', performances: 'Performances' };
     // Notification dots for pending requests, visible from every tab —
     // passcode resets (Students), attendance requests (Attendance), batch
     // moves (Batches). Each id is filled/hidden by that request's own
@@ -7138,8 +7981,27 @@ function applyIcons() {
     });
 }
 
+// Every popup closes on a click on its dark backdrop (onclick="if(event.target===this) …").
+// But selecting text inside a popup and releasing the mouse outside it also
+// produces a "click" on the backdrop — which closed the popup mid-typing.
+// Only let a backdrop click through when the press also STARTED on the backdrop.
+let backdropPressTarget = null;
+document.addEventListener('mousedown', (e) => { backdropPressTarget = e.target; }, true);
+document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('modal-backdrop') && backdropPressTarget !== t) {
+        e.stopPropagation(); // capture phase: the backdrop's own onclick never runs
+    }
+}, true);
+
 document.addEventListener('DOMContentLoaded', () => {
     applyIcons();
+    window.Anagrafica.attachComunePicker(
+        document.getElementById('addrComune'), document.getElementById('addrProvincia'), document.getElementById('addrCap'),
+        updateAddressStatus
+    );
+    document.getElementById('studentAge').addEventListener('input', updateCfStatus);
+    updateCfStatus();
     checkAuthentication();
 });
 </script>

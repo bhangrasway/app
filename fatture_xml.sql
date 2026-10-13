@@ -1,29 +1,26 @@
 -- ============================================================================
--- FATTURE XML — run once in the Supabase SQL editor
+-- FATTURE — run once in the Supabase SQL editor, AFTER student_details.sql
 -- (Project -> SQL Editor -> New query -> paste -> Run).
 --
--- Lets admin.html build the FatturaPA XML (FPR12, privato: codice
--- destinatario 0000000) for a recharge, ready to upload by hand in
--- "Fatture e Corrispettivi" on the Agenzia delle Entrate site. Nothing is
--- sent anywhere automatically.
+-- admin.html builds the FatturaPA XML (FPR12, privato, CodiceDestinatario
+-- 0000000) for a recharge — same structure as the studio's own fattura that
+-- AdE accepted — plus its own PDF, and keeps a register of every fattura.
+-- The XML is uploaded BY HAND in "Fatture e Corrispettivi"; nothing here
+-- sends anything to the Agenzia delle Entrate.
 --
---  1. students.parent_codice_fiscale — when filled, the fattura is made out
---     to the parent (minors); otherwise to the student.
---  2. fattura_settings — one row (id = 1): the studio's own cedente data,
---     IVA treatment, bollo, default description, and where numbering starts.
---  3. fatture — one row per generated fattura. Unique (anno, numero) so a
---     number can never be used twice; unique transaction_id so a recharge
---     can only be invoiced once (a deleted fattura frees both up again).
---
--- Admin-only: same RLS as v2_credit_transactions. Nothing exposed to anon.
+--  1. fattura_settings: one row (id = 1) — the studio's own data (typed once
+--     in the admin, never hardcoded in the public repo), natura, the two
+--     description templates, optional causale, where numbering starts.
+--  2. fatture: the register. Unique (anno, numero) and one fattura per
+--     recharge among non-deleted rows. status: created -> uploaded ->
+--     accepted | rejected. pdf_token is set only while accepted — that's
+--     what makes the PDF visible to the student.
+--  3. get_my_fatture_v2_by_phone: the student's own ACCEPTED fatture only.
 -- ============================================================================
-
-alter table public.students add column if not exists parent_codice_fiscale text;
 
 create table if not exists public.fattura_settings (
     id int primary key default 1 check (id = 1),
-    -- Cedente / prestatore (the studio)
-    denominazione text,          -- business name; leave empty to use nome + cognome
+    denominazione text,             -- business name; empty = a person (nome + cognome)
     nome text,
     cognome text,
     partita_iva text,
@@ -33,19 +30,16 @@ create table if not exists public.fattura_settings (
     numero_civico text,
     cap text,
     comune text,
-    provincia text,              -- 2-letter sigla, e.g. CR
-    -- IVA
-    aliquota_iva numeric not null default 0,
-    natura text default 'N2.2',  -- required when aliquota is 0
+    provincia text,                 -- 2-letter sigla
+    natura text not null default 'N2.2',
     riferimento_normativo text,
-    -- Bollo
-    bollo_enabled boolean not null default true,  -- €2 virtual bollo above €77.47 when no IVA
-    -- Content
-    descrizione_default text default 'Corso di danza',
-    modalita_pagamento text not null default 'MP01', -- MP01 contanti, MP05 bonifico, MP08 carta
-    -- Numbering: in start_year, numbers continue from start_number
+    descrizione_adulti text not null default 'corso di danza',
+    descrizione_minori text not null default 'corso di danza (per bambini - {allievo})',
+    causale text default 'Operazione effettuata in regime forfettario ai sensi dell''art. 1, commi da 54 a 89, della Legge n. 190/2014 e successive modificazioni',
+    include_causale boolean not null default false,
     start_year int,
     start_number int not null default 1,
+    pdf_footer text default 'Copia di cortesia. L''originale è il file XML trasmesso al Sistema di Interscambio (SdI).',
     updated_at timestamptz not null default now()
 );
 
@@ -56,17 +50,27 @@ create table if not exists public.fatture (
     anno int not null,
     numero int not null,
     data_fattura date not null,
-    student_id bigint not null,
+    student_id bigint,
     transaction_id bigint,
-    recipient_type text not null,      -- 'student' | 'parent'
+    source text not null default 'app',      -- 'app' | 'manual'
+    recipient_type text not null,            -- 'student' | 'parent'
     recipient_nome text,
     recipient_cognome text,
     recipient_cf text not null,
-    importo numeric not null,          -- total paid by the customer
-    bollo numeric not null default 0,
+    recipient_via text,
+    recipient_civico text,
+    recipient_cap text,
+    recipient_comune text,
+    recipient_provincia text,
+    importo numeric not null,
     descrizione text,
-    file_name text not null,
-    xml text not null,
+    revision int not null default 0,         -- +1 each corrected resend (new file name)
+    file_name text,
+    xml text,
+    status text not null default 'created',  -- 'created' | 'uploaded' | 'accepted' | 'rejected'
+    status_updated_at timestamptz,
+    pdf_token text,                          -- member-docs file, only while accepted
+    manual_pdf_path text,                    -- tax-pdfs path of an uploaded AdE PDF (manual entries)
     created_at timestamptz not null default now(),
     deleted_at timestamptz
 );
@@ -89,3 +93,40 @@ create policy "authenticated_all" on public.fatture
 
 revoke all on public.fattura_settings from anon;
 revoke all on public.fatture from anon;
+
+-- ===== Student reads their own accepted fatture =====
+create or replace function public.get_my_fatture_v2_by_phone(
+    p_student_id bigint,
+    p_phone text,
+    p_passcode text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+    if not public._phone_matches_student(p_student_id, p_phone) then
+        return '[]'::jsonb;
+    end if;
+    if not public._passcode_matches_student(p_student_id, p_passcode) then
+        return '[]'::jsonb;
+    end if;
+    return coalesce((
+        select jsonb_agg(jsonb_build_object(
+            'anno', f.anno,
+            'numero', f.numero,
+            'data', f.data_fattura,
+            'importo', f.importo,
+            'pdf_token', f.pdf_token
+        ) order by f.data_fattura desc, f.numero desc)
+        from public.fatture f
+        where f.student_id = p_student_id
+          and f.deleted_at is null
+          and f.status = 'accepted'
+          and f.pdf_token is not null
+    ), '[]'::jsonb);
+end;
+$$;
+
+grant execute on function public.get_my_fatture_v2_by_phone(bigint, text, text) to anon;

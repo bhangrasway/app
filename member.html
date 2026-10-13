@@ -14,7 +14,8 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=6"></script>
+<script src="i18n.js?v=9"></script>
+<script src="anagrafica.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -84,6 +85,11 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 .field input, .field select{
     width:100%; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em; color:var(--ink); background:var(--surface);
 }
+.cf-status{ font-size:0.76em; font-weight:600; margin-top:4px; min-height:1em; }
+.cf-status.ok{ color:var(--success); } .cf-status.bad{ color:var(--danger); } .cf-status.warn{ color:var(--warning); }
+.details-row{ display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--border-soft); font-size:0.88em; }
+.details-row span:first-child{ color:var(--ink-faint); }
+.details-row span:last-child{ font-weight:600; text-align:right; }
 .field input:focus, .field select:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 
 .badge{ display:inline-flex; align-items:center; gap:4px; font-size:0.74em; font-weight:700; padding:3px 9px; border-radius:999px; }
@@ -336,6 +342,18 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 </label>
             </div>
 
+            <div id="birthdayBanner" class="hidden" style="margin-bottom:16px; padding:16px 18px; border-radius:var(--radius-md); background:linear-gradient(135deg, #fde7f3, #fff7ed); border:1px solid #f5c6e0; text-align:center;">
+                <div style="font-weight:800; font-size:1.15em; color:#be185d;" id="birthdayBannerTitle"></div>
+                <div style="font-size:0.9em; color:var(--ink-soft); margin-top:4px;" id="birthdayBannerText"></div>
+            </div>
+
+            <div class="report-block" id="myDetailsBlock">
+                <h3 id="detailsHeadingLabel"></h3>
+                <div id="myDetailsContent"></div>
+                <p id="detailsPendingNote" class="hidden empty-note" style="margin:10px 0 0;" data-i18n="mv2_details_pending">Correction sent — waiting for the studio to check it.</p>
+                <button type="button" class="btn btn-outline" style="margin-top:10px;" id="detailsEditBtnLabel" onclick="openDetailsScreen()"></button>
+            </div>
+
             <div class="report-block">
                 <h3 id="invoicesHeadingLabel"></h3>
                 <div id="invoicesList"></div>
@@ -437,6 +455,59 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- MY DETAILS (correction request) SCREEN -->
+<div id="detailsScreen" class="hidden" style="position:fixed; inset:0; background:var(--bg); z-index:250; overflow-y:auto;">
+    <div style="max-width:480px; margin:0 auto; padding:20px 18px 40px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <h2 style="font-size:1.2em; margin:0;" data-i18n="mv2_details_title">Correct my details</h2>
+            <button class="btn btn-ghost btn-sm" onclick="closeDetailsScreen()" id="detailsCloseBtn"></button>
+        </div>
+        <p class="empty-note" style="margin:0 0 16px;" data-i18n="mv2_details_intro">These details go on your invoices (fatture), so they must be exactly as on your codice fiscale. The studio checks every change before saving it.</p>
+
+        <div class="report-block">
+            <div class="section-label" style="margin-top:0;">Allievo</div>
+            <div class="field"><label>Nome</label><input id="mdNome" oninput="updateMyDetailsChecks()"></div>
+            <div class="field"><label>Cognome</label><input id="mdCognome" oninput="updateMyDetailsChecks()"></div>
+            <div class="field"><label>Codice fiscale</label><input id="mdCf" maxlength="16" style="text-transform:uppercase;" oninput="updateMyDetailsChecks()"><div id="mdCfStatus" class="cf-status"></div></div>
+        </div>
+
+        <div class="report-block">
+            <div class="section-label" style="margin-top:0;">Genitore <span id="mdParentHint" style="text-transform:none; letter-spacing:normal; font-weight:600;"></span></div>
+            <div class="field"><label>Nome genitore</label><input id="mdParentNome" oninput="updateMyDetailsChecks()"></div>
+            <div class="field"><label>Cognome genitore</label><input id="mdParentCognome" oninput="updateMyDetailsChecks()"></div>
+            <div class="field"><label>Codice fiscale genitore</label><input id="mdParentCf" maxlength="16" style="text-transform:uppercase;" oninput="updateMyDetailsChecks()"><div id="mdParentCfStatus" class="cf-status"></div></div>
+        </div>
+
+        <div class="report-block">
+            <div class="section-label" style="margin-top:0;">Indirizzo <span id="mdAddrStatus" style="text-transform:none; letter-spacing:normal; font-weight:600;"></span></div>
+            <div class="field"><label>Via / Piazza</label><input id="mdVia" placeholder="Via Trento" oninput="updateMyDetailsChecks()"></div>
+            <div class="field"><label>N. civico</label><input id="mdCivico" placeholder="5"></div>
+            <div class="field"><label>Comune</label><input id="mdComune" placeholder="Scrivi e scegli dall'elenco…"><div style="font-size:0.74em; color:var(--ink-faint); margin-top:4px;">Abiti in una frazione? Scegli il comune e scrivi la frazione nella via.</div></div>
+            <div style="display:flex; gap:10px;">
+                <div class="field" style="flex:1;"><label>Provincia</label><input id="mdProvincia" maxlength="2"></div>
+                <div class="field" style="flex:1;"><label>CAP</label><input id="mdCap" placeholder="26100"></div>
+            </div>
+        </div>
+
+        <div class="report-block">
+            <div class="section-label" style="margin-top:0;">Foto <span style="text-transform:none; letter-spacing:normal; font-weight:600; color:var(--ink-faint);">— primo piano, facoltativa</span></div>
+            <div style="display:flex; align-items:center; gap:14px;">
+                <div id="mdPhotoPreview" style="width:76px; height:76px; border-radius:50%; background:var(--accent); background-size:cover; background-position:center; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:1.4em;"></div>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-outline btn-sm" id="mdPhotoCameraBtn" onclick="openMemberCameraCapture(setDetailsPhotoBlob)"></button>
+                        <label class="btn btn-outline btn-sm" style="cursor:pointer;"><span id="mdPhotoUploadText"></span><input type="file" accept="image/*" style="display:none;" onchange="handleDetailsPhotoInput(this)"></label>
+                    </div>
+                    <button type="button" class="link-btn hidden" id="mdPhotoUndoBtn" style="padding:0; text-align:left;" onclick="clearDetailsPhoto()">Annulla nuova foto</button>
+                    <div id="mdPhotoNote" style="font-size:0.76em; color:var(--ink-faint);">Viso ben visibile, senza occhiali da sole.</div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="detailsSendBtnLabel" onclick="sendDetailsCorrection()"></button>
     </div>
 </div>
 
@@ -831,6 +902,7 @@ function renderReport(report) {
     renderBatchBlock(s);
     renderCertificateStatus(s);
     renderInvoices(s);
+    renderMyDetails(s);
     renderProfilePhotoCard(s);
     renderHistoricalRecord(s, report);
 }
@@ -1124,17 +1196,228 @@ async function deleteMedicalCertificate() {
     renderCertificateStatus({ id: selectedMember.id });
 }
 
-async function renderInvoices(student) {
-    const list = document.getElementById('invoicesList');
-    const { data: payments, error } = await supabaseClient.rpc('get_my_fatture_by_phone', {
+// ===== I miei dati (student_details.sql) =====
+// Read-only summary on the dashboard + a correction form. Corrections are
+// never saved directly: they go to the studio as a request (old -> new) and
+// are applied only when approved in the admin.
+let myDetailsOriginal = null; // raw stored values, the "old" side of a request
+const MY_DETAIL_FIELDS = {
+    nome: 'mdNome', cognome: 'mdCognome', codice_fiscale: 'mdCf',
+    parent_nome: 'mdParentNome', parent_cognome: 'mdParentCognome', parent_codice_fiscale: 'mdParentCf',
+    addr_via: 'mdVia', addr_civico: 'mdCivico', addr_cap: 'mdCap', addr_comune: 'mdComune', addr_provincia: 'mdProvincia'
+};
+async function renderMyDetails(student) {
+    const block = document.getElementById('myDetailsBlock');
+    const content = document.getElementById('myDetailsContent');
+    const { data, error } = await supabaseClient.rpc('get_my_details_by_phone', {
         p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
     });
-    if (error || !payments || payments.length === 0) { list.innerHTML = `<span class="empty-note">No invoices yet.</span>`; return; }
-    list.innerHTML = payments.map((p) => {
-        const url = supabaseClient.storage.from('member-docs').getPublicUrl(`${p.publicToken}.pdf`).data.publicUrl;
-        const label = [p.date, p.taxFileNo].filter(Boolean).join(' · ');
-        return `<div class="ledger-row"><span>${escapeHtml(label)}</span><a href="${url}" target="_blank" rel="noopener" class="link-btn" style="padding:0;">Download</a></div>`;
-    }).join('');
+    // Feature not set up yet (SQL not run) or not verified: hide quietly.
+    if (error || !data) { block.classList.add('hidden'); myDetailsOriginal = null; return; }
+    block.classList.remove('hidden');
+    myDetailsOriginal = data;
+    const A = window.Anagrafica;
+    const nome = data.nome || '', cognome = data.cognome || '';
+    const fullName = (nome || cognome) ? `${nome} ${cognome}`.trim() : (data.name || '—');
+    const parent = [data.parent_nome, data.parent_cognome].filter(Boolean).join(' ') || data.parentname || '';
+    const addrParts = (data.addr_comune || data.addr_via)
+        ? data
+        : (() => { const l = A.parseLegacyAddress(data.address); return { addr_via: l.via, addr_civico: l.civico, addr_cap: l.cap, addr_comune: l.comune, addr_provincia: A.siglaFromText(l.provincia) }; })();
+    const addressLine = [
+        [addrParts.addr_via, addrParts.addr_civico].filter(Boolean).join(' '),
+        [addrParts.addr_cap, addrParts.addr_comune].filter(Boolean).join(' ') + (addrParts.addr_provincia ? ` (${addrParts.addr_provincia})` : '')
+    ].filter((x) => x.trim()).join(', ');
+    const row = (label, value) => `<div class="details-row"><span>${label}</span><span>${escapeHtml(value || '—')}</span></div>`;
+    renderBirthdayBanner(data);
+    content.innerHTML = row('Nome e cognome', fullName)
+        + row('Codice fiscale', data.codice_fiscale)
+        + (parent || data.parent_codice_fiscale ? row('Genitore', [parent, data.parent_codice_fiscale].filter(Boolean).join(' · ')) : '')
+        + row('Indirizzo', addressLine);
+    document.getElementById('detailsPendingNote').classList.toggle('hidden', !data.has_pending_request);
+}
+// Birthday (birth date read from the student's own codice fiscale): a
+// banner on the dashboard on the day itself.
+function renderBirthdayBanner(d) {
+    const banner = document.getElementById('birthdayBanner');
+    if (!banner) return;
+    const v = window.Anagrafica.validateCodiceFiscale(d && d.codice_fiscale);
+    const now = new Date();
+    const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const leap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    const born = v.valid ? v.birthDate.slice(5) : '';
+    const isToday = born === mmdd || (born === '02-29' && mmdd === '02-28' && !leap(now.getFullYear()));
+    banner.classList.toggle('hidden', !isToday);
+    if (!isToday) return;
+    const name = (d.nome || String(d.name || '').trim().split(/\s+/)[0] || '').trim();
+    document.getElementById('birthdayBannerTitle').textContent = t('mv2_bday_title', { name });
+    document.getElementById('birthdayBannerText').textContent = t('mv2_bday_text');
+}
+function openDetailsScreen() {
+    const d = myDetailsOriginal;
+    if (!d) return;
+    const A = window.Anagrafica;
+    const set = (id, v) => { document.getElementById(id).value = v || ''; };
+    // Prefill: the separate fields when filled, otherwise a best guess from
+    // the old single fields so the student only has to check/correct.
+    let nome = d.nome, cognome = d.cognome;
+    if (!nome && !cognome) { const sug = A.suggestNameSplit(d.name, d.codice_fiscale); nome = sug.nome; cognome = sug.cognome; }
+    let pNome = d.parent_nome, pCognome = d.parent_cognome;
+    if (!pNome && !pCognome && d.parentname) { const sug = A.suggestNameSplit(d.parentname, d.parent_codice_fiscale); pNome = sug.nome; pCognome = sug.cognome; }
+    let addr = { via: d.addr_via, civico: d.addr_civico, cap: d.addr_cap, comune: d.addr_comune, provincia: d.addr_provincia };
+    if (!Object.values(addr).some(Boolean) && d.address) { addr = A.parseLegacyAddress(d.address); addr.provincia = A.siglaFromText(addr.provincia); }
+    set('mdNome', nome); set('mdCognome', cognome); set('mdCf', d.codice_fiscale);
+    set('mdParentNome', pNome); set('mdParentCognome', pCognome); set('mdParentCf', d.parent_codice_fiscale);
+    set('mdVia', addr.via); set('mdCivico', addr.civico);
+    const comuneEl = document.getElementById('mdComune'), provEl = document.getElementById('mdProvincia'), capEl = document.getElementById('mdCap');
+    A.attachComunePicker(comuneEl, provEl, capEl, updateMyDetailsChecks);
+    A.setComuneValue(comuneEl, provEl, capEl, addr.comune, addr.provincia, addr.cap);
+    clearDetailsPhoto();
+    document.getElementById('detailsScreen').classList.remove('hidden');
+    updateMyDetailsChecks();
+    A.loadComuni().then(updateMyDetailsChecks).catch(() => {});
+}
+function closeDetailsScreen() { document.getElementById('detailsScreen').classList.add('hidden'); }
+// Optional close-up photo: kept locally until "Invia", then uploaded and
+// sent inside the correction request — it becomes the student's photo only
+// when the studio approves it (unlike Settings, which sets it directly).
+let pendingDetailsPhoto = null;
+let pendingDetailsPhotoUrl = '';
+function renderDetailsPhotoPreview() {
+    const el = document.getElementById('mdPhotoPreview');
+    const current = myDetailsOriginal?.photo_path
+        ? supabaseClient.storage.from('student-photos').getPublicUrl(myDetailsOriginal.photo_path).data.publicUrl : '';
+    const url = pendingDetailsPhotoUrl || current;
+    el.style.backgroundImage = url ? `url('${url}')` : 'none';
+    el.textContent = url ? '' : ((myDetailsOriginal?.nome || myDetailsOriginal?.name || '?').trim().charAt(0).toUpperCase());
+    document.getElementById('mdPhotoUndoBtn').classList.toggle('hidden', !pendingDetailsPhoto);
+    document.getElementById('mdPhotoNote').textContent = pendingDetailsPhoto
+        ? 'Nuova foto pronta: verrà inviata con la richiesta.'
+        : 'Viso ben visibile, senza occhiali da sole.';
+}
+function setDetailsPhotoBlob(blob) {
+    if (pendingDetailsPhotoUrl) URL.revokeObjectURL(pendingDetailsPhotoUrl);
+    pendingDetailsPhoto = blob;
+    pendingDetailsPhotoUrl = URL.createObjectURL(blob);
+    renderDetailsPhotoPreview();
+}
+function handleDetailsPhotoInput(input) {
+    const file = input.files[0];
+    if (!file) return;
+    openMemberPhotoCrop(file, setDetailsPhotoBlob);
+    input.value = '';
+}
+function clearDetailsPhoto() {
+    if (pendingDetailsPhotoUrl) URL.revokeObjectURL(pendingDetailsPhotoUrl);
+    pendingDetailsPhoto = null;
+    pendingDetailsPhotoUrl = '';
+    renderDetailsPhotoPreview();
+}
+function updateMyDetailsChecks() {
+    const A = window.Anagrafica;
+    const val = (id) => document.getElementById(id).value.trim();
+    const paint = (statusId, cf, nome, cognome) => {
+        const el = document.getElementById(statusId);
+        if (!cf) { el.className = 'cf-status'; el.textContent = ''; return; }
+        const v = A.validateCodiceFiscale(cf);
+        if (!v.valid) { el.className = 'cf-status bad'; el.textContent = '✗ Non valido: ' + v.reason; return; }
+        if (A.cfMatchesName(cf, nome, cognome) === false) {
+            el.className = 'cf-status warn';
+            el.textContent = A.cfMatchesName(cf, cognome, nome) ? '⚠ Nome e cognome sono invertiti' : '⚠ Non corrisponde a nome e cognome';
+            return;
+        }
+        el.className = 'cf-status ok'; el.textContent = '✓ Valido';
+    };
+    paint('mdCfStatus', A.normalizeCf(val('mdCf')), val('mdNome'), val('mdCognome'));
+    paint('mdParentCfStatus', A.normalizeCf(val('mdParentCf')), val('mdParentNome'), val('mdParentCognome'));
+    const minor = A.isMinorOnDate(val('mdCf'), null);
+    const hint = document.getElementById('mdParentHint');
+    hint.style.color = minor ? 'var(--warning)' : 'var(--ink-faint)';
+    hint.textContent = minor ? '— obbligatorio per i minorenni' : '— facoltativo';
+    const addr = { via: val('mdVia'), civico: val('mdCivico'), cap: val('mdCap'), comune: val('mdComune'), provincia: val('mdProvincia') };
+    const st = document.getElementById('mdAddrStatus');
+    if (!Object.values(addr).some(Boolean)) { st.textContent = ''; return; }
+    const v = A.validateAddress(addr);
+    const all = v.problems.concat(v.warnings);
+    st.style.color = all.length ? 'var(--warning)' : 'var(--success)';
+    st.textContent = all.length ? '⚠ ' + all.join(', ') : '✓';
+}
+async function sendDetailsCorrection() {
+    const A = window.Anagrafica;
+    const val = (id) => document.getElementById(id).value.trim();
+    const nome = A.titleCase(val('mdNome')), cognome = A.titleCase(val('mdCognome'));
+    const cf = A.normalizeCf(val('mdCf')), pCf = A.normalizeCf(val('mdParentCf'));
+    const errors = [];
+    if (!nome || !cognome) errors.push('Nome e cognome sono obbligatori.');
+    if (cf && !A.validateCodiceFiscale(cf).valid) errors.push('Il codice fiscale non è valido.');
+    if (pCf && !A.validateCodiceFiscale(pCf).valid) errors.push('Il codice fiscale del genitore non è valido.');
+    if (A.isMinorOnDate(cf, null) && (!pCf || !val('mdParentNome') || !val('mdParentCognome'))) errors.push('Per i minorenni servono nome, cognome e codice fiscale di un genitore.');
+    const addr = { via: val('mdVia'), civico: val('mdCivico'), cap: val('mdCap'), comune: val('mdComune'), provincia: val('mdProvincia').toUpperCase() };
+    if (Object.values(addr).some(Boolean)) {
+        const v = A.validateAddress(addr);
+        if (!v.ok) errors.push('Indirizzo: ' + v.problems.join(', ') + '. Scegli il comune dall\'elenco.');
+    }
+    if (errors.length) { alert(errors.join('\n')); return; }
+    const values = {
+        nome, cognome, codice_fiscale: cf,
+        parent_nome: A.titleCase(val('mdParentNome')), parent_cognome: A.titleCase(val('mdParentCognome')), parent_codice_fiscale: pCf,
+        addr_via: addr.via, addr_civico: addr.civico, addr_cap: addr.cap, addr_comune: addr.comune, addr_provincia: addr.provincia
+    };
+    // Only what differs from what's stored goes in the request.
+    const changes = {};
+    Object.keys(values).forEach((k) => {
+        const old = String(myDetailsOriginal?.[k] ?? '').trim();
+        if (values[k] !== old) changes[k] = { old, new: values[k] };
+    });
+    if (pendingDetailsPhoto) {
+        const ext = pendingDetailsPhoto.type === 'image/png' ? 'png' : 'jpg';
+        const path = `req_${Date.now().toString(36)}${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await supabaseClient.storage.from('student-photos').upload(path, pendingDetailsPhoto, { contentType: pendingDetailsPhoto.type || 'image/jpeg' });
+        if (upErr) { alert('La foto non è stata caricata. Riprova.'); return; }
+        changes.photo_path = { old: String(myDetailsOriginal?.photo_path || ''), new: path };
+    }
+    if (Object.keys(changes).length === 0) { alert(t('mv2_details_nothing')); return; }
+    const { data: status, error } = await supabaseClient.rpc('request_details_change_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_changes: changes, p_passcode: enteredPasscode
+    });
+    if (error || status !== 'sent') { alert('Something went wrong.'); return; }
+    clearDetailsPhoto();
+    closeDetailsScreen();
+    alert(t('mv2_details_sent'));
+    renderMyDetails({ id: selectedMember.id });
+}
+
+async function renderInvoices(student) {
+    const list = document.getElementById('invoicesList');
+    const args = { p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode };
+    // New fatture (fatture_xml.sql, only once accepted by AdE) + the older
+    // PDFs uploaded through Tax Records — both shown, newest first.
+    const [{ data: v2, error: e2 }, { data: payments, error }] = await Promise.all([
+        supabaseClient.rpc('get_my_fatture_v2_by_phone', args),
+        supabaseClient.rpc('get_my_fatture_by_phone', args)
+    ]);
+    const rows = [];
+    (!e2 && Array.isArray(v2) ? v2 : []).forEach((f) => {
+        const d = String(f.data).slice(0, 10);
+        rows.push({
+            sort: d,
+            label: `Fattura ${f.numero}/${String(f.anno).slice(-2)} · ${d.split('-').reverse().join('/')} · €${Number(f.importo).toFixed(2).replace('.', ',')}`,
+            url: supabaseClient.storage.from('member-docs').getPublicUrl(f.pdf_token).data.publicUrl
+        });
+    });
+    // An old Tax Records PDF imported into the new register shares its
+    // published file — show it once, as the new fattura.
+    const v2Tokens = new Set((!e2 && Array.isArray(v2) ? v2 : []).map((f) => f.pdf_token));
+    (!error && Array.isArray(payments) ? payments : []).forEach((p) => {
+        if (v2Tokens.has(`${p.publicToken}.pdf`)) return;
+        rows.push({
+            sort: String(p.date || ''),
+            label: [p.date, p.taxFileNo].filter(Boolean).join(' · '),
+            url: supabaseClient.storage.from('member-docs').getPublicUrl(`${p.publicToken}.pdf`).data.publicUrl
+        });
+    });
+    if (rows.length === 0) { list.innerHTML = `<span class="empty-note">No invoices yet.</span>`; return; }
+    rows.sort((a, b) => b.sort.localeCompare(a.sort));
+    list.innerHTML = rows.map((r) => `<div class="ledger-row"><span>${escapeHtml(r.label)}</span><a href="${r.url}" target="_blank" rel="noopener" class="link-btn" style="padding:0;">Download</a></div>`).join('');
 }
 
 async function renderProfilePhotoCard(student) {
@@ -1954,6 +2237,12 @@ function applyStaticLabels() {
     document.getElementById('batchHeadingLabel').innerHTML = chipLabel('users-group', t('mv2_batch_heading'), 'icon-chip-purple');
     document.getElementById('certHeadingLabel').innerHTML = chipLabel('stethoscope', t('mv2_cert_heading'), 'icon-chip-warning');
     document.getElementById('invoicesHeadingLabel').innerHTML = chipLabel('file-text', t('mv2_invoices_heading'), 'icon-chip-accent');
+    document.getElementById('detailsHeadingLabel').innerHTML = chipLabel('users', t('mv2_details_heading'), 'icon-chip-accent');
+    document.getElementById('detailsEditBtnLabel').textContent = t('mv2_details_edit_btn');
+    document.getElementById('detailsSendBtnLabel').textContent = t('mv2_details_send_btn');
+    document.getElementById('detailsCloseBtn').innerHTML = icon('x', 18);
+    document.getElementById('mdPhotoCameraBtn').innerHTML = iconLabel('camera', 'Fotocamera', 14);
+    document.getElementById('mdPhotoUploadText').innerHTML = iconLabel('upload', 'Carica', 14);
     document.getElementById('profileHeadingLabel').innerHTML = chipLabel('camera', t('mv2_profile_heading'), 'icon-chip-purple');
     document.getElementById('resetPasscodeHeadingLabel').innerHTML = chipLabel('log-out', t('mv2_reset_passcode_heading'), 'icon-chip-warning');
     document.getElementById('resetPasscodeBtnLabel').textContent = t('mv2_reset_passcode_btn');
