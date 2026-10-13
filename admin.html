@@ -20,7 +20,7 @@
 <script src="membership.js?v=2"></script>
 <script src="anagrafica.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="fatture.js?v=8"></script>
+<script src="fatture.js?v=9"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -525,6 +525,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <button class="btn btn-outline btn-sm" onclick="openManualFattura()">Aggiungi fattura già emessa</button>
                 <button class="btn btn-outline btn-sm" onclick="exportFattureCsv()">Esporta CSV</button>
+                <button class="btn btn-outline btn-sm" onclick="openCertificatesModal()">Certificati medici</button>
                 <button class="btn btn-outline btn-sm" onclick="openFatturaSettings()">Impostazioni</button>
             </div>
         </div>
@@ -1188,6 +1189,35 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closeNewLocationModal()">Annulla</button>
             <button class="btn btn-primary" onclick="saveNewLocation()" id="nlSaveBtn">Crea sede</button>
+        </div>
+    </div>
+</div>
+
+<!-- CERTIFICATI MEDICI (all students) MODAL -->
+<div id="certificatesModal" class="modal-backdrop" onclick="if(event.target===this) closeCertificatesModal()">
+    <div class="modal-box" style="max-width:680px;">
+        <div class="modal-header">
+            <div>
+                <h3 style="font-size:1em;">Certificati medici</h3>
+                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">Tutti gli allievi: guarda, carica o sostituisci, elimina il PDF e imposta la scadenza.</div>
+            </div>
+            <button class="icon-btn-close" onclick="closeCertificatesModal()" id="certificatesCloseBtn"></button>
+        </div>
+        <div class="modal-body">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                <select id="certFilter" onchange="renderCertificatesList()" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em;">
+                    <option value="all">Tutti</option>
+                    <option value="problem" selected>Da sistemare (mancanti, scaduti, in scadenza)</option>
+                    <option value="missing">Mancanti</option>
+                    <option value="expired">Scaduti</option>
+                    <option value="expiring">In scadenza (30 giorni)</option>
+                    <option value="pending">Nuovi dal portale</option>
+                    <option value="valid">Validi</option>
+                </select>
+                <input id="certSearch" placeholder="Cerca allievo…" oninput="renderCertificatesList()" style="flex:1; min-width:160px; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em;">
+            </div>
+            <div id="certCounts" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
+            <div id="certificatesList" style="display:flex; flex-direction:column; gap:6px;"></div>
         </div>
     </div>
 </div>
@@ -4143,7 +4173,7 @@ async function downloadBatchesPdf() {
     const activeBatches = batchList.filter((b) => b.active !== false);
     if (activeBatches.length === 0) { alert('No batches to export.'); return; }
     const logoUrl = new URL('logo.png', window.location.href).href;
-    const generatedOn = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const generatedOn = formatShortDate(formatLocalDate(new Date()));
 
     const sections = activeBatches.map((b) => {
         const roster = students.filter((s) => s.batch === b.name && s.locationId === b.location_id && isStudentActive(s))
@@ -4847,7 +4877,8 @@ async function loadTaxRecords() {
             hasDoctor: row.has_doctor || false,
             doctorPdfPath: row.doctor_pdf_path || '',
             doctorPdfName: row.doctor_pdf_name || '',
-            doctorCertExpiresAt: row.doctor_cert_expires_at || ''
+            doctorCertExpiresAt: row.doctor_cert_expires_at || '',
+            doctorCertHistory: Array.isArray(row.doctor_cert_history) ? row.doctor_cert_history : []
         };
     });
 }
@@ -4869,7 +4900,8 @@ async function _upsertTaxRecord(studentId, record) {
         has_doctor: record.hasDoctor || false,
         doctor_pdf_path: record.doctorPdfPath || '',
         doctor_pdf_name: record.doctorPdfName || '',
-        doctor_cert_expires_at: record.doctorCertExpiresAt || null
+        doctor_cert_expires_at: record.doctorCertExpiresAt || null,
+        doctor_cert_history: record.doctorCertHistory || []
     };
     const droppedColumns = [];
     for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -4891,8 +4923,8 @@ async function _upsertTaxRecord(studentId, record) {
 }
 function getTaxRecord(studentId) {
     const r = taxRecordsCache[String(studentId)];
-    if (!r) return { payments: [], hasDoctor: false, doctorPdfPath: '', doctorPdfName: '', doctorCertExpiresAt: '' };
-    return { payments: r.payments || [], hasDoctor: r.hasDoctor || false, doctorPdfPath: r.doctorPdfPath || '', doctorPdfName: r.doctorPdfName || '', doctorCertExpiresAt: r.doctorCertExpiresAt || '' };
+    if (!r) return { payments: [], hasDoctor: false, doctorPdfPath: '', doctorPdfName: '', doctorCertExpiresAt: '', doctorCertHistory: [] };
+    return { payments: r.payments || [], hasDoctor: r.hasDoctor || false, doctorPdfPath: r.doctorPdfPath || '', doctorPdfName: r.doctorPdfName || '', doctorCertExpiresAt: r.doctorCertExpiresAt || '', doctorCertHistory: r.doctorCertHistory || [] };
 }
 function setTaxRecord(studentId, record) {
     taxRecordsCache[String(studentId)] = record;
@@ -4958,6 +4990,7 @@ function closeTaxModal() {
 }
 function renderTaxModal() {
     refreshStudentDoctorCard();
+    if (document.getElementById('certificatesModal')?.style.display === 'flex') renderCertificatesList();
     if (document.getElementById('taxModal')?.style.display !== 'flex') return;
     const s = students.find((x) => x.id === currentTaxStudentId);
     if (!s) return;
@@ -5075,10 +5108,13 @@ async function uploadDoctorPdf(input) {
     }
 
     const ext = inferDoctorCertExtension(file);
-    const filePath = `student_${currentTaxStudentId}/doctor_cert.${ext}`;
-    const { error } = await supabaseClient.storage.from(TAX_BUCKET).upload(filePath, file, { contentType: file.type || 'application/octet-stream', upsert: true });
+    // A new file name every time (never upsert over the previous one), so
+    // the old certificate survives in the history.
+    const filePath = `student_${currentTaxStudentId}/doctor_cert_${Date.now()}.${ext}`;
+    const { error } = await supabaseClient.storage.from(TAX_BUCKET).upload(filePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
     if (error) { alert('Upload failed: ' + error.message); if (btnText) btnText.textContent = originalBtnText; return; }
     const rec = getTaxRecord(currentTaxStudentId);
+    archiveCurrentDoctorCert(rec, 'Sostituito (caricato dallo studio)');
     rec.doctorPdfPath = filePath;
     rec.doctorPdfName = file.name;
     rec.hasDoctor = true;
@@ -5093,12 +5129,29 @@ async function viewDoctorPdf() {
     if (error) { if (win) win.close(); alert('Could not open PDF: ' + error.message); return; }
     if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
 }
+// Never erases the file: the certificate just stops being the current one and
+// moves into the history (Storico certificati), like every replaced one.
+function archiveCurrentDoctorCert(rec, reason) {
+    if (!rec.doctorPdfPath) return;
+    rec.doctorCertHistory = [{
+        path: rec.doctorPdfPath,
+        name: rec.doctorPdfName || '',
+        expiresAt: rec.doctorCertExpiresAt || '',
+        archivedAt: new Date().toISOString(),
+        reason
+    }, ...(rec.doctorCertHistory || [])];
+}
+async function viewDoctorCertFile(bucket, path) {
+    const win = window.open('', '_blank');
+    const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(path, 120);
+    if (error) { if (win) win.close(); alert('Impossibile aprire il file: ' + error.message); return; }
+    if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+}
 async function deleteDoctorPdf() {
-    if (!confirm('Remove doctor certificate PDF?')) return;
+    if (!confirm('Togliere il certificato attuale?\n\nNon viene cancellato: resta nello «Storico certificati».')) return;
     const rec = getTaxRecord(currentTaxStudentId);
     if (!rec.doctorPdfPath) return;
-    const { error } = await supabaseClient.storage.from(TAX_BUCKET).remove([rec.doctorPdfPath]);
-    if (error) { alert('Delete failed: ' + error.message); return; }
+    archiveCurrentDoctorCert(rec, 'Tolto dallo studio');
     rec.doctorPdfPath = '';
     rec.doctorPdfName = '';
     setTaxRecord(currentTaxStudentId, rec);
@@ -5143,10 +5196,12 @@ function renderStudentDoctorCard(s) {
                     ? `<button class="btn btn-outline btn-sm" onclick="viewDoctorPdf()">Guarda</button><button class="btn btn-outline btn-sm" onclick="deleteDoctorPdf()">Rimuovi file</button>`
                     : `<label class="btn btn-outline btn-sm" style="cursor:pointer;"><span id="uploadDoctorPdfBtnText">Carica certificato</span><input type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="uploadDoctorPdf(this)"></label>`}
                 <label style="display:flex; align-items:center; gap:5px; color:var(--ink-soft); font-weight:600;">Scadenza
-                    <input type="date" value="${exp}" onchange="setDoctorCertExpiry(this.value); refreshStudentDoctorCard();" style="padding:4px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em;">
+                    <input type="date" value="${exp}" onblur="if (isCompleteDate(this.value) || !this.value) { setDoctorCertExpiry(this.value); refreshStudentDoctorCard(); }" onkeydown="if (event.key === 'Enter') this.blur();" style="padding:4px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em;">
                 </label>
             </div>
             <div id="certDeletionNote" style="font-size:0.85em; color:var(--warning); margin-top:6px;"></div>
+            ${renderDoctorCertHistory(rec, s.id)}
+            <div id="certPortalHistory_${s.id}"></div>
             ${pending.map((sub) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:8px 10px; background:var(--warning-soft); border-radius:var(--radius-sm);">
                     <span><strong>Nuovo certificato dal portale</strong> · ${formatShortDate(sub.submitted_at)}</span>
@@ -5158,6 +5213,168 @@ function renderStudentDoctorCard(s) {
                 </div>`).join('')}
         </div>`;
     loadCertDeletionNote(s.id);
+    loadPortalCertHistory(s.id);
+}
+function renderDoctorCertHistory(rec, studentId) {
+    const h = rec.doctorCertHistory || [];
+    if (!h.length) return '';
+    return `
+        <details style="margin-top:8px;">
+            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">Storico certificati (${h.length})</summary>
+            ${h.map((x, i) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border-soft);">
+                    <span>${formatShortDate(String(x.archivedAt).slice(0, 10))} · ${escapeHtml(x.reason || '')}${x.expiresAt ? ' · scadenza ' + formatShortDate(x.expiresAt) : ''}</span>
+                    <span style="display:flex; gap:6px;">
+                        <button class="btn btn-outline btn-sm" onclick="viewDoctorCertFile(TAX_BUCKET, '${escapeHtml(x.path).replace(/'/g, "\\'")}')">Guarda</button>
+                        <button class="btn btn-danger btn-sm" title="Elimina definitivamente (file sbagliato)" onclick="deleteDoctorCertHistoryEntry(${studentId}, ${i})">${icon('trash', 13)}</button>
+                    </span>
+                </div>`).join('')}
+        </details>`;
+}
+// Permanent delete — only for a file attached by mistake. Everything else
+// stays on record; this is the one deliberate way to erase a certificate.
+async function deleteDoctorCertHistoryEntry(studentId, index) {
+    const rec = getTaxRecord(studentId);
+    const entry = (rec.doctorCertHistory || [])[index];
+    if (!entry) return;
+    if (!confirm('Eliminare DEFINITIVAMENTE questo certificato?\n\nUsalo solo se è un file sbagliato: il file viene cancellato e non si può recuperare.')) return;
+    const { error } = await supabaseClient.storage.from(TAX_BUCKET).remove([entry.path]);
+    if (error) { alert('Impossibile eliminare il file: ' + error.message); return; }
+    rec.doctorCertHistory = rec.doctorCertHistory.filter((_, i) => i !== index);
+    taxRecordsCache[String(studentId)] = rec;
+    await _upsertTaxRecord(studentId, rec);
+    refreshStudentDoctorCard();
+    if (document.getElementById('certificatesModal')?.style.display === 'flex') renderCertificatesList();
+}
+async function deletePortalCertSubmission(submissionId, studentId) {
+    if (!confirm('Eliminare DEFINITIVAMENTE questo invio dal portale?\n\nUsalo solo se è un file sbagliato: il file e la sua traccia vengono cancellati.')) return;
+    const { data } = await supabaseClient.from('medical_certificate_submissions').select('file_path').eq('id', submissionId).maybeSingle();
+    if (data && data.file_path) {
+        try { await supabaseClient.storage.from(MEDICAL_CERT_BUCKET).remove([data.file_path]); } catch (e) { /* file may already be gone */ }
+    }
+    const { error } = await supabaseClient.from('medical_certificate_submissions').delete().eq('id', submissionId);
+    if (error) { alert('Impossibile eliminare: ' + error.message); return; }
+    loadPortalCertHistory(studentId);
+    loadCertSubmissions();
+}
+// What the student sent from the portal that never became the current
+// certificate: rejected uploads (file still kept) and ones they deleted.
+async function loadPortalCertHistory(studentId) {
+    const el = document.getElementById(`certPortalHistory_${studentId}`);
+    if (!el) return;
+    const { data, error } = await supabaseClient
+        .from('medical_certificate_submissions')
+        .select('*')
+        .eq('student_id', studentId)
+        .order('submitted_at', { ascending: false });
+    if (error || !data) return;
+    const rows = data.filter((x) => x.status === 'rejected' || x.status === 'replaced' || x.deleted_at);
+    if (!rows.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <details style="margin-top:6px;">
+            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">Inviati dal portale e non usati (${rows.length})</summary>
+            ${rows.map((x) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border-soft);">
+                    <span>${formatShortDate(String(x.submitted_at).slice(0, 10))} · ${x.deleted_at ? 'eliminato dall\'allievo il ' + formatShortDate(String(x.deleted_at).slice(0, 10)) : x.status === 'replaced' ? 'sostituito dall\'allievo prima del controllo' : 'rifiutato'}</span>
+                    <span style="display:flex; gap:6px;">
+                        ${(x.status === 'rejected' || x.status === 'replaced') && x.file_path ? `<button class="btn btn-outline btn-sm" onclick="viewDoctorCertFile(MEDICAL_CERT_BUCKET, '${escapeHtml(x.file_path).replace(/'/g, "\\'")}')">Guarda</button>` : ''}
+                        <button class="btn btn-danger btn-sm" title="Elimina definitivamente (file sbagliato)" onclick="deletePortalCertSubmission(${x.id}, ${studentId})">${icon('trash', 13)}</button>
+                    </span>
+                </div>`).join('')}
+        </details>`;
+}
+// ===== Certificati medici: every student in one list (Fatture tab button) =====
+function doctorCertStatus(s) {
+    const rec = getTaxRecord(s.id);
+    const today = formatLocalDate(new Date());
+    const exp = rec.doctorCertExpiresAt ? String(rec.doctorCertExpiresAt).slice(0, 10) : '';
+    const pending = (certSubmissionsCache || []).some((x) => x.student_id === s.id);
+    let key, badge;
+    if (!rec.hasDoctor && !rec.doctorPdfPath) { key = 'missing'; badge = '<span class="badge badge-danger">Mancante</span>'; }
+    else if (exp && exp < today) { key = 'expired'; badge = `<span class="badge badge-danger">Scaduto il ${formatShortDate(exp)}</span>`; }
+    else if (exp && exp <= addDaysToDate(today, 30)) { key = 'expiring'; badge = `<span class="badge badge-warning">Scade il ${formatShortDate(exp)}</span>`; }
+    else { key = 'valid'; badge = `<span class="badge badge-success">${exp ? 'Valido fino al ' + formatShortDate(exp) : 'In archivio'}</span>`; }
+    return { key, badge, rec, exp, pending };
+}
+function openCertificatesModal() {
+    document.getElementById('certificatesModal').style.display = 'flex';
+    renderCertificatesList();
+}
+function closeCertificatesModal() { document.getElementById('certificatesModal').style.display = 'none'; }
+function renderCertificatesList() {
+    const list = document.getElementById('certificatesList');
+    if (!list) return;
+    const filter = document.getElementById('certFilter').value;
+    const term = (document.getElementById('certSearch').value || '').toLowerCase();
+    const loc = getLocationIdFilter();
+    const base = students
+        .filter((s) => isStudentActive(s) && (loc === null || s.locationId === loc))
+        .map((s) => ({ s, st: doctorCertStatus(s) }));
+    const count = (k) => base.filter((x) => x.st.key === k).length;
+    const pendingCount = base.filter((x) => x.st.pending).length;
+    document.getElementById('certCounts').innerHTML = [
+        `<span class="badge badge-danger">Mancanti ${count('missing')}</span>`,
+        `<span class="badge badge-danger">Scaduti ${count('expired')}</span>`,
+        `<span class="badge badge-warning">In scadenza ${count('expiring')}</span>`,
+        `<span class="badge badge-success">Validi ${count('valid')}</span>`,
+        pendingCount ? `<span class="badge badge-warning">Nuovi dal portale ${pendingCount}</span>` : ''
+    ].join('');
+    const rows = base
+        .filter(({ s, st }) => {
+            if (term && !s.name.toLowerCase().includes(term)) return false;
+            if (filter === 'all') return true;
+            if (filter === 'problem') return st.key !== 'valid' || st.pending;
+            if (filter === 'pending') return st.pending;
+            return st.key === filter;
+        })
+        .sort((a, b) => a.s.name.localeCompare(b.s.name));
+    list.innerHTML = rows.length ? rows.map(({ s, st }) => `
+        <div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 11px; font-size:0.86em;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span><span class="student-name-link" onclick="closeCertificatesModal(); openStudentViewModal(${s.id});">${escapeHtml(s.name)}</span> ${st.badge}${st.pending ? ' <span class="badge badge-warning">Nuovo dal portale</span>' : ''}</span>
+                <span style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    ${st.rec.doctorPdfPath ? `<button class="btn btn-outline btn-sm" onclick="certAction(${s.id}, 'view')">Guarda</button>` : ''}
+                    <label class="btn btn-outline btn-sm" style="cursor:pointer;">${st.rec.doctorPdfPath ? 'Sostituisci' : 'Carica'}<input type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="certUpload(${s.id}, this)"></label>
+                    ${st.rec.doctorPdfPath ? `<button class="btn btn-danger btn-sm" title="Togli il certificato attuale (resta nello storico)" onclick="certAction(${s.id}, 'delete')">${icon('trash', 13)}</button>` : ''}
+                    ${(st.rec.doctorCertHistory || []).length ? `<span style="font-size:0.85em; color:var(--ink-faint); cursor:pointer;" title="Apri l'allievo per vedere lo storico" onclick="closeCertificatesModal(); openStudentViewModal(${s.id});">storico ${st.rec.doctorCertHistory.length}</span>` : ''}
+                    <input type="date" value="${st.exp}" title="Scadenza" onblur="if ((isCompleteDate(this.value) || !this.value) && this.value !== '${st.exp}') certSetExpiry(${s.id}, this.value)" onkeydown="if (event.key === 'Enter') this.blur();" style="padding:4px 6px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em;">
+                </span>
+            </div>
+            ${(certSubmissionsCache || []).filter((x) => x.student_id === s.id).map((sub) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:7px; padding:6px 9px; background:var(--warning-soft); border-radius:var(--radius-sm);">
+                    <span>Caricato dall'allievo il ${formatShortDate(sub.submitted_at)}</span>
+                    <span style="display:flex; gap:6px;">
+                        <button class="btn btn-outline btn-sm" onclick="previewCertSubmission('${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Guarda</button>
+                        <button class="btn btn-success btn-sm" onclick="useCertificateSubmission(${sub.id}, ${sub.student_id}, '${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Usa</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectCertificateSubmission(${sub.id})">Rifiuta</button>
+                    </span>
+                </div>`).join('')}
+        </div>`).join('')
+        : `<div style="color:var(--ink-faint); font-size:0.88em; padding:10px 0;">Nessun allievo in questa lista.</div>`;
+}
+// The existing helpers act on currentTaxStudentId — point it at the row first.
+async function certAction(studentId, action) {
+    currentTaxStudentId = studentId;
+    if (action === 'view') await viewDoctorPdf();
+    if (action === 'delete') { await deleteDoctorPdf(); renderCertificatesList(); }
+}
+async function certUpload(studentId, input) {
+    currentTaxStudentId = studentId;
+    await uploadDoctorPdf(input);
+    renderCertificatesList();
+}
+function certSetExpiry(studentId, value) {
+    currentTaxStudentId = studentId;
+    setDoctorCertExpiry(value);
+    renderCertificatesList();
+    refreshStudentDoctorCard();
+}
+
+// Date boxes save when you LEAVE the field (or press Enter), not on every
+// keystroke: typing a year digit by digit (2 -> 20 -> 202 -> 2027) fired a
+// change each time, and the redraw that followed broke the typing.
+function isCompleteDate(v) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) && Number(String(v).slice(0, 4)) >= 1900;
 }
 function refreshStudentDoctorCard() {
     if (typeof currentViewingStudentId === 'undefined' || !currentViewingStudentId) return;
@@ -5197,6 +5414,7 @@ async function loadCertSubmissions() {
     document.getElementById('certSubmissionsCountBadge').textContent = certPendingCount;
     updateStudentsTabBadge();
     refreshStudentDoctorCard();
+    if (document.getElementById('certificatesModal')?.style.display === 'flex') renderCertificatesList();
     list.innerHTML = '';
     if (certSubmissionsCache.length === 0) return;
     certSubmissionsCache.forEach((sub) => {
@@ -5234,10 +5452,11 @@ async function useCertificateSubmission(submissionId, studentId, filePath) {
         // with (member.html sets this), so read it from there rather than
         // assuming .pdf.
         const ext = (String(filePath).match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase() || 'pdf';
-        const destPath = `student_${studentId}/doctor_cert.${ext}`;
-        const { error: uploadError } = await supabaseClient.storage.from(TAX_BUCKET).upload(destPath, blob, { contentType: blob.type || 'application/octet-stream', upsert: true });
+        const destPath = `student_${studentId}/doctor_cert_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabaseClient.storage.from(TAX_BUCKET).upload(destPath, blob, { contentType: blob.type || 'application/octet-stream', upsert: false });
         if (uploadError) throw uploadError;
         const rec = getTaxRecord(studentId);
+        archiveCurrentDoctorCert(rec, 'Sostituito dal nuovo certificato dell\'allievo');
         rec.doctorPdfPath = destPath;
         rec.doctorPdfName = `doctor_cert.${ext}`;
         rec.hasDoctor = true;
@@ -5571,13 +5790,13 @@ async function moveGalleryPhoto(id, dir) {
 
 // ---- Events (kind = 'upcoming' | 'past') ----
 function renderSiteEvents() {
-    const fmt = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const fmt = (d) => formatShortDate(d);
     const rowHtml = (ev) => `
         <div style="display:flex; align-items:center; gap:12px; border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:8px; background:var(--surface);">
             ${ev.image_url ? `<img src="${escapeHtml(ev.image_url)}" alt="" loading="lazy" style="width:52px; height:40px; object-fit:cover; border-radius:6px; flex-shrink:0;">` : `<div style="width:52px; height:40px; border-radius:6px; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--ink-faint);">${icon('calendar', 18)}</div>`}
             <div style="flex:1; min-width:0;">
                 <div style="font-weight:700;">${escapeHtml(ev.title)}</div>
-                <div style="font-size:0.85em; color:var(--ink-soft);">${ev.tba ? new Date(ev.event_date + 'T00:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) + ' · date TBA' : fmt(ev.event_date)}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
+                <div style="font-size:0.85em; color:var(--ink-soft);">${ev.tba ? String(ev.event_date).slice(5, 7) + '/' + String(ev.event_date).slice(0, 4) + ' · date TBA' : fmt(ev.event_date)}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
             </div>
             ${ev.kind === 'upcoming' ? `<button class="btn btn-success btn-sm" onclick="markEventDone(${ev.id})" title="Move to Recent Events">Done</button>` : ''}
             <button class="btn btn-danger btn-sm" onclick="deleteSiteEvent(${ev.id})" title="Delete event">${icon('trash', 13)}</button>
@@ -5639,7 +5858,8 @@ async function deleteSiteEvent(id) {
 function formatShortDate(dateStr) {
     const dt = new Date(String(dateStr).slice(0, 10) + 'T00:00:00');
     if (Number.isNaN(dt.getTime())) return dateStr;
-    return `${dt.getDate()} ${dt.toLocaleDateString('en-GB', { month: 'short' })} ${dt.getFullYear()}`;
+    // Numbers only (dd/mm/yyyy), never month names.
+    return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
 }
 
 // Old (pre-v2) payments — read straight from the shared fees_paid table,
@@ -6640,7 +6860,7 @@ function generateWhatsAppReportMessage(s) {
         .sort()
         .map((d) => {
             const dt = new Date(d + 'T00:00:00');
-            return `${dt.getDate()} ${dt.toLocaleDateString('en-GB', { month: 'short' })}`;
+            return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
         });
     const attendanceLine = recentAttendanceDates.length > 0 ? recentAttendanceDates.join(', ') : 'Nessuna presenza';
     const lastTx = v2CreditTransactions
@@ -7547,7 +7767,7 @@ function renderStudentViewModal(s) {
             const showNote = t.note && t.type !== 'practice_fee' && t.type !== 'extra_charge';
             return `
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;${clickable ? ' cursor:pointer;' : ''}"${clickable ? ` onclick="openEditRechargeModal(${t.id})"` : ''}>
-                <span>${label}${showNote ? ' — ' + escapeHtml(t.note) : ''} · ${String(t._effectiveDate).slice(0,10)}</span>
+                <span>${label}${showNote ? ' — ' + escapeHtml(t.note) : ''} · ${formatShortDate(t._effectiveDate)}</span>
                 <span style="display:flex; align-items:center; gap:8px; text-align:right; white-space:nowrap;">
                     <strong style="color:${Number(t.amount) > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${Number(t.amount) > 0 ? '+' : ''}€${t.amount}</strong>
                     <span style="color:var(--ink-faint);"> (bal €${t._runningBalance})</span>
@@ -7956,6 +8176,7 @@ function applyIcons() {
     document.getElementById('editPracticeListBtnLabel').innerHTML = iconLabel('users', 'Edit practice list', 15);
     document.getElementById('practiceListCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('dataCheckCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('certificatesCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('newBatchCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('newLocationCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('manageLocationsCloseBtn').innerHTML = icon('x', 16);

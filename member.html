@@ -636,7 +636,8 @@ function maskName(name) {
 function formatShortDate(dateStr) {
     const dt = new Date(String(dateStr).slice(0, 10) + 'T00:00:00');
     if (Number.isNaN(dt.getTime())) return dateStr;
-    return `${dt.getDate()} ${dt.toLocaleDateString('en-GB', { month: 'short' })} ${dt.getFullYear()}`;
+    // Numbers only (dd/mm/yyyy), never month names.
+    return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
 }
 
 // ===== Global state =====
@@ -1009,7 +1010,7 @@ function renderPaymentHistoryCard(rows) {
                 <div class="ledger-icon">${icon(iconName, 17)}</div>
                 <div style="flex:1; min-width:0;">
                     <div style="font-weight:700; font-size:0.87em;">${label}</div>
-                    <div style="font-size:0.75em; color:var(--ink-faint);">${String(tx._effectiveDate).slice(0, 10)}</div>
+                    <div style="font-size:0.75em; color:var(--ink-faint);">${formatShortDate(tx._effectiveDate)}</div>
                 </div>
                 <div style="font-weight:700; font-size:0.87em; color:${amt > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${amtText}</div>
             </div>`;

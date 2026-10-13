@@ -608,7 +608,7 @@ function renderFatturaForm() {
                     <span style="font-weight:700;">/ <span id="fmAnnoLabel">${String(d.anno).slice(-2)}</span></span>
                 </div>
             </div>
-            <div class="field" style="flex:1;"><label>Data</label><input id="fmData" type="date" value="${v(d.data_fattura)}" ${locked ? 'readonly' : ''} onchange="onFatturaDateChange()"></div>
+            <div class="field" style="flex:1;"><label>Data</label><input id="fmData" type="date" value="${v(d.data_fattura)}" ${locked ? 'readonly' : ''} onblur="onFatturaDateChange()" onkeydown="if (event.key === 'Enter') this.blur();"></div>
         </div>
         ${s ? `<div class="field"><label>Intestata a</label>
             <select id="fmTipo" onchange="onFatturaTipoChange()" ${locked ? 'disabled' : ''}>
@@ -695,9 +695,11 @@ function updateFatturaFormChecks() {
 }
 function onFatturaDateChange() {
     const d = fatturaDraft;
+    if (!d) return;
     const date = document.getElementById('fmData').value;
     const anno = Number(String(date).slice(0, 4));
-    if (!anno || anno === d.anno) return;
+    // Only once a full, real year is typed (not while typing "2", "20"…).
+    if (!anno || anno < 2000 || anno === d.anno) return;
     readFatturaForm();
     d.anno = anno;
     if (d.mode !== 'correct' && d.mode !== 'editManual') d.numero = nextFatturaNumber(anno);
