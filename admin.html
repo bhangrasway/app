@@ -21,6 +21,7 @@
 <script src="anagrafica.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="fatture.js?v=9"></script>
+<script src="tasse.js?v=17"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -293,6 +294,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <button class="tab-btn" data-tab="attendance" onclick="switchTab('attendance')"></button>
         <button class="tab-btn" data-tab="payments" onclick="switchTab('payments')"></button>
         <button class="tab-btn" data-tab="fatture" onclick="switchTab('fatture')"></button>
+        <button class="tab-btn" data-tab="tasse" onclick="switchTab('tasse')"></button>
         <button class="tab-btn" data-tab="batches" onclick="switchTab('batches')"></button>
         <button class="tab-btn" data-tab="fees" onclick="switchTab('fees')"></button>
         <button class="tab-btn" data-tab="website" onclick="switchTab('website')"></button>
@@ -318,6 +320,8 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">A student forgot their passcode and asked (via the member portal) to have it reset. Approving clears it — they'll be prompted to set a new one next time.</p>
             <div id="passcodeReqList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
+
+        <div class="card hidden" id="taxReminderCard" style="padding:14px 18px; margin-bottom:20px; border-color:#fbdca0; background:var(--warning-soft);"></div>
 
         <div class="card hidden" id="birthdayCard" style="padding:18px 20px; margin-bottom:20px; border-color:#f5c6e0; background:linear-gradient(160deg, #fff7fb, var(--surface));">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
@@ -531,6 +535,16 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         </div>
         <p style="font-size:0.84em; color:var(--ink-soft); margin:-6px 0 14px;">Per fare una fattura: apri l'allievo e premi «Fattura» sulla ricarica. Scarica l'XML, caricalo su Fatture e Corrispettivi, poi segna qui l'esito.</p>
         <div id="fattureTabContent"></div>
+    </div>
+
+    <!-- TASSE TAB (tasse.js / tax_tab.sql) -->
+    <div class="tab-panel" data-panel="tasse">
+        <div class="page-head">
+            <h2>Taxes <span style="font-weight:500; color:var(--ink-faint); font-size:0.7em;">(Tasse)</span></h2>
+            <button class="btn btn-outline btn-sm" onclick="openTaxSettings()">Settings</button>
+        </div>
+        <p style="font-size:0.84em; color:var(--ink-soft); margin:-6px 0 14px;">Forfettario · INPS Gestione Separata. The app prepares your F24s; you send them yourself.</p>
+        <div id="taxTabContent"></div>
     </div>
 
     <div class="tab-panel" data-panel="payments">
@@ -1222,6 +1236,18 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     </div>
 </div>
 
+<!-- TASSE GENERIC MODAL (tasse.js) -->
+<div id="taxGenericModal" class="modal-backdrop" onclick="if(event.target===this) closeTaxModal2()">
+    <div class="modal-box" style="max-width:560px;">
+        <div class="modal-header">
+            <h3 style="font-size:1em;" id="taxGenModalTitle"></h3>
+            <button class="icon-btn-close" onclick="closeTaxModal2()" id="taxGenCloseBtn"></button>
+        </div>
+        <div class="modal-body" id="taxGenModalBody"></div>
+        <div class="modal-footer" id="taxGenModalFooter"></div>
+    </div>
+</div>
+
 <!-- CONTROLLO DATI MODAL -->
 <div id="dataCheckModal" class="modal-backdrop" onclick="if(event.target===this) closeDataCheckModal()">
     <div class="modal-box" style="max-width:640px;">
@@ -1812,6 +1838,9 @@ async function loadAllData() {
         await loadTaxRecords();
         await loadCertSubmissions();
         renderFattureTab(); // old Tax Records entries to import are known only now
+        await loadTaxData();
+        renderTaxTab();
+        renderTaxReminder();
         // Must run before the request-count badges below: it rebuilds every
         // tab button's innerHTML from scratch (icon + label + a fresh, empty
         // badge span), so calling it after would silently wipe out whatever
@@ -8176,6 +8205,7 @@ function applyIcons() {
     document.getElementById('editPracticeListBtnLabel').innerHTML = iconLabel('users', 'Edit practice list', 15);
     document.getElementById('practiceListCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('dataCheckCloseBtn').innerHTML = icon('x', 16);
+    document.getElementById('taxGenCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('certificatesCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('newBatchCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('newLocationCloseBtn').innerHTML = icon('x', 16);
@@ -8185,8 +8215,8 @@ function applyIcons() {
     document.getElementById('chargeStudentsBtnLabel').innerHTML = iconLabel('plus', 'Charge students', 14);
     document.getElementById('extraChargeCloseBtn').innerHTML = icon('x', 16);
 
-    const tabIcons = { fatture: 'file-text', students: 'users', attendance: 'calendar', payments: 'credit-card', batches: 'filter', fees: 'file-text', reports: 'chevron-right', website: 'edit', performances: 'user' };
-    const tabLabels = { fatture: 'Fatture', students: 'Students', attendance: 'Attendance', payments: 'Payments', batches: 'Batches', fees: 'Income & Expense', reports: 'Reports', website: 'Website', performances: 'Performances' };
+    const tabIcons = { tasse: 'credit-card', fatture: 'file-text', students: 'users', attendance: 'calendar', payments: 'credit-card', batches: 'filter', fees: 'file-text', reports: 'chevron-right', website: 'edit', performances: 'user' };
+    const tabLabels = { tasse: 'Taxes', fatture: 'Fatture', students: 'Students', attendance: 'Attendance', payments: 'Payments', batches: 'Batches', fees: 'Income & Expense', reports: 'Reports', website: 'Website', performances: 'Performances' };
     // Notification dots for pending requests, visible from every tab —
     // passcode resets (Students), attendance requests (Attendance), batch
     // moves (Batches). Each id is filled/hidden by that request's own
