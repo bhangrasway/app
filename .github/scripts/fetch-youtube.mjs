@@ -17,12 +17,28 @@ function decodeEntities(s) {
         .replace(/&amp;/g, '&');
 }
 
-const res = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL_ID}`);
-if (!res.ok) {
-    console.error(`Feed fetch failed: ${res.status}`);
-    process.exit(1);
+// YouTube's RSS endpoint occasionally answers 404/5xx to CI runners for a
+// few minutes. Retry a few times; if it's still down, keep the existing
+// data/youtube.json and exit 0 — a temporary outage is not a failure worth
+// an alarm email (the next scheduled run, 6 hours later, picks it up).
+async function fetchFeed() {
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+        try {
+            const res = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL_ID}`);
+            if (res.ok) return await res.text();
+            console.warn(`Attempt ${attempt}: feed answered ${res.status}`);
+        } catch (e) {
+            console.warn(`Attempt ${attempt}: ${e.message}`);
+        }
+        await new Promise((r) => setTimeout(r, attempt * 15000));
+    }
+    return null;
 }
-const xml = await res.text();
+const xml = await fetchFeed();
+if (!xml) {
+    console.warn('YouTube feed unavailable right now; keeping the existing data/youtube.json.');
+    process.exit(0);
+}
 
 const videos = [...xml.matchAll(/<entry>[\s\S]*?<\/entry>/g)].map(([entry]) => {
     const id = (entry.match(/<yt:videoId>([\w-]+)<\/yt:videoId>/) || [])[1];
@@ -32,8 +48,8 @@ const videos = [...xml.matchAll(/<entry>[\s\S]*?<\/entry>/g)].map(([entry]) => {
 }).filter(v => v.id).slice(0, MAX_VIDEOS);
 
 if (!videos.length) {
-    console.error('Feed parsed but contained no videos; leaving existing data/youtube.json untouched.');
-    process.exit(1);
+    console.warn('Feed parsed but contained no videos; leaving existing data/youtube.json untouched.');
+    process.exit(0);
 }
 
 mkdirSync('data', { recursive: true });
