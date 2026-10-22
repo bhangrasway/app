@@ -341,7 +341,14 @@ function downloadBlob(blob, name) {
 function downloadFatturaXml(id) {
     const f = fattureList.find((x) => x.id === id);
     if (!f || !f.xml) { alert('This fattura has no XML file (added by hand).'); return; }
-    downloadBlob(new Blob([f.xml], { type: 'application/xml' }), f.file_name || `fattura_${f.numero}_${f.anno}.xml`);
+    const name = f.file_name || `fattura_${f.numero}_${f.anno}.xml`;
+    const blob = new Blob([f.xml], { type: 'application/xml' });
+    // Phone (above all the iPhone home-screen app, where a plain download can
+    // silently do nothing): the Share / Download menu of pdfview.js, so the XML
+    // can be saved in Files and then uploaded on AdE. Computer: download as always.
+    const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (phone && typeof openFileSmart === 'function') { openFileSmart({ name, getBlob: async () => blob }); return; }
+    downloadBlob(blob, name);
 }
 async function downloadFatturaPdf(id) {
     const f = fattureList.find((x) => x.id === id);
@@ -1049,11 +1056,14 @@ function fattureFromDate() {
 }
 // Recharges since fattureFromDate() without a fattura, grouped by student.
 // skipped=true returns the «Non serve» ones instead.
+// Done = on AdE (Uploaded / Accepted). An XML only created, or a rejected
+// fattura, still needs work: the payment stays in «To invoice».
+function fatturaIsDone(f) { return !!f && (f.status === 'accepted' || f.status === 'uploaded'); }
 function rechargesToInvoice(skipped) {
     const from = fattureFromDate();
     const rows = (typeof v2CreditTransactions === 'undefined' ? [] : v2CreditTransactions)
         .filter((t) => t.type === 'recharge' && !t.deleted_at && t.id && String(t.created_at).slice(0, 10) >= from)
-        .filter((t) => !fatturaForTransaction(t.id))
+        .filter((t) => !fatturaIsDone(fatturaForTransaction(t.id)))
         .filter((t) => fatturaSkipIds.has(t.id) === !!skipped)
         .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     const groups = new Map();
@@ -1068,7 +1078,7 @@ function studentsInvoiced() {
     const from = fattureFromDate();
     const missing = new Map(rechargesToInvoice(false).map((g) => [g.student?.id, g.txs.length]));
     const map = new Map();
-    fattureList.filter((f) => f.student_id && String(f.data_fattura).slice(0, 10) >= from).forEach((f) => {
+    fattureList.filter((f) => f.student_id && fatturaIsDone(f) && String(f.data_fattura).slice(0, 10) >= from).forEach((f) => {
         if (!map.has(f.student_id)) map.set(f.student_id, { student: students.find((x) => x.id === f.student_id), count: 0, total: 0 });
         const g = map.get(f.student_id);
         g.count++; g.total += Number(f.importo || 0);
@@ -1093,15 +1103,28 @@ function fattureTodoCardHtml() {
     const nSkipped = skipped.reduce((n, g) => n + g.txs.length, 0);
     const view = fattureTodoView === 'skipped' && !nSkipped ? 'todo' : fattureTodoView;
     const tab = (key, label) => `<button class="btn btn-sm ${view === key ? 'btn-primary' : 'btn-outline'}" onclick="setFattureTodoView('${key}')">${label}</button>`;
-    const txRow = (t, skippedRow) => `
+    const txRow = (t, skippedRow) => {
+        const f = fatturaForTransaction(t.id);
+        let state = '', buttons;
+        if (skippedRow) {
+            buttons = `<button class="btn btn-outline btn-sm" onclick="skipFatturaFor(${t.id}, false)">Restore</button>`;
+        } else if (f && f.status === 'rejected') {
+            state = ` <span class="badge badge-danger">${fmtNumeroFattura(f)} rejected</span>`;
+            buttons = `<button class="btn btn-primary btn-sm" onclick="openFatturaView(${f.id})">Open</button>`;
+        } else if (f) { // XML created, not uploaded to AdE yet
+            state = ` <span class="badge badge-warning">${fmtNumeroFattura(f)} · XML made, not uploaded yet</span>`;
+            buttons = `<button class="btn btn-outline btn-sm" onclick="downloadFatturaXml(${f.id})">${iconLabel('download', 'XML', 13)}</button>
+                <button class="btn btn-success btn-sm" onclick="setFatturaStatus(${f.id}, 'accepted', true)">${iconLabel('check-circle', 'Uploaded to AdE', 13)}</button>`;
+        } else {
+            buttons = `<button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})">Make fattura</button>
+                ${fatturaTodoReady ? `<button class="btn btn-outline btn-sm" title="This payment won't get a fattura from the app" onclick="skipFatturaFor(${t.id}, true)">Not needed</button>` : ''}`;
+        }
+        return `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0 5px 12px; font-size:0.85em;">
-            <span>${dateIt(String(t.created_at).slice(0, 10))} · <b>€${moneyIt(t.amount)}</b></span>
-            <span style="display:flex; gap:6px;">${skippedRow
-                ? `<button class="btn btn-outline btn-sm" onclick="skipFatturaFor(${t.id}, false)">Restore</button>`
-                : `<button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})">Make fattura</button>
-                   ${fatturaTodoReady ? `<button class="btn btn-outline btn-sm" title="This payment won't get a fattura from the app" onclick="skipFatturaFor(${t.id}, true)">Not needed</button>` : ''}`}
-            </span>
+            <span>${dateIt(String(t.created_at).slice(0, 10))} · <b>€${moneyIt(t.amount)}</b>${state}</span>
+            <span style="display:flex; gap:6px; flex-wrap:wrap;">${buttons}</span>
         </div>`;
+    };
     const groupHtml = (g, skippedRows) => `
         <div style="padding:8px 0; border-top:1px solid var(--border-soft);">
             <div style="font-weight:700; font-size:0.9em; cursor:pointer;" onclick="${g.student ? `openStudentViewModal(${g.student.id})` : ''}">${escapeHtml(g.student ? g.student.name : 'Deleted student')}

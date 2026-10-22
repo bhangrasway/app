@@ -21,7 +21,7 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=20"></script>
+<script src="i18n.js?v=21"></script>
 <script src="anagrafica.js?v=2"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -345,7 +345,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 <div style="font-size:0.82em; color:var(--ink-soft); margin-top:2px;" data-i18n="loc_info_text">On class days the app asks your location once, only to confirm your check-in at the studio. Never in the background, no battery drain.</div>
             </div>
             <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
-                <button class="btn btn-primary btn-sm" onclick="allowLocationNow()" data-i18n="loc_allow_btn">Allow location</button>
+                <button class="btn btn-primary btn-sm" onclick="allowLocationNow(true)" data-i18n="loc_allow_btn">Allow location</button>
                 <button class="link-btn" style="font-size:0.78em;" onclick="dismissLocInfo()" data-i18n="pwa_not_now">Not now</button>
             </div>
         </div>
@@ -1873,7 +1873,7 @@ async function renderLocInfoCard() {
     }
     const txt = document.getElementById('locSettingsText');
     if (txt) {
-        txt.textContent = t(perm === 'granted' ? 'loc_state_on' : perm === 'denied' ? 'loc_state_blocked' : 'loc_state_off');
+        txt.textContent = perm === 'granted' ? t('loc_state_on') : perm === 'denied' ? locHelp('on') : t('loc_state_off');
         txt.style.color = perm === 'granted' ? 'var(--success)' : 'var(--ink-faint)';
         txt.style.fontWeight = perm === 'granted' ? '600' : '';
         document.getElementById('locSwitch').checked = perm === 'granted';
@@ -1882,8 +1882,10 @@ async function renderLocInfoCard() {
 // Turning on asks the phone. A website can't take the permission back by itself,
 // so turning off explains where to do it (the switch stays as the phone says).
 function onLocSwitch(want) {
-    if (want) { allowLocationNow(); return; }
-    alert(t('loc_turn_off_help'));
+    // Ask straight from the tap (no await before it, or the browser may not
+    // show its popup). If the phone answers «blocked», explain how to unblock.
+    if (want) { allowLocationNow(true); return; }
+    alert(locHelp('off'));
     renderLocInfoCard();
 }
 function dismissLocInfo() {
@@ -1891,9 +1893,22 @@ function dismissLocInfo() {
     renderLocInfoCard();
 }
 // The phone's own «Allow location?» question, asked right after the tap.
-function allowLocationNow() {
-    if (!navigator.geolocation) { alert(t('loc_state_blocked')); return; }
-    navigator.geolocation.getCurrentPosition(() => renderLocInfoCard(), () => renderLocInfoCard(), { timeout: 10000, maximumAge: 60000 });
+// Where to turn location on/off for THIS phone: iPhone (Safari), Android
+// (Chrome) or computer — the menus differ. which: 'on' | 'off'.
+function locHelp(which) {
+    const os = isIos() ? 'ios' : /Android/i.test(navigator.userAgent) ? 'android' : 'pc';
+    return t(`loc_${which}_${os}`);
+}
+function allowLocationNow(explainIfBlocked) {
+    if (!navigator.geolocation) { alert(locHelp('on')); return; }
+    navigator.geolocation.getCurrentPosition(
+        () => renderLocInfoCard(),
+        (err) => {
+            // 1 = PERMISSION_DENIED: blocked before, the phone shows no popup anymore.
+            if (explainIfBlocked && err && err.code === 1) alert(locHelp('on'));
+            renderLocInfoCard();
+        },
+        { timeout: 10000, maximumAge: 60000 });
 }
 function renderAttnLocBlock() {
     const unknown = attnLocStatus === 'unknown';
