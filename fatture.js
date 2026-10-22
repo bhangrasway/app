@@ -59,6 +59,7 @@ async function loadFattureData() {
         const { data: skips, error: e3 } = await supabaseClient.from('fattura_skips').select('transaction_id');
         fatturaTodoReady = !e3;
         fatturaSkipIds = new Set((skips || []).map((r) => r.transaction_id));
+        setTimeout(checkXmlUploads, 1500);
     } catch (e) {
         console.error('Fatture not available (has fatture_xml.sql been run?):', e);
         fattureMissing = true;
@@ -343,6 +344,7 @@ function downloadFatturaXml(id) {
     if (!f || !f.xml) { alert('This fattura has no XML file (added by hand).'); return; }
     const name = f.file_name || `fattura_${f.numero}_${f.anno}.xml`;
     const blob = new Blob([f.xml], { type: 'application/xml' });
+    if (f.status === 'created') xmlPendingAdd(f.id);
     // Phone (above all the iPhone home-screen app, where a plain download can
     // silently do nothing): the Share / Download menu of pdfview.js, so the XML
     // can be saved in Files and then uploaded on AdE. Computer: download as always.
@@ -350,6 +352,76 @@ function downloadFatturaXml(id) {
     if (phone && typeof openFileSmart === 'function') { openFileSmart({ name, getBlob: async () => blob }); return; }
     downloadBlob(blob, name);
 }
+// ---------- «Did you upload it to AdE?» ----------
+// Downloading an XML, switching to the AdE site and coming back: on a phone the
+// admin page is often reloaded meanwhile and the fattura window is gone. The
+// downloaded-but-not-confirmed XMLs are kept in localStorage, and on return (or
+// after a reload) the admin asks which ones were uploaded.
+const XML_PENDING_KEY = 'bs_xml_pending';
+const XML_ASK_AFTER_MS = 20000;   // not right after the download
+let xmlAskOpen = false;
+function xmlPendingRead() {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(XML_PENDING_KEY) || '[]'); } catch (e) {}
+    // keep only XMLs still «created» (not uploaded/accepted/deleted), max 7 days
+    return list.filter((x) => x && x.id && Date.now() - x.at < 7 * 86400000
+        && fattureList.some((f) => f.id === x.id && f.status === 'created'));
+}
+function xmlPendingWrite(list) {
+    try { localStorage.setItem(XML_PENDING_KEY, JSON.stringify(list)); } catch (e) {}
+}
+function xmlPendingAdd(id) {
+    const list = xmlPendingRead().filter((x) => x.id !== id);
+    list.push({ id, at: Date.now() });
+    xmlPendingWrite(list);
+}
+function xmlPendingRemove(id) {
+    xmlPendingWrite(xmlPendingRead().filter((x) => x.id !== id));
+}
+function checkXmlUploads() {
+    if (xmlAskOpen || fattureMissing) return;
+    if (document.getElementById('fatturaModal')?.style.display === 'flex') return;
+    if (document.getElementById('taxGenericModal')?.style.display === 'flex') return;
+    const list = xmlPendingRead();
+    xmlPendingWrite(list); // pruned
+    if (!list.some((x) => Date.now() - x.at >= XML_ASK_AFTER_MS)) return;
+    renderXmlAsk();
+}
+function renderXmlAsk() {
+    const list = xmlPendingRead();
+    if (!list.length) { if (xmlAskOpen) { xmlAskOpen = false; closeTaxModal2(); } refreshFattureViews(); return; }
+    xmlAskOpen = true;
+    const hhmm = (t) => new Date(t).toTimeString().slice(0, 5);
+    const rows = list.map((x) => {
+        const f = fattureList.find((y) => y.id === x.id);
+        return `
+        <div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:8px; font-size:0.86em;">
+            <div><b>${fmtNumeroFattura(f)}</b> · ${dateIt(f.data_fattura)} · ${escapeHtml(`${f.recipient_cognome}, ${f.recipient_nome}`)} · <b>€${moneyIt(f.importo)}</b></div>
+            <div style="color:var(--ink-faint); margin-top:2px;">${escapeHtml(f.file_name || '')} · XML downloaded at ${hhmm(x.at)}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                <button class="btn btn-success btn-sm" onclick="xmlAskAnswer(${f.id}, true)">${iconLabel('check-circle', 'Uploaded', 13)}</button>
+                <button class="btn btn-outline btn-sm" onclick="xmlAskAnswer(${f.id}, false)">Not yet</button>
+                <button class="btn btn-outline btn-sm" onclick="downloadFatturaXml(${f.id})">${iconLabel('download', 'XML again', 13)}</button>
+            </div>
+        </div>`;
+    }).join('');
+    taxModal('Did you upload these to AdE?',
+        `<p style="font-size:0.85em; color:var(--ink-soft); margin-top:0;">You downloaded these XML files. If you're not sure, check on AdE: «Fatture e Corrispettivi» → «Monitoraggio» → «Fatture emesse»: the file name is the same as here.</p>${rows}`,
+        `<button class="btn btn-outline" style="margin-left:auto;" onclick="xmlAskLater()">Ask me later</button>`);
+}
+async function xmlAskAnswer(id, uploaded) {
+    xmlPendingRemove(id);
+    if (uploaded) await setFatturaStatus(id, 'accepted', true);
+    renderXmlAsk();
+}
+function xmlAskLater() {
+    xmlAskOpen = false;
+    closeTaxModal2();
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') setTimeout(checkXmlUploads, 600);
+});
+
 async function downloadFatturaPdf(id) {
     const f = fattureList.find((x) => x.id === id);
     if (!f) return;
@@ -1157,6 +1229,25 @@ function fattureTodoCardHtml() {
         </div>`;
 }
 
+// Every fattura whose XML was made but isn't marked as uploaded (from the DB,
+// so it shows on any device and after any reload).
+function xmlNotUploadedCardHtml() {
+    const list = fattureList.filter((f) => f.status === 'created').sort((a, b) => a.anno - b.anno || a.numero - b.numero);
+    if (!list.length) return '';
+    return `
+        <div class="card" style="padding:14px 16px; margin-bottom:14px; border-color:#fbdca0; background:var(--warning-soft);">
+            <div style="font-weight:700; font-size:0.92em; margin-bottom:6px;">XML made, not uploaded to AdE yet (${list.length})</div>
+            ${list.map((f) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid #fbdca0; font-size:0.85em;">
+                    <span><b>${fmtNumeroFattura(f)}</b> · ${escapeHtml(`${f.recipient_cognome}, ${f.recipient_nome}`)} · €${moneyIt(f.importo)} <span style="color:var(--ink-faint);">· ${escapeHtml(f.file_name || '')}</span></span>
+                    <span style="display:flex; gap:6px;">
+                        <button class="btn btn-outline btn-sm" onclick="downloadFatturaXml(${f.id})">${iconLabel('download', 'XML', 13)}</button>
+                        <button class="btn btn-success btn-sm" onclick="xmlPendingRemove(${f.id}); setFatturaStatus(${f.id}, 'accepted', true)">${iconLabel('check-circle', 'Uploaded to AdE', 13)}</button>
+                    </span>
+                </div>`).join('')}
+        </div>`;
+}
+
 function renderFattureTab() {
     const panel = document.getElementById('fattureTabContent');
     if (!panel) return;
@@ -1201,6 +1292,7 @@ function renderFattureTab() {
         </div>` : '';
     panel.innerHTML = `
         ${settingsWarn}
+        ${xmlNotUploadedCardHtml()}
         ${fattureTodoCardHtml()}
         ${legacyHtml}
         <div class="card" style="padding:14px 16px; margin-bottom:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
