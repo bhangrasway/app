@@ -729,6 +729,27 @@ function onFatturaStudentChange() {
     renderFatturaForm();
 }
 
+// An address fixed in the fattura form also goes into the student's record, so
+// the next fattura starts right. Fatture already made keep their own copy of the
+// address (their PDF/XML never change); only future ones use the record.
+async function writeBackFatturaAddress(s, d) {
+    if (!s) return;
+    const an = getStudentAnagrafica(s);
+    const next = {
+        via: d.recipient_via || '', civico: d.recipient_civico || '', cap: d.recipient_cap || '',
+        comune: d.recipient_comune || '', provincia: d.recipient_provincia || ''
+    };
+    if (!Object.values(next).some(Boolean)) return;
+    const same = !an.addrSuggested && Object.keys(next).every((k) => String(an.addr[k] || '') === next[k]);
+    if (same) return;
+    const back = {
+        addr_via: next.via, addr_civico: next.civico, addr_cap: next.cap, addr_comune: next.comune, addr_provincia: next.provincia,
+        address: [next.via, next.civico, next.cap, next.comune, next.provincia].join('|')
+    };
+    const { error } = await writeStudentWithSchemaFallback(back, s.id);
+    if (!error) Object.assign(s, { addrVia: next.via, addrCivico: next.civico, addrCap: next.cap, addrComune: next.comune, addrProvincia: next.provincia, address: back.address });
+}
+
 let fatturaSaveInProgress = false;
 async function saveFatturaForm() {
     if (fatturaSaveInProgress) return;
@@ -824,6 +845,7 @@ async function saveFatturaForm() {
             if (error) throw error;
             const f = fattureList.find((x) => x.id === d.id);
             Object.assign(f, update);
+            await writeBackFatturaAddress(students.find((x) => x.id === d.student_id), d);
             downloadFatturaXml(f.id);
             refreshFattureViews();
             openFatturaView(f.id);
@@ -853,6 +875,7 @@ async function saveFatturaForm() {
             const { error: backErr } = await writeStudentWithSchemaFallback(back, s.id);
             if (!backErr) { s.parentNome = back.parent_nome; s.parentCognome = back.parent_cognome; s.parentCodiceFiscale = back.parent_codice_fiscale; s.parentName = back.parentName; }
         }
+        await writeBackFatturaAddress(s, d);
         downloadFatturaXml(inserted.id);
         refreshFattureViews();
         openFatturaView(inserted.id);
