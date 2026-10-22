@@ -681,7 +681,12 @@ function renderFatturaForm() {
             <select id="fmStudent" onchange="onFatturaStudentChange()">
                 <option value="">— none —</option>
                 ${students.slice().sort((a, b) => a.name.localeCompare(b.name)).map((x) => `<option value="${x.id}" ${x.id === d.student_id ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}
-            </select></div>`
+            </select></div>
+           ${s ? `<div class="field"><label>Payment it belongs to</label>
+            <select id="fmTx">
+                <option value="">— none —</option>
+                ${paymentsForManualFattura(s.id, d.transaction_id).map((t) => `<option value="${t.id}" ${t.id === d.transaction_id ? 'selected' : ''}>${dateIt(String(t.created_at).slice(0, 10))} · €${moneyIt(t.amount)}</option>`).join('')}
+            </select></div>` : ''}`
         : '';
     const minorNote = d.minor ? `<div style="font-size:0.8em; color:var(--warning); font-weight:600; margin:-4px 0 10px;">Student under 18: the fattura goes to the parent.</div>` : '';
     body.innerHTML = `
@@ -755,6 +760,8 @@ function readFatturaForm() {
     d.recipient_cap = val('fmCap');
     d.descrizione = val('fmDescrizione');
     d.importo = Number(val('fmImporto'));
+    const txEl = document.getElementById('fmTx');
+    if (txEl) d.transaction_id = Number(txEl.value) || null;
     return d;
 }
 function updateFatturaFormChecks() {
@@ -798,11 +805,20 @@ function onFatturaTipoChange() {
     Object.assign(d, fatturaRecipientFor(s, d.data_fattura, document.getElementById('fmTipo').value));
     renderFatturaForm();
 }
+// A student's recharges that have no fattura yet (plus the one already linked
+// to this fattura), newest first — for the «Payment it belongs to» select.
+function paymentsForManualFattura(studentId, currentTxId) {
+    return (typeof v2CreditTransactions === 'undefined' ? [] : v2CreditTransactions)
+        .filter((t) => t.student_id === studentId && t.type === 'recharge' && !t.deleted_at && t.id
+            && (t.id === currentTxId || !fatturaForTransaction(t.id)))
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+}
 function onFatturaStudentChange() {
     const d = fatturaDraft;
     readFatturaForm();
     const id = Number(document.getElementById('fmStudent').value) || null;
     d.student_id = id;
+    d.transaction_id = null; // another student: choose their payment again
     const s = id && students.find((x) => x.id === id);
     if (s) Object.assign(d, fatturaRecipientFor(s, d.data_fattura));
     renderFatturaForm();
@@ -857,7 +873,7 @@ async function saveFatturaForm() {
     try {
         if (d.mode === 'editManual') {
             const f = fattureList.find((x) => x.id === d.id);
-            const update = { ...row, transaction_id: f.transaction_id, source: 'manual' };
+            const update = { ...row, source: 'manual' };
             const { error } = await supabaseClient.from('fatture').update(update).eq('id', d.id);
             if (error) throw error;
             Object.assign(f, update);
@@ -1149,7 +1165,7 @@ function rechargesToInvoice(skipped, year) {
 // Students with fatture dated since fattureFromDate(), plus how many recharges still miss one.
 function studentsInvoiced(year) {
     const from = fattureFromDate();
-    const missing = new Map(rechargesToInvoice(false, year).map((g) => [g.student?.id, g.txs.length]));
+    const missing = new Map(rechargesToInvoice(false).map((g) => [g.student?.id, g.txs.length]));
     const map = new Map();
     fattureList.filter((f) => f.student_id && fatturaIsDone(f) && String(f.data_fattura).slice(0, 10) >= from
         && (!year || String(f.data_fattura).slice(0, 4) === String(year))).forEach((f) => {
@@ -1169,9 +1185,102 @@ async function skipFatturaFor(txId, skip) {
     refreshFattureViews();
 }
 function setFattureTodoView(v) { fattureTodoView = v; renderFattureTab(); }
+// Fatture of a student not linked to any payment (typically «Add fattura already
+// issued»): they can be linked from «To invoice» so the payment counts as invoiced.
+function unlinkedFattureOf(studentId) {
+    return fattureList.filter((f) => f.student_id === studentId && !f.transaction_id);
+}
+function openLinkFattura(txId) {
+    const t = v2CreditTransactions.find((x) => x.id === txId);
+    if (!t) return;
+    const s = students.find((x) => x.id === t.student_id);
+    const list = unlinkedFattureOf(t.student_id)
+        .sort((a, b) => (Number(b.importo) === Number(t.amount)) - (Number(a.importo) === Number(t.amount)) || String(b.data_fattura).localeCompare(String(a.data_fattura)));
+    taxModal('Link an existing fattura',
+        `<p style="font-size:0.86em; margin-top:0;">Payment of <b>${escapeHtml(s ? s.name : '')}</b>: ${dateIt(String(t.created_at).slice(0, 10))} · <b>€${moneyIt(t.amount)}</b>. Which fattura already covers it?</p>
+        ${list.map((f) => `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0; border-top:1px solid var(--border-soft); font-size:0.86em;">
+                <span><b>${fmtNumeroFattura(f)}</b> · ${dateIt(f.data_fattura)} · €${moneyIt(f.importo)} · ${escapeHtml((FATTURA_STATUS[f.status] || {}).label || f.status)}
+                    ${Number(f.importo) === Number(t.amount) ? '<span class="badge badge-success">same amount</span>' : ''}</span>
+                <button class="btn btn-primary btn-sm" onclick="linkFatturaToPayment(${f.id}, ${t.id})">Link</button>
+            </div>`).join('')}`,
+        `<button class="btn btn-outline" style="margin-left:auto;" onclick="closeTaxModal2()">Cancel</button>`);
+}
+async function linkFatturaToPayment(fatturaId, txId) {
+    const { error } = await supabaseClient.from('fatture').update({ transaction_id: txId }).eq('id', fatturaId);
+    if (error) { alert('Could not link: ' + (/duplicate|unique/i.test(error.message) ? 'this payment already has a fattura.' : error.message)); return; }
+    const f = fattureList.find((x) => x.id === fatturaId);
+    if (f) f.transaction_id = txId;
+    closeTaxModal2();
+    refreshFattureViews();
+}
+// ---- Automatic linking of fatture added by hand ----
+// Pairs each unlinked fattura with a payment of the SAME student and the SAME
+// amount, without a fattura, at most 120 days apart — the closest dates first.
+// Shown as a list to check (all ticked) before anything is saved.
+function autoLinkPairs() {
+    const day = (d) => new Date(String(d).slice(0, 10) + 'T12:00:00').getTime() / 86400000;
+    const pairs = [];
+    const usedTx = new Set();
+    const byStudent = new Map();
+    fattureList.filter((f) => f.student_id && !f.transaction_id).forEach((f) => {
+        if (!byStudent.has(f.student_id)) byStudent.set(f.student_id, []);
+        byStudent.get(f.student_id).push(f);
+    });
+    byStudent.forEach((fatt, sid) => {
+        const pays = (typeof v2CreditTransactions === 'undefined' ? [] : v2CreditTransactions)
+            .filter((t) => t.student_id === sid && t.type === 'recharge' && !t.deleted_at && t.id && !fatturaForTransaction(t.id));
+        const cands = [];
+        fatt.forEach((f) => pays.forEach((t) => {
+            const gap = Math.abs(day(f.data_fattura) - day(t.created_at));
+            if (Number(f.importo) === Number(t.amount) && gap <= 120) cands.push({ f, t, gap });
+        }));
+        cands.sort((a, b) => a.gap - b.gap);
+        const usedF = new Set();
+        cands.forEach((c) => {
+            if (usedF.has(c.f.id) || usedTx.has(c.t.id)) return;
+            usedF.add(c.f.id); usedTx.add(c.t.id);
+            pairs.push(c);
+        });
+    });
+    return pairs.sort((a, b) => String(a.t.created_at).localeCompare(String(b.t.created_at)));
+}
+function openAutoLink() {
+    const pairs = autoLinkPairs();
+    if (!pairs.length) { alert('No automatic match found (same student and same amount). Link the others one by one.'); return; }
+    taxModal(`Link automatically (${pairs.length})`,
+        `<p style="font-size:0.86em; margin-top:0;">Fatture added by hand matched to a payment of the same student with the same amount. Untick any that is wrong, then «Link selected».</p>
+        ${pairs.map((c, i) => {
+            const st = students.find((x) => x.id === c.t.student_id);
+            return `<label style="display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border-soft); font-size:0.86em; cursor:pointer;">
+                <input type="checkbox" class="autoLinkBox" data-i="${i}" checked style="width:18px; height:18px; margin:0;">
+                <span style="flex:1;"><b>${escapeHtml(st ? st.name : '')}</b> · €${moneyIt(c.t.amount)}<br>
+                <span style="color:var(--ink-soft);">payment ${dateIt(String(c.t.created_at).slice(0, 10))} → fattura <b>${fmtNumeroFattura(c.f)}</b> of ${dateIt(c.f.data_fattura)}</span></span>
+            </label>`;
+        }).join('')}`,
+        `<div style="display:flex; gap:8px; margin-left:auto;"><button class="btn btn-outline" onclick="closeTaxModal2()">Cancel</button><button class="btn btn-primary" id="autoLinkBtn" onclick="saveAutoLink()">Link selected</button></div>`);
+    autoLinkPending = pairs;
+}
+let autoLinkPending = [];
+async function saveAutoLink() {
+    const chosen = Array.from(document.querySelectorAll('.autoLinkBox:checked')).map((x) => autoLinkPending[Number(x.dataset.i)]);
+    if (!chosen.length) { closeTaxModal2(); return; }
+    const btn = document.getElementById('autoLinkBtn');
+    btn.disabled = true;
+    let ok = 0;
+    for (const c of chosen) {
+        const { error } = await supabaseClient.from('fatture').update({ transaction_id: c.t.id }).eq('id', c.f.id);
+        if (!error) { c.f.transaction_id = c.t.id; ok++; }
+    }
+    closeTaxModal2();
+    refreshFattureViews();
+    alert(`${ok} fattur${ok === 1 ? 'a' : 'e'} linked.` + (ok < chosen.length ? ` ${chosen.length - ok} could not be linked.` : ''));
+}
 function fattureTodoCardHtml(year) {
-    const todo = rechargesToInvoice(false, year);
-    const skipped = fatturaTodoReady ? rechargesToInvoice(true, year) : [];
+    // To invoice / Hidden: every pending payment, any year (a December payment
+    // still shows in January). Invoiced: only the chosen year (restarts yearly).
+    const todo = rechargesToInvoice(false);
+    const skipped = fatturaTodoReady ? rechargesToInvoice(true) : [];
     const done = studentsInvoiced(year);
     // fatture · students · € for each tab
     const sumTx = (groups) => ({ n: groups.reduce((n, g) => n + g.txs.length, 0), stu: groups.length, eur: groups.reduce((e, g) => e + g.txs.reduce((x, t) => x + Number(t.amount || 0), 0), 0) });
@@ -1180,8 +1289,8 @@ function fattureTodoCardHtml(year) {
     const nTodo = todoS.n, nSkipped = skipS.n;
     const view = fattureTodoView === 'skipped' && !nSkipped ? 'todo' : fattureTodoView;
     const eur0 = (v) => '€' + (Math.round(v * 100) / 100).toLocaleString('it-IT', { maximumFractionDigits: 2 });
-    const tab = (key, label, st, tip) => `<button class="btn btn-sm ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" style="display:flex; flex-direction:column; align-items:flex-start; line-height:1.2; padding-top:5px; padding-bottom:5px;" onclick="setFattureTodoView('${key}')">
-        <span>${label}</span><span style="font-size:0.78em; opacity:0.85; font-weight:600;">${st.n} · ${st.stu} · ${eur0(st.eur)}</span></button>`;
+    const tab = (key, label, st, tip) => `<button class="btn ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" style="flex:1 1 0; min-width:110px; height:auto; display:flex; flex-direction:column; align-items:flex-start; gap:2px; line-height:1.25; padding:9px 14px; border-radius:var(--radius-sm); text-align:left;" onclick="setFattureTodoView('${key}')">
+        <span style="font-size:0.95em; font-weight:700;">${label}</span><span style="font-size:0.82em; opacity:0.9; font-weight:600;">${st.n} · ${st.stu} · ${eur0(st.eur)}</span></button>`;
     const txRow = (t, skippedRow) => {
         const f = fatturaForTransaction(t.id);
         let state = '', buttons;
@@ -1195,7 +1304,11 @@ function fattureTodoCardHtml(year) {
             buttons = `<button class="btn btn-outline btn-sm" onclick="downloadFatturaXml(${f.id})">${iconLabel('download', 'XML', 13)}</button>
                 <button class="btn btn-success btn-sm" onclick="setFatturaStatus(${f.id}, 'accepted', true)">${iconLabel('check-circle', 'Uploaded to AdE', 13)}</button>`;
         } else {
-            buttons = `<button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})">Make fattura</button>
+            const unlinked = unlinkedFattureOf(t.student_id);
+            const same = unlinked.find((x) => Number(x.importo) === Number(t.amount));
+            if (same) state = ` <span class="badge badge-neutral">${fmtNumeroFattura(same)} · €${moneyIt(same.importo)} added by hand, not linked</span>`;
+            buttons = `${unlinked.length ? `<button class="btn btn-outline btn-sm" onclick="openLinkFattura(${t.id})">Link existing fattura</button>` : ''}
+                <button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})">Make fattura</button>
                 ${fatturaTodoReady ? `<button class="btn btn-outline btn-sm" title="This payment won't get a fattura from the app" onclick="skipFatturaFor(${t.id}, true)">Not needed</button>` : ''}`;
         }
         return `
@@ -1225,13 +1338,17 @@ function fattureTodoCardHtml(year) {
     }
     return `
         <div class="card" style="padding:14px 16px; margin-bottom:14px;">
-            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
                 ${tab('todo', 'To invoice', todoS, 'To invoice')}
                 ${tab('done', 'Invoiced', doneS, 'Invoiced')}
                 ${nSkipped ? tab('skipped', 'Hidden', skipS, 'Hidden') : ''}
-                <span style="margin-left:auto; font-size:0.78em; color:var(--ink-faint);">year ${year || ''}</span>
             </div>
-            <div style="font-size:0.72em; color:var(--ink-faint); margin:-4px 0 8px;">fatture · students · €</div>
+            <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:0.74em; color:var(--ink-faint); margin-bottom:8px;">
+                <span>fatture · students · €</span><span>Invoiced: year ${year || ''}</span>
+            </div>
+            ${(() => { const n = autoLinkPairs().length; return n ? `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:8px 10px; margin-bottom:8px; background:var(--accent-soft); border-radius:var(--radius-sm); font-size:0.84em;">
+                <span>${n} fattur${n === 1 ? 'a' : 'e'} added by hand can be linked to ${n === 1 ? 'its payment' : 'their payments'} automatically.</span>
+                <button class="btn btn-primary btn-sm" onclick="openAutoLink()">Link automatically</button></div>` : ''; })()}
             ${fatturaTodoReady ? '' : '<div style="font-size:0.8em; color:var(--warning); margin-bottom:6px;">Run fatture_todo.sql in Supabase for the «Not needed» button and to change the date.</div>'}
             <div style="max-height:420px; overflow-y:auto;">${body}</div>
         </div>`;
