@@ -21,7 +21,7 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=16"></script>
+<script src="i18n.js?v=17"></script>
 <script src="anagrafica.js?v=2"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -259,7 +259,28 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 <p class="error-text" id="passcodeError" style="text-align:center;"></p>
                 <button class="btn btn-primary btn-block" id="passcodeSubmitBtn" onclick="handlePasscodeSubmit()"></button>
                 <button class="btn btn-outline btn-block hidden" id="passcodeSkipBtn" style="margin-top:8px;" onclick="handlePasscodeSkip()" data-i18n="mv2_skip_for_now">Skip for now</button>
-                <div style="text-align:center; margin-top:10px;"><button class="link-btn hidden" id="passcodeForgotBtn" onclick="handlePasscodeForgot()" data-i18n="mv2_forgot_passcode">Forgot your passcode?</button></div>
+                <div style="text-align:center; margin-top:10px;"><button class="link-btn hidden" id="passcodeForgotBtn" onclick="openForgotChoice()" data-i18n="mv2_forgot_passcode">Forgot your passcode?</button></div>
+            </div>
+            <!-- Forgot passcode: 1) reset it yourself (codice fiscale + one answer) 2) ask the studio -->
+            <div id="passcodeForgotChoice" class="hidden">
+                <h2 data-i18n="pr_title">Forgot your passcode?</h2>
+                <p style="color:var(--ink-faint); font-size:0.88em; margin:4px 0 16px;" data-i18n="pr_choose">Choose how:</p>
+                <button class="btn btn-primary btn-block" onclick="openSelfReset()" data-i18n="pr_self_btn">Reset it myself (codice fiscale)</button>
+                <button class="btn btn-outline btn-block" style="margin-top:8px;" onclick="handlePasscodeForgot()" data-i18n="pr_admin_btn">Send a request to the studio</button>
+                <div style="text-align:center; margin-top:12px;"><button class="link-btn" onclick="backToPasscodeForm()" data-i18n="pr_back">← Back</button></div>
+            </div>
+            <div id="passcodeSelfReset" class="hidden">
+                <h2 data-i18n="pr_self_title">Reset your passcode</h2>
+                <div class="field" style="margin-top:12px;"><label data-i18n="pr_cf_label">Codice fiscale (yours or your parent's)</label>
+                    <input id="prCf" maxlength="16" autocomplete="off" style="text-transform:uppercase;"></div>
+                <div class="field"><label id="prQuestionLabel"></label>
+                    <input id="prAnswer" autocomplete="off">
+                    <div id="prHint" style="font-size:0.8em; color:var(--ink-faint); margin-top:4px;"></div></div>
+                <div class="field"><label data-i18n="pr_new_label">New passcode (4 digits)</label>
+                    <input id="prNew" type="tel" inputmode="numeric" maxlength="4" autocomplete="off" style="letter-spacing:6px; font-size:1.2em; text-align:center;"></div>
+                <p class="error-text" id="prError"></p>
+                <button class="btn btn-primary btn-block" id="prSaveBtn" onclick="handleSelfReset()" data-i18n="pr_save">Save new passcode</button>
+                <div style="text-align:center; margin-top:12px;"><button class="link-btn" onclick="openForgotChoice()" data-i18n="pr_back">← Back</button></div>
             </div>
             <div id="passcodeForgotSent" class="hidden">
                 <div class="result-icon">✉</div>
@@ -803,8 +824,7 @@ function pickMember(member) {
     enteredPasscode = null;
     clearPasscodeBoxes();
     document.getElementById('passcodeError').textContent = '';
-    document.getElementById('passcodeForm').classList.remove('hidden');
-    document.getElementById('passcodeForgotSent').classList.add('hidden');
+    showPasscodePart('passcodeForm');
     passcodeMode = member.has_passcode ? 'enter' : 'setup';
     renderPasscodeTexts();
     show('passcodeState');
@@ -854,6 +874,56 @@ async function handlePasscodeSubmit() {
 function handlePasscodeSkip() { enteredPasscode = null; loadDashboard(selectedMember); }
 
 const STUDIO_WA_PHONE = '393445667033';
+// ---- Forgot passcode: choose «reset it myself» or «ask the studio» ----
+let passcodeResetQuestion = null; // { kind: 'parent'|'street'|'none', hint }
+function showPasscodePart(id) {
+    ['passcodeForm', 'passcodeForgotChoice', 'passcodeSelfReset', 'passcodeForgotSent'].forEach((x) => {
+        document.getElementById(x).classList.toggle('hidden', x !== id);
+    });
+}
+function backToPasscodeForm() { showPasscodePart('passcodeForm'); }
+function openForgotChoice() {
+    showPasscodePart('passcodeForgotChoice');
+    passcodeResetQuestion = null;
+    supabaseClient.rpc('get_passcode_reset_question_by_phone', { p_student_id: selectedMember.id, p_phone: enteredPhone })
+        .then(({ data }) => { passcodeResetQuestion = data && data.status === 'ok' ? data : { kind: 'none' }; });
+}
+async function openSelfReset() {
+    if (!passcodeResetQuestion) {
+        const { data } = await supabaseClient.rpc('get_passcode_reset_question_by_phone', { p_student_id: selectedMember.id, p_phone: enteredPhone });
+        passcodeResetQuestion = data && data.status === 'ok' ? data : { kind: 'none' };
+    }
+    if (passcodeResetQuestion.kind === 'none') { alert(t('pr_not_possible')); return; }
+    document.getElementById('prQuestionLabel').textContent = t(passcodeResetQuestion.kind === 'parent' ? 'pr_q_parent' : 'pr_q_street');
+    document.getElementById('prHint').textContent = t('pr_hint') + ' ' + (passcodeResetQuestion.hint || '');
+    ['prCf', 'prAnswer', 'prNew'].forEach((id) => { document.getElementById(id).value = ''; });
+    document.getElementById('prError').textContent = '';
+    showPasscodePart('passcodeSelfReset');
+    document.getElementById('prCf').focus();
+}
+async function handleSelfReset() {
+    const err = document.getElementById('prError');
+    const cf = document.getElementById('prCf').value.replace(/\s/g, '').toUpperCase();
+    const answer = document.getElementById('prAnswer').value.trim();
+    const code = document.getElementById('prNew').value.trim();
+    err.textContent = '';
+    if (cf.length !== 16) { err.textContent = t('pr_err_cf'); return; }
+    if (!answer) { err.textContent = t('pr_err_answer'); return; }
+    if (!/^\d{4}$/.test(code)) { err.textContent = t('mv2_enter_4digit'); return; }
+    const btn = document.getElementById('prSaveBtn');
+    btn.disabled = true;
+    const { data: status, error } = await supabaseClient.rpc('reset_passcode_self_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_cf: cf, p_answer: answer, p_new_passcode: code
+    });
+    btn.disabled = false;
+    if (error) { err.textContent = t('mv2_something_wrong'); return; }
+    if (status === 'wrong') { err.textContent = t('pr_err_wrong'); return; }
+    if (status === 'too_many') { err.textContent = t('pr_err_too_many'); return; }
+    if (status !== 'ok') { err.textContent = t('mv2_something_wrong'); return; }
+    enteredPasscode = code;
+    showPasscodePart('passcodeForm');
+    loadDashboard(selectedMember);
+}
 async function handlePasscodeForgot() {
     const { error } = await supabaseClient.rpc('request_passcode_reset_by_phone', { p_student_id: selectedMember.id, p_phone: enteredPhone });
     if (error) { document.getElementById('passcodeError').textContent = t('mv2_something_wrong'); return; }
@@ -862,8 +932,7 @@ async function handlePasscodeForgot() {
     document.getElementById('passcodeWaMessageBox').value = message;
     document.getElementById('passcodeWaBtn').href = `https://api.whatsapp.com/send?phone=${STUDIO_WA_PHONE}&text=${encodeURIComponent(message)}`;
     document.getElementById('passcodeCopyBtn').onclick = () => { navigator.clipboard?.writeText(message); };
-    document.getElementById('passcodeForm').classList.add('hidden');
-    document.getElementById('passcodeForgotSent').classList.remove('hidden');
+    showPasscodePart('passcodeForgotSent');
 }
 
 // ===== Settings screen (My Profile + in-session passcode reset request) =====
