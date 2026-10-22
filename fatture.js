@@ -1289,8 +1289,7 @@ function fattureTodoCardHtml(year) {
     const nTodo = todoS.n, nSkipped = skipS.n;
     const view = fattureTodoView === 'skipped' && !nSkipped ? 'todo' : fattureTodoView;
     const eur0 = (v) => '€' + (Math.round(v * 100) / 100).toLocaleString('it-IT', { maximumFractionDigits: 2 });
-    const tab = (key, label, st, tip) => `<button class="btn ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" style="flex:1 1 140px; max-width:210px; height:auto; display:flex; flex-direction:column; align-items:flex-start; gap:2px; line-height:1.25; padding:9px 14px; border-radius:var(--radius-sm); text-align:left;" onclick="setFattureTodoView('${key}')">
-        <span style="font-size:0.95em; font-weight:700;">${label}</span></button>`;
+    const tab = (key, label, st, tip) => `<button class="btn btn-sm ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" onclick="setFattureTodoView('${key}')">${label}</button>`;
     const txRow = (t, skippedRow) => {
         const f = fatturaForTransaction(t.id);
         let state = '', buttons;
