@@ -320,8 +320,10 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 <div id="appPage" style="display:none;">
     <div class="app-header">
         <div class="app-brand">
-            <img src="logo.png" alt="" style="height:28px; width:28px; border-radius:6px; object-fit:cover;">
-            <span class="brand-text">Bhangra Sway</span>
+            <a href="#" class="brand-home" onclick="switchTab('students'); return false;" title="Students" style="display:flex; align-items:center; gap:10px; color:inherit; text-decoration:none;">
+                <img src="logo.png" alt="" style="height:28px; width:28px; border-radius:6px; object-fit:cover;">
+                <span class="brand-text">Bhangra Sway</span>
+            </a>
             <button class="btn btn-ghost btn-sm" onclick="handleRefreshData()" id="refreshDataBtn" title="Reload data"></button>
         </div>
         <select id="locationSwitcher" onchange="handleLocationSwitch(this.value)" style="padding:6px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; font-weight:700;"></select>
@@ -332,7 +334,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     </div>
     <div class="nav-backdrop" id="navBackdrop" onclick="toggleNav(false)"></div>
     <div class="tab-row" id="tabRow">
-        <div class="nav-drawer-head"><img src="logo.png" alt="" style="height:28px; width:28px; border-radius:6px; object-fit:cover;"> Bhangra Sway</div>
+        <div class="nav-drawer-head" onclick="switchTab('students')" style="cursor:pointer;"><img src="logo.png" alt="" style="height:28px; width:28px; border-radius:6px; object-fit:cover;"> Bhangra Sway</div>
         <button class="tab-btn active" data-tab="students" onclick="switchTab('students')"></button>
         <button class="tab-btn" data-tab="attendance" onclick="switchTab('attendance')"></button>
         <button class="tab-btn" data-tab="payments" onclick="switchTab('payments')"></button>
