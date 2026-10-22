@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bhangra Sway: My Account</title>
 <link rel="icon" type="image/png" href="logo.png">
-<link rel="apple-touch-icon" href="logo.png">
+<!-- Home-screen app (PWA): Android reads the manifest, iPhone the apple-* tags -->
+<link rel="manifest" href="member.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bhangra Sway">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
     // This page defaults to Italian, unlike member.html/checkin.html (which
@@ -14,8 +21,9 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=9"></script>
+<script src="i18n.js?v=16"></script>
 <script src="anagrafica.js?v=2"></script>
+<script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -283,6 +291,42 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         </div>
         <div class="sibling-row hidden" id="siblingRow"></div>
 
+        <!-- "Get the app" hint: Android shows an Install button, iPhone the Share → Add to Home Screen steps. Hidden inside the installed app. -->
+        <div id="installCard" class="hidden" style="display:flex; gap:12px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin:0 0 14px; box-shadow:var(--shadow-sm);">
+            <img src="icons/icon-180.png" alt="" style="width:42px; height:42px; border-radius:10px; flex-shrink:0;">
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:0.92em;" data-i18n="pwa_install_title">Get the Bhangra Sway app</div>
+                <div style="font-size:0.82em; color:var(--ink-faint); margin-top:2px;" id="installCardText"></div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
+                <button class="btn btn-primary btn-sm hidden" id="installBtn" onclick="handleInstallClick()" data-i18n="pwa_install_btn">Install</button>
+                <button class="link-btn" style="font-size:0.78em;" onclick="dismissInstallCard()" data-i18n="pwa_not_now">Not now</button>
+            </div>
+        </div>
+
+        <!-- One-time note: when and why the app asks for location (hidden after "OK", or once allowed). -->
+        <div id="locInfoCard" class="hidden" style="display:flex; gap:12px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin:0 0 14px;">
+            <div style="font-size:1.5em;">📍</div>
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:0.92em;" data-i18n="loc_info_title">About your location</div>
+                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:2px;" data-i18n="loc_info_text">On class days the app asks your location once, only to confirm your check-in at the studio. Never in the background, no battery drain.</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="dismissLocInfo()" data-i18n="loc_info_ok">OK</button>
+        </div>
+
+        <!-- "Turn on notifications" (push). On iPhone only inside the installed app. -->
+        <div id="pushCard" class="hidden" style="display:flex; gap:12px; align-items:center; background:var(--accent-soft); border:1px solid #bfdbfe; border-radius:var(--radius-md); padding:12px 14px; margin:0 0 14px;">
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:0.92em;" data-i18n="pwa_push_title">Get class news on your phone</div>
+                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:2px;" data-i18n="pwa_push_text">Cancellations, new batches and reminders as notifications.</div>
+                <div style="font-size:0.8em; color:var(--danger); margin-top:4px;" id="pushCardError"></div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
+                <button class="btn btn-primary btn-sm" onclick="enablePush()" data-i18n="pwa_push_btn">Turn on</button>
+                <button class="link-btn" style="font-size:0.78em;" onclick="dismissPushCard()" data-i18n="pwa_not_now">Not now</button>
+            </div>
+        </div>
+
         <div class="tab-row">
             <button class="tab-btn active" data-tab="report" onclick="switchTab('report')" id="tabBtnReport"></button>
             <button class="tab-btn" data-tab="attendance" onclick="switchTab('attendance')" id="tabBtnAttendance"></button>
@@ -381,6 +425,17 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div class="report-block">
                 <p style="font-size:0.85em; font-weight:700; color:var(--ink-soft);" id="branchLine"></p>
                 <div id="attnLoading"><div class="spinner small"></div></div>
+                <div id="attnLocAsk" class="hidden">
+                    <div style="font-size:1.6em; margin-bottom:4px;">📍</div>
+                    <h3 style="margin-bottom:6px;" data-i18n="loc_ask_title">Check in with your location</h3>
+                    <ul style="margin:0 0 14px 18px; padding:0; color:var(--ink-soft); font-size:0.88em; line-height:1.6;">
+                        <li data-i18n="loc_ask_1">Only to confirm you're at the studio.</li>
+                        <li data-i18n="loc_ask_2">Only now, on class days. Never in the background.</li>
+                        <li data-i18n="loc_ask_3">One quick check: it doesn't drain your battery.</li>
+                    </ul>
+                    <button class="btn btn-primary btn-block" onclick="attnAllowLocation()" data-i18n="loc_ask_btn">Allow location & check in</button>
+                    <div style="text-align:center; margin-top:10px;"><button class="link-btn" onclick="submitAttnNotify('Did not want to share location')" data-i18n="loc_ask_no">Don't want to share it? Send a request instead</button></div>
+                </div>
                 <div id="attnClosed" class="hidden">
                     <p style="color:var(--ink-soft); font-size:0.9em; margin-bottom:12px;" id="attnClosedMessage"></p>
                     <button class="btn btn-outline-success" id="attnNotifyFromClosedBtnLabel"></button>
@@ -393,11 +448,13 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 </div>
                 <div id="attnReady" class="hidden">
                     <button class="btn btn-primary btn-block" id="attnConfirmBtnLabel" onclick="handleAttnConfirm()"></button>
+                    <p id="attnWhoHint" class="hidden" style="text-align:center; color:var(--ink-soft); font-size:0.85em; margin:10px 0 0;"></p>
                 </div>
                 <div id="attnResult" class="hidden">
                     <div class="result-icon" id="attnResultIcon"></div>
                     <div class="result-title" id="attnResultTitle"></div>
                     <div class="result-sub" id="attnResultSub"></div>
+                    <div id="attnSiblingsToo" style="display:flex; flex-direction:column; gap:8px; margin-top:14px;"></div>
                 </div>
                 <p class="error-text" id="attnError"></p>
             </div>
@@ -522,6 +579,13 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="report-block">
             <h3 id="profileHeadingLabel"></h3>
             <div id="profilePhotoContent" style="display:flex; flex-direction:column; align-items:center; text-align:center;"></div>
+        </div>
+
+        <div class="report-block">
+            <h3 data-i18n="pwa_push_heading">Notifications</h3>
+            <p class="empty-note" style="margin:0 0 12px;" id="pushSettingsText"></p>
+            <button class="btn btn-outline hidden" id="pushSettingsOnBtn" onclick="enablePush()" data-i18n="pwa_push_btn">Turn on</button>
+            <button class="btn btn-outline hidden" id="pushSettingsOffBtn" onclick="disablePush()" data-i18n="pwa_push_turn_off">Turn off on this phone</button>
         </div>
 
         <div class="report-block">
@@ -655,6 +719,7 @@ function show(id) {
     });
     document.getElementById('authShell').classList.toggle('hidden', id === 'dashboard');
     document.getElementById('dashboardState').classList.toggle('hidden', id !== 'dashboard');
+    if (id === 'dashboard') { renderInstallCard(); refreshPushState(); renderLocInfoCard(); }
 
     // #langPicker is one shared element (i18n.js finds it by id and builds
     // the dropdown into it once) — relocated rather than duplicated: next
@@ -841,7 +906,11 @@ function renderSiblingRow() {
         chip.className = 'sibling-chip' + (selectedMember && String(selectedMember.id) === String(m.id) ? ' active' : '');
         const initial = String(m.name || '?').trim().charAt(0).toUpperCase();
         chip.innerHTML = `<span class="sibling-avatar">${escapeHtml(initial)}</span><span>${escapeHtml(maskName(m.name))}</span>`;
-        chip.addEventListener('click', () => { if (!selectedMember || String(selectedMember.id) !== String(m.id)) pickMember(m); });
+        chip.addEventListener('click', () => {
+            if (selectedMember && String(selectedMember.id) === String(m.id)) return;
+            const saved = savedCodeFor(m.id);
+            if (saved) { enteredPasscode = saved.code; loadDashboard(m); } else pickMember(m);
+        });
         row.appendChild(chip);
     });
 }
@@ -854,6 +923,7 @@ async function loadDashboard(member) {
     });
     if (error) { backToPhoneEntry('Could not load your account. Please try again.'); return; }
     if (report?.status === 'bad_passcode') {
+        forgetSavedChild(member.id);
         passcodeMode = 'enter'; renderPasscodeTexts();
         document.getElementById('passcodeError').textContent = 'Wrong passcode.';
         clearPasscodeBoxes(); show('passcodeState'); shakePasscodeBoxes();
@@ -863,6 +933,7 @@ async function loadDashboard(member) {
     if (report?.status !== 'ok') { backToPhoneEntry('Verification failed.'); return; }
 
     lastReport = report;
+    saveLogin();
     if (report.student?.location_id) await loadMyLocation(report.student.location_id);
     renderReport(report);
     renderSiblingRow();
@@ -872,7 +943,7 @@ async function loadDashboard(member) {
     initPerform();
 }
 
-document.getElementById('startOverBtn').addEventListener('click', () => backToPhoneEntry(''));
+document.getElementById('startOverBtn').addEventListener('click', () => { forgetLogin(); backToPhoneEntry(''); });
 
 // ===== Dashboard tabs =====
 function switchTab(tabName) {
@@ -1186,7 +1257,8 @@ async function viewMedicalCertificate() {
     // the token; older ones predate that and are bare tokens always
     // published as .pdf — keep both working.
     const filename = /\.[a-zA-Z0-9]+$/.test(token) ? token : `${token}.pdf`;
-    window.open(supabaseClient.storage.from('member-docs').getPublicUrl(filename).data.publicUrl, '_blank');
+    const url = supabaseClient.storage.from('member-docs').getPublicUrl(filename).data.publicUrl;
+    openFileSmart({ name: 'certificato_medico' + (filename.match(/\.[a-zA-Z0-9]+$/) || ['.pdf'])[0], getUrl: async () => url });
 }
 async function deleteMedicalCertificate() {
     if (!confirm('Delete your medical certificate?')) return;
@@ -1418,7 +1490,15 @@ async function renderInvoices(student) {
     });
     if (rows.length === 0) { list.innerHTML = `<span class="empty-note">No invoices yet.</span>`; return; }
     rows.sort((a, b) => b.sort.localeCompare(a.sort));
-    list.innerHTML = rows.map((r) => `<div class="ledger-row"><span>${escapeHtml(r.label)}</span><a href="${r.url}" target="_blank" rel="noopener" class="link-btn" style="padding:0;">Download</a></div>`).join('');
+    memberInvoiceRows = rows;
+    list.innerHTML = rows.map((r, i) => `<div class="ledger-row"><span>${escapeHtml(r.label)}</span><button type="button" class="link-btn" style="padding:0;" onclick="openMemberInvoice(${i})">${escapeHtml(t('file_open'))}</button></div>`).join('');
+}
+let memberInvoiceRows = [];
+function openMemberInvoice(i) {
+    const r = memberInvoiceRows[i];
+    if (!r) return;
+    const name = (r.label.split(' · ')[0] || 'Fattura').replace(/[\\/\s]+/g, '_') + '.pdf';
+    openFileSmart({ name, getUrl: async () => r.url });
 }
 
 async function renderProfilePhotoCard(student) {
@@ -1544,7 +1624,7 @@ let attnLocStatus = 'too-far';
 let attnClosedMsg = null;
 
 function showAttn(id) {
-    ['attnLoading', 'attnClosed', 'attnTooFar', 'attnReady', 'attnResult'].forEach((s) => {
+    ['attnLoading', 'attnLocAsk', 'attnClosed', 'attnTooFar', 'attnReady', 'attnResult'].forEach((s) => {
         document.getElementById(s).classList.toggle('hidden', s !== id);
     });
     document.getElementById('attnError').textContent = '';
@@ -1605,14 +1685,65 @@ async function initAttendance() {
         showAttn('attnClosed');
         return;
     }
+    // Check-in is open: bring the student to the Attendance tab, then ask for
+    // the location only now. If the phone hasn't allowed it yet, first our own
+    // friendly explanation; the phone's popup comes only after their tap.
+    switchTab('attendance');
+    const perm = await geoPermissionState();
+    if (perm === 'granted') { await attnCheckLocation(); return; }
+    if (perm === 'denied') { attnLocStatus = 'unknown'; renderAttnLocBlock(); showAttn('attnTooFar'); return; }
+    showAttn('attnLocAsk');
+}
+// 'granted' | 'denied' | 'prompt' (not asked yet, or the browser can't tell)
+async function geoPermissionState() {
+    try {
+        if (navigator.permissions && navigator.permissions.query) {
+            const p = await navigator.permissions.query({ name: 'geolocation' });
+            return p.state;
+        }
+    } catch (e) { /* older Safari: unknown */ }
+    return 'prompt';
+}
+async function attnAllowLocation() {
+    showAttn('attnLoading');
+    await attnCheckLocation();
+}
+async function attnCheckLocation() {
     const locationStatus = await confirmBranchSilently();
+    renderLocInfoCard();
     if (locationStatus !== 'confirmed') {
         attnLocStatus = locationStatus;
         renderAttnLocBlock();
         showAttn('attnTooFar');
         return;
     }
-    showAttn('attnReady');
+    // At the studio. One student on this phone: mark it straight away (no tap).
+    // Siblings on the same phone: never automatic — the button shows the name of
+    // the child open now, so the right one is checked in.
+    if (householdMembers.length > 1) {
+        const name = maskName(selectedMember.name);
+        document.getElementById('attnConfirmBtnLabel').textContent = `${t('mv2_attn_confirm')} · ${name}`;
+        document.getElementById('attnWhoHint').textContent = t('attn_not_this_child').replace('{name}', name);
+        document.getElementById('attnWhoHint').classList.remove('hidden');
+        showAttn('attnReady');
+        return;
+    }
+    showAttn('attnLoading');
+    await handleAttnConfirm();
+}
+// ---- the one-time "About your location" card ----
+const LOC_INFO_KEY = 'bs_loc_info_seen';
+async function renderLocInfoCard() {
+    const card = document.getElementById('locInfoCard');
+    if (!card) return;
+    let seen = false;
+    try { seen = localStorage.getItem(LOC_INFO_KEY) === '1'; } catch (e) {}
+    const perm = seen ? 'granted' : await geoPermissionState();
+    card.classList.toggle('hidden', seen || perm === 'granted');
+}
+function dismissLocInfo() {
+    try { localStorage.setItem(LOC_INFO_KEY, '1'); } catch (e) {}
+    renderLocInfoCard();
 }
 function renderAttnLocBlock() {
     const unknown = attnLocStatus === 'unknown';
@@ -1654,6 +1785,22 @@ function showAttnResult(iconChar, title, sub) {
     document.getElementById('attnResultIcon').textContent = iconChar;
     document.getElementById('attnResultTitle').textContent = title;
     document.getElementById('attnResultSub').textContent = sub;
+    // Siblings on this phone: after one check-in, offer the others (one tap opens
+    // that child, whose own «Confirm Check-In · name» button then appears).
+    const box = document.getElementById('attnSiblingsToo');
+    const others = iconChar === '✓' ? householdMembers.filter((m) => selectedMember && m.id !== selectedMember.id) : [];
+    box.innerHTML = '';
+    others.forEach((m) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-outline btn-block';
+        b.textContent = t('attn_also_child').replace('{name}', maskName(m.name));
+        b.addEventListener('click', () => {
+            const saved = savedCodeFor(m.id);
+            if (saved) { enteredPasscode = saved.code; loadDashboard(m); } else pickMember(m);
+        });
+        box.appendChild(b);
+    });
     showAttn('attnResult');
 }
 document.getElementById('attnNotifyFromClosedBtnLabel').addEventListener('click', () => submitAttnNotify('Check-in window closed on their device'));
@@ -2263,14 +2410,210 @@ function applyStaticLabels() {
 // HTML, which i18n.js's own applyI18n() already handles) whenever the
 // language changes, so switching mid-session updates text immediately
 // instead of only on next page load.
-window.onLangChange = () => { applyStaticLabels(); renderPasscodeTexts(); };
+window.onLangChange = () => { applyStaticLabels(); renderPasscodeTexts(); renderInstallCard(); renderPushUi(); };
 
-document.addEventListener('DOMContentLoaded', () => {
+// ---------- "Get the app" (home-screen install) ----------
+// Android/Chrome fires beforeinstallprompt → our Install button opens the real
+// install dialog. iPhone has no such API → we show the Share → "Add to Home
+// Screen" steps. Never shown inside the installed app; "Not now" hides it for 7 days.
+let deferredInstallPrompt = null;
+const INSTALL_DISMISS_KEY = 'bs_install_dismissed';
+function isInstalledApp() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function isIos() {
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function installDismissedRecently() {
+    try { return Date.now() - Number(localStorage.getItem(INSTALL_DISMISS_KEY) || 0) < 7 * 86400000; } catch { return false; }
+}
+function renderInstallCard() {
+    const card = document.getElementById('installCard');
+    if (!card) return;
+    const mode = isInstalledApp() || installDismissedRecently() ? null
+        : deferredInstallPrompt ? 'android'
+        : isIos() ? 'ios' : null;
+    card.classList.toggle('hidden', !mode);
+    if (!mode) return;
+    document.getElementById('installBtn').classList.toggle('hidden', mode !== 'android');
+    document.getElementById('installCardText').textContent = t(mode === 'android' ? 'pwa_install_android' : 'pwa_install_ios');
+}
+async function handleInstallClick() {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    try { await deferredInstallPrompt.userChoice; } catch {}
+    deferredInstallPrompt = null;
+    renderInstallCard();
+}
+function dismissInstallCard() {
+    try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch {}
+    renderInstallCard();
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    renderInstallCard();
+});
+window.addEventListener('appinstalled', () => { deferredInstallPrompt = null; renderInstallCard(); });
+
+// ---------- Push notifications ----------
+// The phone gives a subscription (sw.js receives the pushes); it is saved for
+// this student via save_push_subscription_by_phone (push_notifications.sql).
+// The admin sends from admin.html -> Edge Function "send-push".
+// localStorage remembers which students turned it on on this phone, so it is
+// re-saved silently at each login only for them (not for anyone who logs in).
+const VAPID_PUBLIC_KEY = 'BL0GiDV-_qnD_FSIQDqsXFj7e1udVtXY9Jp_KnJ_P6YIUNurClu3CcYprqQcsWix007UgnTYJ6kI6HIBypM8RuQ';
+const PUSH_STUDENTS_KEY = 'bs_push_students';
+const PUSH_DISMISS_KEY = 'bs_push_dismissed';
+let swRegistration = null;
+let pushSubscription = null;
+function pushSupported() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+function pushStudentIds() {
+    try { return JSON.parse(localStorage.getItem(PUSH_STUDENTS_KEY) || '[]'); } catch { return []; }
+}
+function setPushStudentIds(ids) {
+    try { localStorage.setItem(PUSH_STUDENTS_KEY, JSON.stringify([...new Set(ids)])); } catch {}
+}
+async function getSwRegistration() {
+    if (!('serviceWorker' in navigator)) return null;
+    if (!swRegistration) {
+        try { swRegistration = await navigator.serviceWorker.register('sw.js'); } catch { return null; }
+    }
+    return swRegistration;
+}
+function vapidKeyBytes() {
+    const b64 = (VAPID_PUBLIC_KEY + '='.repeat((4 - VAPID_PUBLIC_KEY.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+async function savePushSubscription(sub) {
+    const j = sub.toJSON();
+    const { data, error } = await supabaseClient.rpc('save_push_subscription_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode,
+        p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_user_agent: navigator.userAgent
+    });
+    return !error && data === 'saved';
+}
+async function refreshPushState() {
+    renderPushUi(); // right away; again once the phone answers below
+    if (!pushSupported()) return;
+    const reg = await getSwRegistration();
+    pushSubscription = reg ? await reg.pushManager.getSubscription().catch(() => null) : null;
+    if (pushSubscription && Notification.permission === 'granted' && selectedMember && pushStudentIds().includes(selectedMember.id)) {
+        savePushSubscription(pushSubscription); // keeps it fresh; silent
+    }
+    renderPushUi();
+}
+function pushIsOnForMe() {
+    return !!(pushSubscription && pushSupported() && Notification.permission === 'granted' && selectedMember && pushStudentIds().includes(selectedMember.id));
+}
+function renderPushUi() {
+    const card = document.getElementById('pushCard');
+    if (!card) return;
+    const supported = pushSupported();
+    const blocked = supported && Notification.permission === 'denied';
+    const on = pushIsOnForMe();
+    let dismissed = false;
+    try { dismissed = Date.now() - Number(localStorage.getItem(PUSH_DISMISS_KEY) || 0) < 7 * 86400000; } catch {}
+    card.classList.toggle('hidden', !supported || blocked || on || dismissed);
+
+    const text = !supported ? (isIos() && !isInstalledApp() ? t('pwa_push_need_install') : t('pwa_push_unsupported'))
+        : blocked ? t('pwa_push_blocked')
+        : on ? t('pwa_push_on') : t('pwa_push_off');
+    document.getElementById('pushSettingsText').textContent = text;
+    document.getElementById('pushSettingsOnBtn').classList.toggle('hidden', !supported || blocked || on);
+    document.getElementById('pushSettingsOffBtn').classList.toggle('hidden', !on);
+}
+async function enablePush() {
+    const errEl = document.getElementById('pushCardError');
+    errEl.textContent = '';
+    if (!pushSupported() || !selectedMember) return;
+    const permission = await Notification.requestPermission(); // first: iPhone needs it right after the tap
+    if (permission !== 'granted') { renderPushUi(); return; }
+    try {
+        const reg = await getSwRegistration();
+        await navigator.serviceWorker.ready;
+        pushSubscription = await reg.pushManager.getSubscription()
+            || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes() });
+        if (!(await savePushSubscription(pushSubscription))) throw new Error('save');
+        setPushStudentIds([...pushStudentIds(), selectedMember.id]);
+    } catch {
+        errEl.textContent = t('pwa_push_error');
+        document.getElementById('pushSettingsText').textContent = t('pwa_push_error');
+        return;
+    }
+    renderPushUi();
+}
+async function disablePush() {
+    if (pushSubscription) {
+        await supabaseClient.rpc('remove_push_subscription', { p_endpoint: pushSubscription.endpoint });
+        try { await pushSubscription.unsubscribe(); } catch {}
+    }
+    pushSubscription = null;
+    setPushStudentIds([]);
+    renderPushUi();
+}
+function dismissPushCard() {
+    try { localStorage.setItem(PUSH_DISMISS_KEY, String(Date.now())); } catch {}
+    renderPushUi();
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
     applyStaticLabels();
     setupDigitBoxGroup('.passcode-box', handlePasscodeSubmit);
     show('loadingState');
-    backToPhoneEntry('');
+    if (!(await resumeSavedLogin())) backToPhoneEntry('');
 });
+
+// ---- Remembered login ----
+// After a successful login the phone keeps it (this device only), so opening
+// the app — or tapping a notification — goes straight to the account and the
+// automatic check-in. «Esci» or a changed passcode forgets it.
+// { phone, last: studentId, codes: { [studentId]: passcode|null } } — a parent's
+// phone keeps every child it logged in with, each with its own passcode.
+const SAVED_LOGIN_KEY = 'bs_member_login';
+function readSavedLogin() {
+    try {
+        const v = JSON.parse(localStorage.getItem(SAVED_LOGIN_KEY) || 'null');
+        if (v && v.id && !v.codes) return { phone: v.phone, last: v.id, codes: { [v.id]: v.passcode || null } }; // older format
+        return v;
+    } catch (e) { return null; }
+}
+function saveLogin() {
+    const prev = readSavedLogin();
+    const codes = prev && prev.phone === enteredPhone ? { ...prev.codes } : {};
+    codes[selectedMember.id] = enteredPasscode;
+    try { localStorage.setItem(SAVED_LOGIN_KEY, JSON.stringify({ phone: enteredPhone, last: selectedMember.id, codes })); } catch (e) {}
+}
+function forgetSavedChild(id) {
+    const prev = readSavedLogin();
+    if (!prev || !prev.codes) return;
+    delete prev.codes[id];
+    try { localStorage.setItem(SAVED_LOGIN_KEY, JSON.stringify(prev)); } catch (e) {}
+}
+function forgetLogin() {
+    try { localStorage.removeItem(SAVED_LOGIN_KEY); } catch (e) {}
+}
+function savedCodeFor(id) {
+    const v = readSavedLogin();
+    return v && v.phone === enteredPhone && v.codes && Object.prototype.hasOwnProperty.call(v.codes, id) ? { code: v.codes[id] } : null;
+}
+async function resumeSavedLogin() {
+    const saved = readSavedLogin();
+    if (!saved || !saved.phone || !saved.last) return false;
+    // A «tap to check in» notification names its child: open that one if saved.
+    const sid = Number(new URLSearchParams(location.search).get('sid')) || null;
+    const openId = sid && saved.codes && Object.prototype.hasOwnProperty.call(saved.codes, sid) ? sid : saved.last;
+    const { data: result, error } = await supabaseClient.rpc('find_members_by_phone', { p_phone: saved.phone });
+    const member = !error && result?.status === 'ok' ? (result.members || []).find((m) => m.id === openId) : null;
+    if (!member) { forgetLogin(); return false; }
+    enteredPhone = saved.phone;
+    householdMembers = result.members;
+    enteredPasscode = (saved.codes || {})[openId] ?? null;
+    await loadDashboard(member);
+    return true;
+}
 </script>
 </body>
 </html>

@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bhangra Sway — Studio Admin</title>
 <link rel="icon" type="image/png" href="logo.png">
-<link rel="apple-touch-icon" href="logo.png">
+<!-- Home-screen app (PWA) for the admin: own name/icon, notifications via the bell -->
+<link rel="manifest" href="admin.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BS Admin">
+<meta name="theme-color" content="#ffffff">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -18,10 +24,13 @@
   window.Mediabunny = { Output, Mp4OutputFormat, WebMOutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality };
 </script>
 <script src="membership.js?v=2"></script>
-<script src="anagrafica.js?v=2"></script>
+<script>window.ANAGRAFICA_LANG = 'en';</script>
+<script src="anagrafica.js?v=3"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="fatture.js?v=9"></script>
+<script src="pdfview.js?v=2"></script>
+<script src="fatture.js?v=13"></script>
 <script src="tasse.js?v=17"></script>
+<script src="notifiche.js?v=7"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -286,6 +295,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <button class="btn btn-ghost btn-sm" onclick="handleRefreshData()" id="refreshDataBtn" title="Reload data"></button>
         </div>
         <select id="locationSwitcher" onchange="handleLocationSwitch(this.value)" style="padding:6px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em; font-weight:700;"></select>
+        <button class="btn btn-ghost btn-sm" onclick="openAdminPushModal()" id="adminBellBtn" title="Notifications on this device"></button>
         <button class="btn btn-ghost btn-sm" onclick="openSecurityModal()" id="securityBtnIcon"></button>
         <button class="btn btn-ghost btn-sm" onclick="handleLogout()" id="logoutBtnIcon"></button>
     </div>
@@ -307,6 +317,8 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <h2>Students</h2>
             <div style="display:flex; align-items:center; gap:10px;">
                 <div id="studentsCountLabel" style="color:var(--ink-soft); font-size:0.86em;"></div>
+                <button class="btn btn-primary btn-sm" onclick="openPushModal()" title="Send a notification to students' phones">Send notification</button>
+                <button class="btn btn-outline btn-sm" onclick="openAutoPushModal()" title="Automatic class reminders and birthday wishes">Auto notifications</button>
                 <button class="btn btn-outline btn-sm" onclick="toggleStudentsTotalBalance()" id="studentsTotalBalanceBtn" title="Show total balance"></button>
                 <div id="studentsTotalBalanceValue" class="hidden" style="font-weight:800; font-size:0.9em;"></div>
             </div>
@@ -325,28 +337,28 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 
         <div class="card hidden" id="birthdayCard" style="padding:18px 20px; margin-bottom:20px; border-color:#f5c6e0; background:linear-gradient(160deg, #fff7fb, var(--surface));">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
-                <h3 style="font-size:0.95em; display:flex; align-items:center; gap:8px;" id="birthdayHeading">Compleanni</h3>
-                <button class="btn btn-primary btn-sm hidden" id="birthdayGroupBtn" onclick="sendBirthdayGroupMessage()">Messaggio per il gruppo</button>
+                <h3 style="font-size:0.95em; display:flex; align-items:center; gap:8px;" id="birthdayHeading">Birthdays</h3>
+                <button class="btn btn-primary btn-sm hidden" id="birthdayGroupBtn" onclick="sendBirthdayGroupMessage()">Message for the group</button>
             </div>
             <div id="birthdayList" style="display:flex; flex-direction:column; gap:6px;"></div>
         </div>
 
         <div class="card hidden" id="certSubmissionsCard" style="padding:18px 20px; margin-bottom:20px; border-color:#fbdca0;">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                <h3 style="font-size:0.95em;">Certificati medici da controllare</h3>
+                <h3 style="font-size:0.95em;">Medical certificates to check</h3>
                 <span class="badge badge-warning" id="certSubmissionsCountBadge"></span>
             </div>
-            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">Un allievo ha caricato il certificato medico dal portale. Guardalo, poi «Usa» per archiviarlo come suo certificato, oppure «Rifiuta».</p>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">A student uploaded a medical certificate from the portal. Look at it, then «Use» to save it as their certificate, or «Reject».</p>
             <div id="certSubmissionsList" style="display:flex; flex-direction:column; gap:8px;"></div>
             <div id="noCertSubmissionsMsg" class="hidden"></div>
         </div>
 
         <div class="card hidden" id="detailReqCard" style="padding:18px 20px; margin-bottom:20px; border-color:#fbdca0;">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                <h3 style="font-size:0.95em;">Richieste di correzione dati</h3>
+                <h3 style="font-size:0.95em;">Requests to correct details</h3>
                 <span class="badge badge-warning" id="detailReqCountBadge"></span>
             </div>
-            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">Un allievo ha corretto i propri dati dal portale. Controlla prima → dopo: «Approva» li salva, «Rifiuta» li scarta.</p>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin:0 0 12px;">A student corrected their details from the portal. Check before → after: «Approve» saves them, «Reject» discards them.</p>
             <div id="detailReqList" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
 
@@ -418,7 +430,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 
         <div style="display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap;">
             <input id="studentSearch" placeholder="Search by name or parent…" oninput="renderStudentsList()" style="flex:1; max-width:360px; padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em;">
-            <button class="btn btn-outline btn-sm" onclick="openDataCheckModal()" id="dataCheckBtn">Controllo dati <span class="badge badge-warning hidden" id="dataCheckCount" style="margin-left:4px;"></span></button>
+            <button class="btn btn-outline btn-sm" onclick="openDataCheckModal()" id="dataCheckBtn">Data check <span class="badge badge-warning hidden" id="dataCheckCount" style="margin-left:4px;"></span></button>
             <select id="studentsActiveFilterSelect" onchange="setStudentsActiveFilter(this.value)" style="padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em; font-weight:600; color:var(--ink-soft); background:var(--bg);">
                 <option value="active">Active only</option>
                 <option value="inactive">Inactive only</option>
@@ -527,13 +539,12 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="page-head">
             <h2>Fatture</h2>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <button class="btn btn-outline btn-sm" onclick="openManualFattura()">Aggiungi fattura già emessa</button>
-                <button class="btn btn-outline btn-sm" onclick="exportFattureCsv()">Esporta CSV</button>
-                <button class="btn btn-outline btn-sm" onclick="openCertificatesModal()">Certificati medici</button>
-                <button class="btn btn-outline btn-sm" onclick="openFatturaSettings()">Impostazioni</button>
+                <button class="btn btn-outline btn-sm" onclick="openManualFattura()">Add fattura already issued</button>
+                <button class="btn btn-outline btn-sm" onclick="exportFattureCsv()">Export CSV</button>
+                <button class="btn btn-outline btn-sm" onclick="openCertificatesModal()">Medical certificates</button>
+                <button class="btn btn-outline btn-sm" onclick="openFatturaSettings()">Settings</button>
             </div>
         </div>
-        <p style="font-size:0.84em; color:var(--ink-soft); margin:-6px 0 14px;">Per fare una fattura: apri l'allievo e premi «Fattura» sulla ricarica. Scarica l'XML, caricalo su Fatture e Corrispettivi, poi segna qui l'esito.</p>
         <div id="fattureTabContent"></div>
     </div>
 
@@ -596,8 +607,8 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="page-head">
             <h2>Batches</h2>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="btn btn-primary btn-sm" onclick="openNewBatchModal()">+ Nuovo gruppo</button>
-                <button class="btn btn-outline btn-sm" onclick="openManageLocations()">Gestisci sedi</button>
+                <button class="btn btn-primary btn-sm" onclick="openNewBatchModal()">+ New batch</button>
+                <button class="btn btn-outline btn-sm" onclick="openManageLocations()">Manage locations</button>
                 <button class="btn btn-outline btn-sm" onclick="downloadBatchesPdf()" id="downloadBatchesPdfBtnLabel"></button>
             </div>
         </div>
@@ -947,6 +958,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 </div>
             </div>
             <div style="display:flex; gap:18px; align-items:center; flex-shrink:0;">
+                <button class="btn btn-outline btn-sm" onclick="openPushModal('stu-' + currentViewingStudentId)" id="svmNotifyBtn" title="Send a notification to this student"></button>
                 <button class="icon-btn-close" style="color:var(--danger);" onclick="deleteStudent(currentViewingStudentId)" id="svmDeleteBtn" title="Delete student"></button>
                 <button class="btn btn-outline btn-sm" onclick="closeStudentViewModal()" id="svmCloseBtn"></button>
             </div>
@@ -1119,13 +1131,13 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 <div id="fatturaSettingsModal" class="modal-backdrop" onclick="if(event.target===this) closeFatturaSettings()">
     <div class="modal-box" style="max-width:560px;">
         <div class="modal-header">
-            <h3 style="font-size:1em;">Impostazioni fattura</h3>
+            <h3 style="font-size:1em;">Fattura settings</h3>
             <button class="icon-btn-close" onclick="closeFatturaSettings()" id="fatturaSettingsCloseBtn"></button>
         </div>
         <div class="modal-body" id="fatturaSettingsBody"></div>
         <div class="modal-footer">
-            <button class="btn btn-outline" onclick="closeFatturaSettings()">Annulla</button>
-            <button class="btn btn-primary" onclick="saveFatturaSettings()">Salva</button>
+            <button class="btn btn-outline" onclick="closeFatturaSettings()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveFatturaSettings()">Save</button>
         </div>
     </div>
 </div>
@@ -1134,28 +1146,28 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 <div id="newBatchModal" class="modal-backdrop" onclick="if(event.target===this) closeNewBatchModal()">
     <div class="modal-box" style="max-width:440px;">
         <div class="modal-header">
-            <h3 style="font-size:1em;">Nuovo gruppo</h3>
+            <h3 style="font-size:1em;">New batch</h3>
             <button class="icon-btn-close" onclick="closeNewBatchModal()" id="newBatchCloseBtn"></button>
         </div>
         <div class="modal-body">
-            <div class="field"><label>Sede</label><select id="nbLocation"></select></div>
-            <div class="field"><label>Nome del gruppo</label><input id="nbName" maxlength="40" placeholder="es. Principianti Castelvetro">
-                <div style="font-size:0.74em; color:var(--ink-faint); margin-top:3px;">Deve essere diverso dai gruppi di tutte le sedi (es. aggiungi il nome della sede).</div></div>
-            <div class="field"><label>Livello</label>
-                <select id="nbCategory"><option value="beginner">Principianti</option><option value="intermediate">Intermedio</option><option value="advance">Avanzato</option></select></div>
-            <div class="field"><label>Giorno</label><select id="nbDay"></select></div>
+            <div class="field"><label>Location</label><select id="nbLocation"></select></div>
+            <div class="field"><label>Batch name</label><input id="nbName" maxlength="40" placeholder="e.g. Principianti Castelvetro">
+                <div style="font-size:0.74em; color:var(--ink-faint); margin-top:3px;">Must be different from the batches of every location (e.g. add the location name).</div></div>
+            <div class="field"><label>Level</label>
+                <select id="nbCategory"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advance">Advanced</option></select></div>
+            <div class="field"><label>Day</label><select id="nbDay"></select></div>
             <div style="display:flex; gap:10px;">
-                <div class="field" style="flex:1;"><label>Inizio</label><input id="nbStart" type="time" value="16:00"></div>
-                <div class="field" style="flex:1;"><label>Fine</label><input id="nbEnd" type="time" value="18:00"></div>
+                <div class="field" style="flex:1;"><label>Start</label><input id="nbStart" type="time" value="16:00"></div>
+                <div class="field" style="flex:1;"><label>End</label><input id="nbEnd" type="time" value="18:00"></div>
             </div>
             <div style="display:flex; gap:10px;">
-                <div class="field" style="flex:1;"><label>Capienza massima</label><input id="nbMax" type="number" min="1" value="30"></div>
-                <div class="field" style="flex:1;"><label>Minimo (facoltativo)</label><input id="nbMin" type="number" min="0" placeholder="—"></div>
+                <div class="field" style="flex:1;"><label>Max students</label><input id="nbMax" type="number" min="1" value="30"></div>
+                <div class="field" style="flex:1;"><label>Minimum (optional)</label><input id="nbMin" type="number" min="0" placeholder="—"></div>
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-outline" onclick="closeNewBatchModal()">Annulla</button>
-            <button class="btn btn-primary" onclick="saveNewBatch()" id="nbSaveBtn">Crea gruppo</button>
+            <button class="btn btn-outline" onclick="closeNewBatchModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveNewBatch()" id="nbSaveBtn">Create batch</button>
         </div>
     </div>
 </div>
@@ -1164,14 +1176,14 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 <div id="manageLocationsModal" class="modal-backdrop" onclick="if(event.target===this) closeManageLocations()">
     <div class="modal-box" style="max-width:520px;">
         <div class="modal-header">
-            <h3 style="font-size:1em;">Sedi</h3>
+            <h3 style="font-size:1em;">Locations</h3>
             <button class="icon-btn-close" onclick="closeManageLocations()" id="manageLocationsCloseBtn"></button>
         </div>
         <div class="modal-body">
             <div id="manageLocationsList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-primary" onclick="closeManageLocations(); openNewLocationModal();">+ Nuova sede</button>
+            <button class="btn btn-primary" onclick="closeManageLocations(); openNewLocationModal();">+ New location</button>
         </div>
     </div>
 </div>
@@ -1180,29 +1192,29 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 <div id="newLocationModal" class="modal-backdrop" onclick="if(event.target===this) closeNewLocationModal()">
     <div class="modal-box" style="max-width:460px;">
         <div class="modal-header">
-            <h3 style="font-size:1em;" id="nlTitle">Nuova sede</h3>
+            <h3 style="font-size:1em;" id="nlTitle">New location</h3>
             <button class="icon-btn-close" onclick="closeNewLocationModal()" id="newLocationCloseBtn"></button>
         </div>
         <div class="modal-body">
-            <div class="field"><label>Nome della sede</label><input id="nlName" maxlength="60" placeholder="es. Piacenza"></div>
-            <div class="field"><label>Indirizzo</label><input id="nlAddress" maxlength="160" placeholder="Via Roma 1, 29121 Piacenza PC"></div>
-            <div class="field"><label>Posizione (per il check-in degli allievi)</label>
+            <div class="field"><label>Location name</label><input id="nlName" maxlength="60" placeholder="e.g. Piacenza"></div>
+            <div class="field"><label>Address</label><input id="nlAddress" maxlength="160" placeholder="Via Roma 1, 29121 Piacenza PC"></div>
+            <div class="field"><label>Position (for the students' check-in)</label>
                 <div style="display:flex; gap:6px;">
                     <input id="nlCoords" placeholder="45.106313, 9.990563" style="flex:1;">
-                    <button type="button" class="btn btn-outline btn-sm" onclick="useCurrentPositionForLocation()">Posizione attuale</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="useCurrentPositionForLocation()">Current position</button>
                 </div>
-                <div style="font-size:0.74em; color:var(--ink-faint); margin-top:3px;">Su Google Maps tieni premuto sul posto e copia i numeri (latitudine, longitudine). Oppure, se sei lì, premi «Posizione attuale».</div></div>
-            <div class="field"><label>Raggio check-in (metri)</label><input id="nlRadius" type="number" min="50" value="1000"></div>
-            <div class="field"><label>Giorni di lezione</label><div id="nlDays" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
+                <div style="font-size:0.74em; color:var(--ink-faint); margin-top:3px;">On Google Maps, press and hold on the place and copy the numbers (latitude, longitude). Or, if you are there, tap «Current position».</div></div>
+            <div class="field"><label>Check-in radius (metres)</label><input id="nlRadius" type="number" min="50" value="1000"></div>
+            <div class="field"><label>Class days</label><div id="nlDays" style="display:flex; flex-wrap:wrap; gap:6px;"></div></div>
             <div style="display:flex; gap:10px;">
-                <div class="field" style="flex:1;"><label>Check-in da</label><input id="nlStart" type="time" value="15:45"></div>
-                <div class="field" style="flex:1;"><label>a</label><input id="nlEnd" type="time" value="18:15"></div>
+                <div class="field" style="flex:1;"><label>Check-in from</label><input id="nlStart" type="time" value="15:45"></div>
+                <div class="field" style="flex:1;"><label>to</label><input id="nlEnd" type="time" value="18:15"></div>
             </div>
-            <div style="font-size:0.78em; color:var(--ink-faint);">Dopo aver creato la sede, aggiungi i suoi gruppi con «Nuovo gruppo».</div>
+            <div style="font-size:0.78em; color:var(--ink-faint);">After creating the location, add its batches with «New batch».</div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-outline" onclick="closeNewLocationModal()">Annulla</button>
-            <button class="btn btn-primary" onclick="saveNewLocation()" id="nlSaveBtn">Crea sede</button>
+            <button class="btn btn-outline" onclick="closeNewLocationModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveNewLocation()" id="nlSaveBtn">Create location</button>
         </div>
     </div>
 </div>
@@ -1212,23 +1224,23 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     <div class="modal-box" style="max-width:680px;">
         <div class="modal-header">
             <div>
-                <h3 style="font-size:1em;">Certificati medici</h3>
-                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">Tutti gli allievi: guarda, carica o sostituisci, elimina il PDF e imposta la scadenza.</div>
+                <h3 style="font-size:1em;">Medical certificates</h3>
+                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">All students: view, upload or replace, remove the file and set the expiry date.</div>
             </div>
             <button class="icon-btn-close" onclick="closeCertificatesModal()" id="certificatesCloseBtn"></button>
         </div>
         <div class="modal-body">
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                 <select id="certFilter" onchange="renderCertificatesList()" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em;">
-                    <option value="all">Tutti</option>
-                    <option value="problem" selected>Da sistemare (mancanti, scaduti, in scadenza)</option>
-                    <option value="missing">Mancanti</option>
-                    <option value="expired">Scaduti</option>
-                    <option value="expiring">In scadenza (30 giorni)</option>
-                    <option value="pending">Nuovi dal portale</option>
-                    <option value="valid">Validi</option>
+                    <option value="all">All</option>
+                    <option value="problem" selected>To fix (missing, expired, expiring)</option>
+                    <option value="missing">Missing</option>
+                    <option value="expired">Expired</option>
+                    <option value="expiring">Expiring (30 days)</option>
+                    <option value="pending">New from the portal</option>
+                    <option value="valid">Valid</option>
                 </select>
-                <input id="certSearch" placeholder="Cerca allievo…" oninput="renderCertificatesList()" style="flex:1; min-width:160px; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em;">
+                <input id="certSearch" placeholder="Search student…" oninput="renderCertificatesList()" style="flex:1; min-width:160px; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em;">
             </div>
             <div id="certCounts" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <div id="certificatesList" style="display:flex; flex-direction:column; gap:6px;"></div>
@@ -1253,15 +1265,22 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     <div class="modal-box" style="max-width:640px;">
         <div class="modal-header">
             <div>
-                <h3 style="font-size:1em;">Controllo dati</h3>
-                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">Allievi con dati da completare o correggere prima di fare una fattura.</div>
+                <h3 style="font-size:1em;">Data check</h3>
+                <div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">Students whose details must be completed or fixed before making a fattura.</div>
             </div>
             <button class="icon-btn-close" onclick="closeDataCheckModal()" id="dataCheckCloseBtn"></button>
         </div>
         <div class="modal-body">
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.84em; font-weight:600; margin-bottom:12px; cursor:pointer;">
-                <input type="checkbox" id="dataCheckIncludeInactive" onchange="renderDataCheck()" style="width:16px; height:16px; margin:0;"> Includi allievi inattivi
-            </label>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                <select id="dataCheckFilter" onchange="renderDataCheck()" style="padding:7px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.86em; font-weight:600;">
+                    <option value="all">All problems</option>
+                    <option value="novia">Street without «Via»</option>
+                </select>
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.84em; font-weight:600; cursor:pointer;">
+                    <input type="checkbox" id="dataCheckIncludeInactive" onchange="renderDataCheck()" style="width:16px; height:16px; margin:0;"> Include inactive students
+                </label>
+            </div>
+            <div id="dataCheckTools"></div>
             <div id="dataCheckList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
     </div>
@@ -1443,6 +1462,7 @@ const PRACTICE_RATE = 5;
 // ===== Inline SVG icon set — stroke-style, 24x24 viewbox, currentColor.
 // No emoji anywhere in this file; every icon need routes through here. =====
 const ICONS = {
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
     user: '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
     users: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 8.2a2.6 2.6 0 1 0 0-5.2"/><path d="M21 20c0-2.6-1.8-4.6-4.2-5.3"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/>',
@@ -2009,7 +2029,7 @@ function renderStudentsList() {
             ? `<span class="badge badge-success">${icon('check-circle', 13)} Has balance</span>`
             : `<span class="badge badge-warning">${icon('warning', 13)} Needs recharge</span>`;
         const inactiveBadge = (isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`)
-            + (isBirthdayToday(s) ? ` <span class="badge" style="background:#fde7f3; color:#be185d;">${icon('calendar', 13)} Compleanno oggi</span>` : '');
+            + (isBirthdayToday(s) ? ` <span class="badge" style="background:#fde7f3; color:#be185d;">${icon('calendar', 13)} Birthday today</span>` : '');
         const rateBadge = hasCustomPerClassRate(s) ? `<span class="badge badge-neutral">${icon('credit-card', 13)} €${getPerClassRate(s)}/class</span>` : '';
         return `
             <div class="student-row">
@@ -2154,7 +2174,7 @@ function renderPaymentsList() {
             .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
         const lastRechargeLabel = lastRecharge ? String(lastRecharge.created_at).slice(0, 10) : 'Never';
         const inactiveBadge = (isStudentActive(s) ? '' : `<span class="badge badge-danger">${icon('clock', 13)} Inactive</span>`)
-            + (isBirthdayToday(s) ? ` <span class="badge" style="background:#fde7f3; color:#be185d;">${icon('calendar', 13)} Compleanno oggi</span>` : '');
+            + (isBirthdayToday(s) ? ` <span class="badge" style="background:#fde7f3; color:#be185d;">${icon('calendar', 13)} Birthday today</span>` : '');
         const rateBadge = hasCustomPerClassRate(s) ? `<span class="badge badge-neutral">${icon('credit-card', 13)} €${getPerClassRate(s)}/class</span>` : '';
         return `
             <div class="student-row">
@@ -2252,10 +2272,10 @@ async function loadBatchesData() {
 // display time, to the Italian the studio actually uses.
 // Stored as the English day name (existing rows), shown in Italian.
 const BATCH_DAYS = [
-    { en: 'Monday', it: 'Lunedì', short: 'Lun', dow: 1 }, { en: 'Tuesday', it: 'Martedì', short: 'Mar', dow: 2 },
-    { en: 'Wednesday', it: 'Mercoledì', short: 'Mer', dow: 3 }, { en: 'Thursday', it: 'Giovedì', short: 'Gio', dow: 4 },
-    { en: 'Friday', it: 'Venerdì', short: 'Ven', dow: 5 }, { en: 'Saturday', it: 'Sabato', short: 'Sab', dow: 6 },
-    { en: 'Sunday', it: 'Domenica', short: 'Dom', dow: 0 }
+    { en: 'Monday', it: 'Monday', short: 'Mon', dow: 1 }, { en: 'Tuesday', it: 'Tuesday', short: 'Tue', dow: 2 },
+    { en: 'Wednesday', it: 'Wednesday', short: 'Wed', dow: 3 }, { en: 'Thursday', it: 'Thursday', short: 'Thu', dow: 4 },
+    { en: 'Friday', it: 'Friday', short: 'Fri', dow: 5 }, { en: 'Saturday', it: 'Saturday', short: 'Sat', dow: 6 },
+    { en: 'Sunday', it: 'Sunday', short: 'Sun', dow: 0 }
 ];
 const BATCH_DAY_LABELS_IT = Object.fromEntries(BATCH_DAYS.map((d) => [d.en, d.short]));
 function getBatchTimingLabel(batchName) {
@@ -2517,11 +2537,11 @@ async function saveNewBatch() {
     const end = timeTo12h(document.getElementById('nbEnd').value);
     const maxCap = Number(document.getElementById('nbMax').value) || 30;
     const minRaw = document.getElementById('nbMin').value;
-    if (!name) { alert('Scrivi il nome del gruppo.'); return; }
-    if (!locationId) { alert('Scegli la sede.'); return; }
-    if (!start || !end) { alert('Scegli orario di inizio e fine.'); return; }
+    if (!name) { alert('Write the batch name.'); return; }
+    if (!locationId) { alert('Choose the location.'); return; }
+    if (!start || !end) { alert('Choose the start and end time.'); return; }
     // students.batch stores the NAME, so it must be unique across all sedi.
-    if (batchList.some((b) => b.name.toLowerCase() === name.toLowerCase())) { alert(`Esiste già un gruppo "${name}". Scegli un nome diverso (es. aggiungi la sede).`); return; }
+    if (batchList.some((b) => b.name.toLowerCase() === name.toLowerCase())) { alert(`A batch "${name}" already exists. Choose a different name (e.g. add the location).`); return; }
     const row = {
         name, location_id: locationId,
         day: document.getElementById('nbDay').value,
@@ -2533,7 +2553,7 @@ async function saveNewBatch() {
         active: true
     };
     const { error } = await supabaseClient.from('batches').insert(row);
-    if (error) { alert('Impossibile creare il gruppo: ' + error.message); return; }
+    if (error) { alert('Could not create the batch: ' + error.message); return; }
     closeNewBatchModal();
     await loadBatchesData();
     alert(`Gruppo "${name}" creato (${getLocationName(locationId)}).`);
@@ -2543,8 +2563,8 @@ let editingLocationId = null;
 function openNewLocationModal(locationId) {
     const l = locationId ? locations.find((x) => x.id === locationId) : null;
     editingLocationId = l ? l.id : null;
-    document.getElementById('nlTitle').textContent = l ? `Modifica sede: ${l.name}` : 'Nuova sede';
-    document.getElementById('nlSaveBtn').textContent = l ? 'Salva' : 'Crea sede';
+    document.getElementById('nlTitle').textContent = l ? `Edit location: ${l.name}` : 'New location';
+    document.getElementById('nlSaveBtn').textContent = l ? 'Save' : 'Create location';
     document.getElementById('nlName').value = l ? l.name : '';
     document.getElementById('nlAddress').value = l ? l.address || '' : '';
     document.getElementById('nlCoords').value = l && l.lat != null ? `${l.lat}, ${l.lng}` : '';
@@ -2569,10 +2589,10 @@ function openManageLocations() {
                 <div>
                     <div style="font-weight:700;">${escapeHtml(l.name)}</div>
                     <div style="font-size:0.8em; color:var(--ink-soft);">${escapeHtml(l.address || '—')}</div>
-                    <div style="font-size:0.78em; color:var(--ink-faint);">${n} allievi attivi · ${days || '—'} · check-in ${String(l.start_time).slice(0, 5)}–${String(l.end_time).slice(0, 5)}</div>
+                    <div style="font-size:0.78em; color:var(--ink-faint);">${n} active students · ${days || '—'} · check-in ${String(l.start_time).slice(0, 5)}–${String(l.end_time).slice(0, 5)}</div>
                 </div>
                 <div style="display:flex; gap:6px;">
-                    <button class="btn btn-outline btn-sm" onclick="closeManageLocations(); openNewLocationModal(${l.id});">Modifica</button>
+                    <button class="btn btn-outline btn-sm" onclick="closeManageLocations(); openNewLocationModal(${l.id});">Edit</button>
                 </div>
             </div>
         </div>`;
@@ -2582,10 +2602,10 @@ function openManageLocations() {
 function closeManageLocations() { document.getElementById('manageLocationsModal').style.display = 'none'; }
 function closeNewLocationModal() { document.getElementById('newLocationModal').style.display = 'none'; }
 function useCurrentPositionForLocation() {
-    if (!navigator.geolocation) { alert('Questo dispositivo non può leggere la posizione.'); return; }
+    if (!navigator.geolocation) { alert("This device can't read its position."); return; }
     navigator.geolocation.getCurrentPosition(
         (pos) => { document.getElementById('nlCoords').value = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`; },
-        () => alert('Posizione non disponibile. Copia le coordinate da Google Maps.'),
+        () => alert('Position not available. Copy the coordinates from Google Maps.'),
         { enableHighAccuracy: true, timeout: 15000 }
     );
 }
@@ -2596,13 +2616,13 @@ async function saveNewLocation() {
     const days = Array.from(document.querySelectorAll('.nlDay:checked')).map((cb) => Number(cb.value));
     const startTime = document.getElementById('nlStart').value;
     const endTime = document.getElementById('nlEnd').value;
-    if (!name) { alert('Scrivi il nome della sede.'); return; }
-    if (locations.some((l) => l.id !== editingLocationId && l.name.toLowerCase() === name.toLowerCase())) { alert(`Esiste già una sede "${name}".`); return; }
+    if (!name) { alert('Write the location name.'); return; }
+    if (locations.some((l) => l.id !== editingLocationId && l.name.toLowerCase() === name.toLowerCase())) { alert(`A location "${name}" already exists.`); return; }
     if (!address) { alert('Scrivi l\'indirizzo.'); return; }
     const lat = m ? Number(m[1]) : NaN, lng = m ? Number(m[2]) : NaN;
-    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) { alert('Coordinate non valide. Esempio: 45.106313, 9.990563'); return; }
-    if (days.length === 0) { alert('Scegli almeno un giorno di lezione.'); return; }
-    if (!startTime || !endTime || endTime <= startTime) { alert('Controlla l\'orario del check-in.'); return; }
+    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) { alert('Invalid coordinates. Example: 45.106313, 9.990563'); return; }
+    if (days.length === 0) { alert('Choose at least one class day.'); return; }
+    if (!startTime || !endTime || endTime <= startTime) { alert('Check the check-in times.'); return; }
     const fields = {
         name, address, lat, lng,
         radius_meters: Number(document.getElementById('nlRadius').value) || 1000,
@@ -2611,14 +2631,14 @@ async function saveNewLocation() {
     const { error } = editingLocationId
         ? await supabaseClient.from('locations').update(fields).eq('id', editingLocationId)
         : await supabaseClient.from('locations').insert(fields);
-    if (error) { alert('Impossibile salvare la sede: ' + error.message); return; }
+    if (error) { alert('Could not save the location: ' + error.message); return; }
     const wasEdit = !!editingLocationId;
     closeNewLocationModal();
     await loadLocations();
     populateStudentLocationDropdown();
     renderStudentsList();
-    if (wasEdit) { alert(`Sede "${name}" aggiornata.`); openManageLocations(); }
-    else alert(`Sede "${name}" creata. Ora aggiungi i suoi gruppi con «Nuovo gruppo».`);
+    if (wasEdit) { alert(`Location "${name}" updated.`); openManageLocations(); }
+    else alert(`Location "${name}" created. Now add its batches with «New batch».`);
 }
 
 async function saveBatchSchedule(batchId) {
@@ -5143,7 +5163,7 @@ async function uploadDoctorPdf(input) {
     const { error } = await supabaseClient.storage.from(TAX_BUCKET).upload(filePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
     if (error) { alert('Upload failed: ' + error.message); if (btnText) btnText.textContent = originalBtnText; return; }
     const rec = getTaxRecord(currentTaxStudentId);
-    archiveCurrentDoctorCert(rec, 'Sostituito (caricato dallo studio)');
+    archiveCurrentDoctorCert(rec, 'Replaced (uploaded by the studio)');
     rec.doctorPdfPath = filePath;
     rec.doctorPdfName = file.name;
     rec.hasDoctor = true;
@@ -5153,10 +5173,14 @@ async function uploadDoctorPdf(input) {
 async function viewDoctorPdf() {
     const rec = getTaxRecord(currentTaxStudentId);
     if (!rec.doctorPdfPath) return;
-    const win = window.open('', '_blank');
-    const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(rec.doctorPdfPath, 120);
-    if (error) { if (win) win.close(); alert('Could not open PDF: ' + error.message); return; }
-    if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+    openFileSmart({
+        name: String(rec.doctorPdfPath).split('/').pop(),
+        getUrl: async () => {
+            const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(rec.doctorPdfPath, 600);
+            if (error) throw error;
+            return data.signedUrl;
+        }
+    });
 }
 // Never erases the file: the certificate just stops being the current one and
 // moves into the history (Storico certificati), like every replaced one.
@@ -5171,16 +5195,20 @@ function archiveCurrentDoctorCert(rec, reason) {
     }, ...(rec.doctorCertHistory || [])];
 }
 async function viewDoctorCertFile(bucket, path) {
-    const win = window.open('', '_blank');
-    const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(path, 120);
-    if (error) { if (win) win.close(); alert('Impossibile aprire il file: ' + error.message); return; }
-    if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+    openFileSmart({
+        name: String(path).split('/').pop(),
+        getUrl: async () => {
+            const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(path, 600);
+            if (error) throw error;
+            return data.signedUrl;
+        }
+    });
 }
 async function deleteDoctorPdf() {
-    if (!confirm('Togliere il certificato attuale?\n\nNon viene cancellato: resta nello «Storico certificati».')) return;
+    if (!confirm('Remove the current certificate?\n\nIt is not deleted: it stays in «Certificate history».')) return;
     const rec = getTaxRecord(currentTaxStudentId);
     if (!rec.doctorPdfPath) return;
-    archiveCurrentDoctorCert(rec, 'Tolto dallo studio');
+    archiveCurrentDoctorCert(rec, 'Removed by the studio');
     rec.doctorPdfPath = '';
     rec.doctorPdfName = '';
     setTaxRecord(currentTaxStudentId, rec);
@@ -5205,26 +5233,26 @@ function renderStudentDoctorCard(s) {
     const today = formatLocalDate(new Date());
     const exp = rec.doctorCertExpiresAt ? String(rec.doctorCertExpiresAt).slice(0, 10) : '';
     let statusBadge;
-    if (!rec.hasDoctor && !rec.doctorPdfPath) statusBadge = `<span class="badge badge-danger">Mancante</span>`;
-    else if (exp && exp < today) statusBadge = `<span class="badge badge-danger">Scaduto il ${formatShortDate(exp)}</span>`;
-    else if (exp && exp <= addMonthsToDate(today, 1)) statusBadge = `<span class="badge badge-warning">Scade il ${formatShortDate(exp)}</span>`;
-    else if (exp) statusBadge = `<span class="badge badge-success">Valido fino al ${formatShortDate(exp)}</span>`;
-    else statusBadge = `<span class="badge badge-success">In archivio</span>`;
+    if (!rec.hasDoctor && !rec.doctorPdfPath) statusBadge = `<span class="badge badge-danger">Missing</span>`;
+    else if (exp && exp < today) statusBadge = `<span class="badge badge-danger">Expired on ${formatShortDate(exp)}</span>`;
+    else if (exp && exp <= addMonthsToDate(today, 1)) statusBadge = `<span class="badge badge-warning">Expires on ${formatShortDate(exp)}</span>`;
+    else if (exp) statusBadge = `<span class="badge badge-success">Valid until ${formatShortDate(exp)}</span>`;
+    else statusBadge = `<span class="badge badge-success">On file</span>`;
     const pending = (certSubmissionsCache || []).filter((x) => x.student_id === s.id);
-    label.innerHTML = iconLabel('file-text', 'Certificato medico', 13);
+    label.innerHTML = iconLabel('file-text', 'Medical certificate', 13);
     box.innerHTML = `
         <div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:10px; font-size:0.86em;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                 <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer;">
-                    <input type="checkbox" ${rec.hasDoctor ? 'checked' : ''} onchange="toggleDoctorCertificate(this.checked); refreshStudentDoctorCard();" style="width:16px; height:16px; margin:0;"> Certificato in archivio
+                    <input type="checkbox" ${rec.hasDoctor ? 'checked' : ''} onchange="toggleDoctorCertificate(this.checked); refreshStudentDoctorCard();" style="width:16px; height:16px; margin:0;"> Certificate on file
                 </label>
                 ${statusBadge}
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
                 ${rec.doctorPdfPath
-                    ? `<button class="btn btn-outline btn-sm" onclick="viewDoctorPdf()">Guarda</button><button class="btn btn-outline btn-sm" onclick="deleteDoctorPdf()">Rimuovi file</button>`
-                    : `<label class="btn btn-outline btn-sm" style="cursor:pointer;"><span id="uploadDoctorPdfBtnText">Carica certificato</span><input type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="uploadDoctorPdf(this)"></label>`}
-                <label style="display:flex; align-items:center; gap:5px; color:var(--ink-soft); font-weight:600;">Scadenza
+                    ? `<button class="btn btn-outline btn-sm" onclick="viewDoctorPdf()">View</button><button class="btn btn-outline btn-sm" onclick="deleteDoctorPdf()">Remove file</button>`
+                    : `<label class="btn btn-outline btn-sm" style="cursor:pointer;"><span id="uploadDoctorPdfBtnText">Upload certificate</span><input type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="uploadDoctorPdf(this)"></label>`}
+                <label style="display:flex; align-items:center; gap:5px; color:var(--ink-soft); font-weight:600;">Expiry
                     <input type="date" value="${exp}" onblur="if (isCompleteDate(this.value) || !this.value) { setDoctorCertExpiry(this.value); refreshStudentDoctorCard(); }" onkeydown="if (event.key === 'Enter') this.blur();" style="padding:4px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em;">
                 </label>
             </div>
@@ -5233,29 +5261,35 @@ function renderStudentDoctorCard(s) {
             <div id="certPortalHistory_${s.id}"></div>
             ${pending.map((sub) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:8px 10px; background:var(--warning-soft); border-radius:var(--radius-sm);">
-                    <span><strong>Nuovo certificato dal portale</strong> · ${formatShortDate(sub.submitted_at)}</span>
+                    <span><strong>New certificate from the portal</strong> · ${formatShortDate(sub.submitted_at)}</span>
                     <span style="display:flex; gap:6px;">
-                        <button class="btn btn-outline btn-sm" onclick="previewCertSubmission('${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Guarda</button>
-                        <button class="btn btn-success btn-sm" onclick="useCertificateSubmission(${sub.id}, ${sub.student_id}, '${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Usa</button>
-                        <button class="btn btn-danger btn-sm" onclick="rejectCertificateSubmission(${sub.id})">Rifiuta</button>
+                        <button class="btn btn-outline btn-sm" onclick="previewCertSubmission('${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">View</button>
+                        <button class="btn btn-success btn-sm" onclick="useCertificateSubmission(${sub.id}, ${sub.student_id}, '${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Use</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectCertificateSubmission(${sub.id})">Reject</button>
                     </span>
                 </div>`).join('')}
         </div>`;
     loadCertDeletionNote(s.id);
     loadPortalCertHistory(s.id);
 }
+// Reasons saved in Italian before the admin switched to English.
+const CERT_REASON_EN = {
+    'Tolto dallo studio': 'Removed by the studio',
+    'Sostituito (caricato dallo studio)': 'Replaced (uploaded by the studio)',
+    "Sostituito dal nuovo certificato dell'allievo": "Replaced by the student's new certificate"
+};
 function renderDoctorCertHistory(rec, studentId) {
     const h = rec.doctorCertHistory || [];
     if (!h.length) return '';
     return `
         <details style="margin-top:8px;">
-            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">Storico certificati (${h.length})</summary>
+            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">Certificate history (${h.length})</summary>
             ${h.map((x, i) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border-soft);">
-                    <span>${formatShortDate(String(x.archivedAt).slice(0, 10))} · ${escapeHtml(x.reason || '')}${x.expiresAt ? ' · scadenza ' + formatShortDate(x.expiresAt) : ''}</span>
+                    <span>${formatShortDate(String(x.archivedAt).slice(0, 10))} · ${escapeHtml(CERT_REASON_EN[x.reason] || x.reason || '')}${x.expiresAt ? ' · expiry ' + formatShortDate(x.expiresAt) : ''}</span>
                     <span style="display:flex; gap:6px;">
-                        <button class="btn btn-outline btn-sm" onclick="viewDoctorCertFile(TAX_BUCKET, '${escapeHtml(x.path).replace(/'/g, "\\'")}')">Guarda</button>
-                        <button class="btn btn-danger btn-sm" title="Elimina definitivamente (file sbagliato)" onclick="deleteDoctorCertHistoryEntry(${studentId}, ${i})">${icon('trash', 13)}</button>
+                        <button class="btn btn-outline btn-sm" onclick="viewDoctorCertFile(TAX_BUCKET, '${escapeHtml(x.path).replace(/'/g, "\\'")}')">View</button>
+                        <button class="btn btn-danger btn-sm" title="Delete permanently (wrong file)" onclick="deleteDoctorCertHistoryEntry(${studentId}, ${i})">${icon('trash', 13)}</button>
                     </span>
                 </div>`).join('')}
         </details>`;
@@ -5266,9 +5300,9 @@ async function deleteDoctorCertHistoryEntry(studentId, index) {
     const rec = getTaxRecord(studentId);
     const entry = (rec.doctorCertHistory || [])[index];
     if (!entry) return;
-    if (!confirm('Eliminare DEFINITIVAMENTE questo certificato?\n\nUsalo solo se è un file sbagliato: il file viene cancellato e non si può recuperare.')) return;
+    if (!confirm('PERMANENTLY delete this certificate?\n\nOnly for a wrong file: the file is deleted and cannot be recovered.')) return;
     const { error } = await supabaseClient.storage.from(TAX_BUCKET).remove([entry.path]);
-    if (error) { alert('Impossibile eliminare il file: ' + error.message); return; }
+    if (error) { alert('Could not delete the file: ' + error.message); return; }
     rec.doctorCertHistory = rec.doctorCertHistory.filter((_, i) => i !== index);
     taxRecordsCache[String(studentId)] = rec;
     await _upsertTaxRecord(studentId, rec);
@@ -5276,13 +5310,13 @@ async function deleteDoctorCertHistoryEntry(studentId, index) {
     if (document.getElementById('certificatesModal')?.style.display === 'flex') renderCertificatesList();
 }
 async function deletePortalCertSubmission(submissionId, studentId) {
-    if (!confirm('Eliminare DEFINITIVAMENTE questo invio dal portale?\n\nUsalo solo se è un file sbagliato: il file e la sua traccia vengono cancellati.')) return;
+    if (!confirm('PERMANENTLY delete this portal upload?\n\nOnly for a wrong file: the file and its record are deleted.')) return;
     const { data } = await supabaseClient.from('medical_certificate_submissions').select('file_path').eq('id', submissionId).maybeSingle();
     if (data && data.file_path) {
         try { await supabaseClient.storage.from(MEDICAL_CERT_BUCKET).remove([data.file_path]); } catch (e) { /* file may already be gone */ }
     }
     const { error } = await supabaseClient.from('medical_certificate_submissions').delete().eq('id', submissionId);
-    if (error) { alert('Impossibile eliminare: ' + error.message); return; }
+    if (error) { alert('Could not delete: ' + error.message); return; }
     loadPortalCertHistory(studentId);
     loadCertSubmissions();
 }
@@ -5301,13 +5335,13 @@ async function loadPortalCertHistory(studentId) {
     if (!rows.length) { el.innerHTML = ''; return; }
     el.innerHTML = `
         <details style="margin-top:6px;">
-            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">Inviati dal portale e non usati (${rows.length})</summary>
+            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">Sent from the portal and not used (${rows.length})</summary>
             ${rows.map((x) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border-soft);">
-                    <span>${formatShortDate(String(x.submitted_at).slice(0, 10))} · ${x.deleted_at ? 'eliminato dall\'allievo il ' + formatShortDate(String(x.deleted_at).slice(0, 10)) : x.status === 'replaced' ? 'sostituito dall\'allievo prima del controllo' : 'rifiutato'}</span>
+                    <span>${formatShortDate(String(x.submitted_at).slice(0, 10))} · ${x.deleted_at ? 'deleted by the student on ' + formatShortDate(String(x.deleted_at).slice(0, 10)) : x.status === 'replaced' ? 'replaced by the student before the check' : 'rejected'}</span>
                     <span style="display:flex; gap:6px;">
-                        ${(x.status === 'rejected' || x.status === 'replaced') && x.file_path ? `<button class="btn btn-outline btn-sm" onclick="viewDoctorCertFile(MEDICAL_CERT_BUCKET, '${escapeHtml(x.file_path).replace(/'/g, "\\'")}')">Guarda</button>` : ''}
-                        <button class="btn btn-danger btn-sm" title="Elimina definitivamente (file sbagliato)" onclick="deletePortalCertSubmission(${x.id}, ${studentId})">${icon('trash', 13)}</button>
+                        ${(x.status === 'rejected' || x.status === 'replaced') && x.file_path ? `<button class="btn btn-outline btn-sm" onclick="viewDoctorCertFile(MEDICAL_CERT_BUCKET, '${escapeHtml(x.file_path).replace(/'/g, "\\'")}')">View</button>` : ''}
+                        <button class="btn btn-danger btn-sm" title="Delete permanently (wrong file)" onclick="deletePortalCertSubmission(${x.id}, ${studentId})">${icon('trash', 13)}</button>
                     </span>
                 </div>`).join('')}
         </details>`;
@@ -5319,10 +5353,10 @@ function doctorCertStatus(s) {
     const exp = rec.doctorCertExpiresAt ? String(rec.doctorCertExpiresAt).slice(0, 10) : '';
     const pending = (certSubmissionsCache || []).some((x) => x.student_id === s.id);
     let key, badge;
-    if (!rec.hasDoctor && !rec.doctorPdfPath) { key = 'missing'; badge = '<span class="badge badge-danger">Mancante</span>'; }
-    else if (exp && exp < today) { key = 'expired'; badge = `<span class="badge badge-danger">Scaduto il ${formatShortDate(exp)}</span>`; }
-    else if (exp && exp <= addDaysToDate(today, 30)) { key = 'expiring'; badge = `<span class="badge badge-warning">Scade il ${formatShortDate(exp)}</span>`; }
-    else { key = 'valid'; badge = `<span class="badge badge-success">${exp ? 'Valido fino al ' + formatShortDate(exp) : 'In archivio'}</span>`; }
+    if (!rec.hasDoctor && !rec.doctorPdfPath) { key = 'missing'; badge = '<span class="badge badge-danger">Missing</span>'; }
+    else if (exp && exp < today) { key = 'expired'; badge = `<span class="badge badge-danger">Expired on ${formatShortDate(exp)}</span>`; }
+    else if (exp && exp <= addDaysToDate(today, 30)) { key = 'expiring'; badge = `<span class="badge badge-warning">Expires on ${formatShortDate(exp)}</span>`; }
+    else { key = 'valid'; badge = `<span class="badge badge-success">${exp ? 'Valid until ' + formatShortDate(exp) : 'On file'}</span>`; }
     return { key, badge, rec, exp, pending };
 }
 function openCertificatesModal() {
@@ -5342,11 +5376,11 @@ function renderCertificatesList() {
     const count = (k) => base.filter((x) => x.st.key === k).length;
     const pendingCount = base.filter((x) => x.st.pending).length;
     document.getElementById('certCounts').innerHTML = [
-        `<span class="badge badge-danger">Mancanti ${count('missing')}</span>`,
-        `<span class="badge badge-danger">Scaduti ${count('expired')}</span>`,
-        `<span class="badge badge-warning">In scadenza ${count('expiring')}</span>`,
-        `<span class="badge badge-success">Validi ${count('valid')}</span>`,
-        pendingCount ? `<span class="badge badge-warning">Nuovi dal portale ${pendingCount}</span>` : ''
+        `<span class="badge badge-danger">Missing ${count('missing')}</span>`,
+        `<span class="badge badge-danger">Expired ${count('expired')}</span>`,
+        `<span class="badge badge-warning">Expiring ${count('expiring')}</span>`,
+        `<span class="badge badge-success">Valid ${count('valid')}</span>`,
+        pendingCount ? `<span class="badge badge-warning">New from the portal ${pendingCount}</span>` : ''
     ].join('');
     const rows = base
         .filter(({ s, st }) => {
@@ -5360,26 +5394,26 @@ function renderCertificatesList() {
     list.innerHTML = rows.length ? rows.map(({ s, st }) => `
         <div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 11px; font-size:0.86em;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span><span class="student-name-link" onclick="closeCertificatesModal(); openStudentViewModal(${s.id});">${escapeHtml(s.name)}</span> ${st.badge}${st.pending ? ' <span class="badge badge-warning">Nuovo dal portale</span>' : ''}</span>
+                <span><span class="student-name-link" onclick="closeCertificatesModal(); openStudentViewModal(${s.id});">${escapeHtml(s.name)}</span> ${st.badge}${st.pending ? ' <span class="badge badge-warning">New from the portal</span>' : ''}</span>
                 <span style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                    ${st.rec.doctorPdfPath ? `<button class="btn btn-outline btn-sm" onclick="certAction(${s.id}, 'view')">Guarda</button>` : ''}
-                    <label class="btn btn-outline btn-sm" style="cursor:pointer;">${st.rec.doctorPdfPath ? 'Sostituisci' : 'Carica'}<input type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="certUpload(${s.id}, this)"></label>
-                    ${st.rec.doctorPdfPath ? `<button class="btn btn-danger btn-sm" title="Togli il certificato attuale (resta nello storico)" onclick="certAction(${s.id}, 'delete')">${icon('trash', 13)}</button>` : ''}
-                    ${(st.rec.doctorCertHistory || []).length ? `<span style="font-size:0.85em; color:var(--ink-faint); cursor:pointer;" title="Apri l'allievo per vedere lo storico" onclick="closeCertificatesModal(); openStudentViewModal(${s.id});">storico ${st.rec.doctorCertHistory.length}</span>` : ''}
-                    <input type="date" value="${st.exp}" title="Scadenza" onblur="if ((isCompleteDate(this.value) || !this.value) && this.value !== '${st.exp}') certSetExpiry(${s.id}, this.value)" onkeydown="if (event.key === 'Enter') this.blur();" style="padding:4px 6px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em;">
+                    ${st.rec.doctorPdfPath ? `<button class="btn btn-outline btn-sm" onclick="certAction(${s.id}, 'view')">View</button>` : ''}
+                    <label class="btn btn-outline btn-sm" style="cursor:pointer;">${st.rec.doctorPdfPath ? 'Replace' : 'Upload'}<input type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.heic,.heif,.webp" style="display:none;" onchange="certUpload(${s.id}, this)"></label>
+                    ${st.rec.doctorPdfPath ? `<button class="btn btn-danger btn-sm" title="Remove the current certificate (it stays in the history)" onclick="certAction(${s.id}, 'delete')">${icon('trash', 13)}</button>` : ''}
+                    ${(st.rec.doctorCertHistory || []).length ? `<span style="font-size:0.85em; color:var(--ink-faint); cursor:pointer;" title="Open the student to see the history" onclick="closeCertificatesModal(); openStudentViewModal(${s.id});">history ${st.rec.doctorCertHistory.length}</span>` : ''}
+                    <input type="date" value="${st.exp}" title="Expiry" onblur="if ((isCompleteDate(this.value) || !this.value) && this.value !== '${st.exp}') certSetExpiry(${s.id}, this.value)" onkeydown="if (event.key === 'Enter') this.blur();" style="padding:4px 6px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.95em;">
                 </span>
             </div>
             ${(certSubmissionsCache || []).filter((x) => x.student_id === s.id).map((sub) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:7px; padding:6px 9px; background:var(--warning-soft); border-radius:var(--radius-sm);">
-                    <span>Caricato dall'allievo il ${formatShortDate(sub.submitted_at)}</span>
+                    <span>Uploaded by the student on ${formatShortDate(sub.submitted_at)}</span>
                     <span style="display:flex; gap:6px;">
-                        <button class="btn btn-outline btn-sm" onclick="previewCertSubmission('${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Guarda</button>
-                        <button class="btn btn-success btn-sm" onclick="useCertificateSubmission(${sub.id}, ${sub.student_id}, '${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Usa</button>
-                        <button class="btn btn-danger btn-sm" onclick="rejectCertificateSubmission(${sub.id})">Rifiuta</button>
+                        <button class="btn btn-outline btn-sm" onclick="previewCertSubmission('${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">View</button>
+                        <button class="btn btn-success btn-sm" onclick="useCertificateSubmission(${sub.id}, ${sub.student_id}, '${escapeHtml(sub.file_path).replace(/'/g, "\\'")}')">Use</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectCertificateSubmission(${sub.id})">Reject</button>
                     </span>
                 </div>`).join('')}
         </div>`).join('')
-        : `<div style="color:var(--ink-faint); font-size:0.88em; padding:10px 0;">Nessun allievo in questa lista.</div>`;
+        : `<div style="color:var(--ink-faint); font-size:0.88em; padding:10px 0;">No students in this list.</div>`;
 }
 // The existing helpers act on currentTaxStudentId — point it at the row first.
 async function certAction(studentId, action) {
@@ -5455,9 +5489,9 @@ async function loadCertSubmissions() {
                 <div style="font-size:0.8em; color:var(--ink-soft);">${formatShortDate(sub.submitted_at)}</div>
             </div>
             <div style="display:flex; gap:6px;">
-                <button class="btn btn-outline btn-sm">Guarda</button>
-                <button class="btn btn-success btn-sm">Usa</button>
-                <button class="btn btn-danger btn-sm">Rifiuta</button>
+                <button class="btn btn-outline btn-sm">View</button>
+                <button class="btn btn-success btn-sm">Use</button>
+                <button class="btn btn-danger btn-sm">Reject</button>
             </div>`;
         const [previewBtn, useBtn, rejectBtn] = row.querySelectorAll('button');
         previewBtn.addEventListener('click', () => previewCertSubmission(sub.file_path));
@@ -5467,10 +5501,14 @@ async function loadCertSubmissions() {
     });
 }
 async function previewCertSubmission(filePath) {
-    const win = window.open('', '_blank');
-    const { data, error } = await supabaseClient.storage.from(MEDICAL_CERT_BUCKET).createSignedUrl(filePath, 120);
-    if (error) { if (win) win.close(); alert('Could not open PDF: ' + error.message); return; }
-    if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+    openFileSmart({
+        name: String(filePath).split('/').pop(),
+        getUrl: async () => {
+            const { data, error } = await supabaseClient.storage.from(MEDICAL_CERT_BUCKET).createSignedUrl(filePath, 600);
+            if (error) throw error;
+            return data.signedUrl;
+        }
+    });
 }
 async function useCertificateSubmission(submissionId, studentId, filePath) {
     try {
@@ -5485,7 +5523,7 @@ async function useCertificateSubmission(submissionId, studentId, filePath) {
         const { error: uploadError } = await supabaseClient.storage.from(TAX_BUCKET).upload(destPath, blob, { contentType: blob.type || 'application/octet-stream', upsert: false });
         if (uploadError) throw uploadError;
         const rec = getTaxRecord(studentId);
-        archiveCurrentDoctorCert(rec, 'Sostituito dal nuovo certificato dell\'allievo');
+        archiveCurrentDoctorCert(rec, "Replaced by the student's new certificate");
         rec.doctorPdfPath = destPath;
         rec.doctorPdfName = `doctor_cert.${ext}`;
         rec.hasDoctor = true;
@@ -5501,7 +5539,7 @@ async function useCertificateSubmission(submissionId, studentId, filePath) {
     }
 }
 async function rejectCertificateSubmission(submissionId) {
-    if (!confirm('Rifiutare questo certificato?')) return;
+    if (!confirm('Reject this certificate?')) return;
     await supabaseClient.from('medical_certificate_submissions').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', submissionId);
     loadCertSubmissions();
 }
@@ -5555,10 +5593,14 @@ async function deletePdfAttachment(paymentId) {
     renderTaxModal();
 }
 async function viewTaxPdf(pdfPath) {
-    const win = window.open('', '_blank');
-    const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(pdfPath, 120);
-    if (error) { if (win) win.close(); alert('Could not open PDF: ' + error.message); return; }
-    if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+    openFileSmart({
+        name: String(pdfPath).split('/').pop(),
+        getUrl: async () => {
+            const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).createSignedUrl(pdfPath, 600);
+            if (error) throw error;
+            return data.signedUrl;
+        }
+    });
 }
 async function sendTaxPdfWhatsApp(studentId, paymentId) {
     const s = students.find((x) => x.id === studentId);
@@ -6977,7 +7019,7 @@ function generateBirthdayMessage(s) {
 function sendBirthdayWish(studentId) {
     const s = students.find((x) => x.id === studentId);
     if (!s) return;
-    if (!s.phone) { alert('Nessun numero di telefono per questo allievo.'); return; }
+    if (!s.phone) { alert('No phone number for this student.'); return; }
     openWhatsApp(s.phone, generateBirthdayMessage(s));
 }
 // One message naming everyone celebrating today — WhatsApp opens without a
@@ -7000,16 +7042,16 @@ function renderBirthdayCard() {
     if (!items.length) return;
     const today = formatLocalDate(new Date());
     const todayCount = items.filter((x) => x.date === today).length;
-    document.getElementById('birthdayHeading').innerHTML = iconLabel('calendar', todayCount ? `Compleanni oggi (${todayCount})` : 'Compleanni in arrivo', 16);
+    document.getElementById('birthdayHeading').innerHTML = iconLabel('calendar', todayCount ? `Birthdays today (${todayCount})` : 'Upcoming birthdays', 16);
     document.getElementById('birthdayGroupBtn').classList.toggle('hidden', todayCount === 0);
-    const dayLabel = (d) => d === today ? 'Oggi' : d === addDaysToDate(today, 1) ? 'Domani' : formatShortDate(d);
+    const dayLabel = (d) => d === today ? 'Today' : d === addDaysToDate(today, 1) ? 'Tomorrow' : formatShortDate(d);
     list.innerHTML = items.map(({ s, date }) => {
         const turning = Number(date.slice(0, 4)) - Number(s.birthDate.slice(0, 4));
         const isToday = date === today;
         return `
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 10px; border-radius:var(--radius-sm); ${isToday ? 'background:#fde7f3; font-weight:700;' : 'background:var(--surface); border:1px solid var(--border-soft);'}">
-                <span><span class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</span> <span style="color:var(--ink-soft); font-weight:500;">· ${dayLabel(date)} · compie ${turning} anni</span></span>
-                ${s.phone ? `<button class="btn ${isToday ? 'btn-success' : 'btn-outline'} btn-sm" onclick="sendBirthdayWish(${s.id})">${iconLabel('message', 'Auguri', 13)}</button>` : '<span style="font-size:0.8em; color:var(--ink-faint);">senza telefono</span>'}
+                <span><span class="student-name-link" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</span> <span style="color:var(--ink-soft); font-weight:500;">· ${dayLabel(date)} · turns ${turning}</span></span>
+                ${s.phone ? `<button class="btn ${isToday ? 'btn-success' : 'btn-outline'} btn-sm" onclick="sendBirthdayWish(${s.id})">${iconLabel('message', 'Send wishes', 13)}</button>` : '<span style="font-size:0.8em; color:var(--ink-faint);">no phone</span>'}
             </div>`;
     }).join('');
 }
@@ -7060,29 +7102,29 @@ async function saveStudent(event) {
         comune: val('addrComune'),
         provincia: val('addrProvincia').toUpperCase()
     };
-    if (!nome || !cognome) { alert('Nome e cognome sono obbligatori.'); return; }
+    if (!nome || !cognome) { alert('First and last name are required.'); return; }
     const locationId = Number(document.getElementById('studentLocation').value) || null;
-    if (!locationId) { alert('Seleziona la sede.'); return; }
+    if (!locationId) { alert('Select the location.'); return; }
 
     // Problems never block saving (an incomplete record is still better than
     // none) — but they're shown once, so nothing wrong goes in unnoticed.
     const warnings = [];
     if (cf) {
         const v = A.validateCodiceFiscale(cf);
-        if (!v.valid) warnings.push(`Codice fiscale allievo: ${v.reason}`);
-        else if (A.cfMatchesName(cf, nome, cognome) === false) warnings.push('Il codice fiscale non corrisponde a nome e cognome (forse sono invertiti?)');
+        if (!v.valid) warnings.push(`Student codice fiscale: ${v.reason}`);
+        else if (A.cfMatchesName(cf, nome, cognome) === false) warnings.push("The codice fiscale doesn't match the first and last name (swapped?)");
     }
     if (parentCf) {
         const v = A.validateCodiceFiscale(parentCf);
-        if (!v.valid) warnings.push(`Codice fiscale genitore: ${v.reason}`);
-        else if (A.cfMatchesName(parentCf, parentNome, parentCognome) === false) warnings.push('Il codice fiscale del genitore non corrisponde al suo nome e cognome');
+        if (!v.valid) warnings.push(`Parent codice fiscale: ${v.reason}`);
+        else if (A.cfMatchesName(parentCf, parentNome, parentCognome) === false) warnings.push("The parent's codice fiscale doesn't match their name");
     }
     const anyAddress = Object.values(addr).some(Boolean);
     if (anyAddress) {
         const av = A.validateAddress(addr);
-        if (av.problems.length || av.warnings.length) warnings.push('Indirizzo: ' + av.problems.concat(av.warnings).join(', '));
+        if (av.problems.length || av.warnings.length) warnings.push('Address: ' + av.problems.concat(av.warnings).join(', '));
     }
-    if (warnings.length && !confirm('Attenzione:\n\n- ' + warnings.join('\n- ') + '\n\nSalvare comunque?')) return;
+    if (warnings.length && !confirm('Careful:\n\n- ' + warnings.join('\n- ') + '\n\nSave anyway?')) return;
 
     const payload = {
         name: `${nome} ${cognome}`.trim(),
@@ -7180,13 +7222,13 @@ async function saveStudent(event) {
         resetStudentForm();
         await loadAllData();
         const savedLocation = getLocationName(payload.location_id);
-        const savedBatch = payload.batch ? getBatchDisplayLabel(payload.batch) : 'nessun gruppo';
+        const savedBatch = payload.batch ? getBatchDisplayLabel(payload.batch) : 'no batch';
         const missingNote = droppedOptionalColumns.length
-            ? '\n\nNota: nome/cognome separati, genitore e indirizzo NON sono stati salvati — esegui student_details.sql in Supabase.'
+            ? '\n\nNote: separate first/last name, parent and address were NOT saved: run student_details.sql in Supabase.'
             : '';
         alert((isNewStudent
-            ? `Nuovo allievo aggiunto: ${payload.name}\n\n${savedLocation} · ${savedBatch}`
-            : `${payload.name} aggiornato.`) + missingNote);
+            ? `New student added: ${payload.name}\n\n${savedLocation} · ${savedBatch}`
+            : `${payload.name} updated.`) + missingNote);
     } catch (error) {
         alert('Error saving student: ' + error.message);
     }
@@ -7304,10 +7346,10 @@ function editStudent(studentId) {
         an.addr.comune, an.addr.provincia, an.addr.cap
     );
     const notes = [];
-    if (an.nameSuggested) notes.push(an.nameConfirmed ? 'Nome e cognome separati automaticamente (confermati dal codice fiscale)' : 'Nome e cognome separati automaticamente — da verificare');
-    if (an.parentSuggested) notes.push('Nome e cognome del genitore da verificare');
-    if (an.addrSuggested) notes.push('Indirizzo letto dal vecchio formato — controlla');
-    document.getElementById('studentFormNote').textContent = notes.length ? notes.join(' · ') + '. Salva per confermare.' : '';
+    if (an.nameSuggested) notes.push(an.nameConfirmed ? 'First and last name split automatically (confirmed by the codice fiscale)' : 'First and last name split automatically: please check');
+    if (an.parentSuggested) notes.push("Check the parent's first and last name");
+    if (an.addrSuggested) notes.push('Address read from the old format: please check');
+    document.getElementById('studentFormNote').textContent = notes.length ? notes.join(' · ') + '. Save to confirm.' : '';
     updateCfStatus();
     window.Anagrafica.loadComuni().then(updateAddressStatus).catch(() => {});
     document.getElementById('formHeading').textContent = 'Modifica allievo';
@@ -7407,40 +7449,54 @@ async function confirmPermanentDelete() {
 // ===== Controllo dati (student_details.sql) =====
 // Everything that would make a fattura wrong or "scartata", per student.
 // Uses the same rules as the form's live checks (anagrafica.js).
+const DATA_CHECK_NO_VIA = 'Street without type (e.g. "Via")';
+// Shown in red: an adult (the student from 18, or the parent of a minor) with no codice fiscale.
+const DATA_CHECK_NO_CF = 'Codice fiscale not found';
+const DATA_CHECK_NO_PARENT_CF = 'Parent: codice fiscale not found';
+const DATA_CHECK_RED = new Set([DATA_CHECK_NO_CF, DATA_CHECK_NO_PARENT_CF]);
+function getStudentDataCheck(s) {
+    return { problems: getStudentDataProblems(s) };
+}
 function getStudentDataProblems(s) {
     const A = window.Anagrafica;
     const an = getStudentAnagrafica(s);
     const problems = [];
-    if (!an.nome || !an.cognome) problems.push('Nome/cognome mancanti');
-    else if (an.nameSuggested) problems.push(an.nameConfirmed ? 'Nome/cognome da confermare' : 'Nome/cognome da separare');
-    if (!an.cf) problems.push('CF mancante');
+    // Kids need it too (birth date, knowing when they turn 18), but it isn't
+    // blocking — their fattura goes to the parent — so orange, not red.
+    const minor = A.isMinorOnDate(an.cf, s.age);
+    if (!an.nome || !an.cognome) problems.push('First/last name missing');
+    else if (an.nameSuggested) problems.push(an.nameConfirmed ? 'First/last name to confirm' : 'First/last name to split');
+    if (!an.cf) problems.push(minor ? 'Codice fiscale missing (under 18)' : DATA_CHECK_NO_CF);
     else {
         const v = A.validateCodiceFiscale(an.cf);
-        if (!v.valid) problems.push('CF non valido');
-        else if (A.cfMatchesName(an.cf, an.nome, an.cognome) === false) problems.push(A.cfMatchesName(an.cf, an.cognome, an.nome) ? 'Nome e cognome invertiti' : 'CF non corrisponde al nome');
+        if (!v.valid) problems.push('CF not valid');
+        else if (A.cfMatchesName(an.cf, an.nome, an.cognome) === false) problems.push(A.cfMatchesName(an.cf, an.cognome, an.nome) ? 'First and last name swapped' : "CF doesn't match the name");
     }
-    if (!Object.values(an.addr).some(Boolean)) problems.push('Indirizzo mancante');
+    if (!Object.values(an.addr).some(Boolean)) problems.push('Address missing');
     else {
         const v = A.validateAddress(an.addr);
-        if (!v.ok) problems.push('Indirizzo: ' + v.problems.join(', '));
-        else if (v.warnings.length) problems.push('Via senza tipo (es. "Via")');
-        else if (an.addrSuggested) problems.push('Indirizzo nel vecchio formato');
+        if (!v.ok) problems.push('Address: ' + v.problems.join(', '));
+        if (v.warnings.length) problems.push(DATA_CHECK_NO_VIA);
+        if (v.ok && !v.warnings.length && an.addrSuggested) problems.push('Address in the old format');
     }
     // Parent details only matter for a minor (fattura goes to the parent).
-    if (A.isMinorOnDate(an.cf, s.age)) {
-        if (!an.parentCf) problems.push('Minorenne senza CF genitore');
-        else if (!A.validateCodiceFiscale(an.parentCf).valid) problems.push('CF genitore non valido');
-        if (!an.parentNome || !an.parentCognome) problems.push('Nome/cognome genitore mancanti');
-        else if (an.parentCf && A.cfMatchesName(an.parentCf, an.parentNome, an.parentCognome) === false) problems.push('CF genitore non corrisponde al nome');
+    if (minor) {
+        if (!an.parentCf) problems.push(DATA_CHECK_NO_PARENT_CF);
+        else if (!A.validateCodiceFiscale(an.parentCf).valid) problems.push('Parent CF not valid');
+        if (!an.parentNome || !an.parentCognome) problems.push('Parent first/last name missing');
+        else if (an.parentCf && A.cfMatchesName(an.parentCf, an.parentNome, an.parentCognome) === false) problems.push("Parent CF doesn't match the name");
     }
     return problems;
 }
 function getDataCheckStudents(includeInactive) {
     return students
         .filter((s) => includeInactive || isStudentActive(s))
-        .map((s) => ({ s, problems: getStudentDataProblems(s) }))
+        .map((s) => ({ s, ...getStudentDataCheck(s) }))
         .filter((x) => x.problems.length > 0)
-        .sort((a, b) => b.problems.length - a.problems.length || a.s.name.localeCompare(b.s.name));
+        .sort((a, b) => {
+            const red = (x) => x.problems.filter((p) => DATA_CHECK_RED.has(p)).length;
+            return red(b) - red(a) || b.problems.length - a.problems.length || a.s.name.localeCompare(b.s.name);
+        });
 }
 function updateDataCheckCount() {
     const el = document.getElementById('dataCheckCount');
@@ -7451,31 +7507,71 @@ function updateDataCheckCount() {
 }
 function openDataCheckModal() {
     document.getElementById('dataCheckModal').style.display = 'flex';
-    document.getElementById('dataCheckList').innerHTML = '<div style="color:var(--ink-faint); font-size:0.85em;">Caricamento elenco comuni…</div>';
+    document.getElementById('dataCheckList').innerHTML = '<div style="color:var(--ink-faint); font-size:0.85em;">Loading the comuni list…</div>';
     window.Anagrafica.loadComuni().then(renderDataCheck).catch(() => renderDataCheck());
 }
 function closeDataCheckModal() { document.getElementById('dataCheckModal').style.display = 'none'; }
+// Italian on purpose: it goes to the student on WhatsApp.
+function noViaWhatsAppMessage(s) {
+    const first = (getStudentAnagrafica(s).nome || String(s.name).split(' ')[0] || '').trim();
+    return `Ciao ${first}! 👋\n\n`
+        + `Nel tuo indirizzo manca il tipo di via (es. «Via», «Piazza», «Corso»). Ci serve per le fatture. 🧾\n\n`
+        + `Puoi correggerlo tu dall'app: apri https://bhangrasway.com/member.html e nella sezione «I Miei Dati» premi «Correggi i miei dati». 🙏\n\n`
+        + `Grazie! 💃🕺`;
+}
+function dataCheckAddressLine(s) {
+    const a = getStudentAnagrafica(s).addr;
+    return [[a.via, a.civico].filter(Boolean).join(' '), [a.cap, a.comune].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+}
 function renderDataCheck() {
     const includeInactive = document.getElementById('dataCheckIncludeInactive').checked;
-    const rows = getDataCheckStudents(includeInactive);
+    const filter = document.getElementById('dataCheckFilter').value;
+    const all = getDataCheckStudents(includeInactive);
+    const noVia = all.filter((x) => x.problems.includes(DATA_CHECK_NO_VIA));
+    const rows = filter === 'novia' ? noVia : all;
+    const sel = document.getElementById('dataCheckFilter');
+    sel.options[0].textContent = `All problems (${all.length})`;
+    sel.options[1].textContent = `Street without «Via» (${noVia.length})`;
+    const phones = rows.map((x) => x.s.phone).filter(Boolean);
+    document.getElementById('dataCheckTools').innerHTML = filter === 'novia' && rows.length ? `
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.84em; margin-bottom:10px;">
+            <span>${rows.length} student${rows.length === 1 ? '' : 's'} · ${phones.length} with a phone number</span>
+            ${phones.length ? '<button class="btn btn-outline btn-sm" onclick="copyDataCheckPhones()">Copy all numbers</button>' : ''}
+        </div>` : '';
     document.getElementById('dataCheckList').innerHTML = rows.length
         ? rows.map(({ s, problems }) => `
             <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); flex-wrap:wrap;">
                 <div style="min-width:0; flex:1;">
-                    <div style="font-weight:700; font-size:0.9em;">${escapeHtml(s.name)}</div>
-                    <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:5px;">${problems.map((p) => `<span class="badge badge-warning">${escapeHtml(p)}</span>`).join('')}</div>
+                    <div style="font-weight:700; font-size:0.9em;">${escapeHtml(s.name)} <span style="font-weight:500; color:var(--ink-soft);">· ${escapeHtml(s.phone || 'no phone')}</span></div>
+                    ${filter === 'novia' ? `<div style="font-size:0.8em; color:var(--ink-faint); margin-top:3px;">${escapeHtml(dataCheckAddressLine(s))}</div>` : ''}
+                    <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:5px;">${problems.map((p) => `<span class="badge ${DATA_CHECK_RED.has(p) ? 'badge-danger' : 'badge-warning'}">${escapeHtml(p)}</span>`).join('')}</div>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="closeDataCheckModal(); editStudent(${s.id});">Correggi</button>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    ${filter === 'novia' && s.phone ? `<button class="btn btn-success btn-sm" title="WhatsApp message asking them to fix the address in the app" onclick="sendNoViaWhatsApp(${s.id})">${iconLabel('message', 'Ask on WhatsApp', 13)}</button>` : ''}
+                    <button class="btn btn-primary btn-sm" onclick="closeDataCheckModal(); editStudent(${s.id});">Fix</button>
+                </div>
             </div>`).join('')
-        : `<div class="placeholder-card">${icon('check-circle', 24)}<h3>Tutti i dati sono in ordine</h3></div>`;
+        : `<div class="placeholder-card">${icon('check-circle', 24)}<h3>${filter === 'novia' ? 'Every address has its «Via»' : 'All details are in order'}</h3></div>`;
     updateDataCheckCount();
+}
+function sendNoViaWhatsApp(studentId) {
+    const s = students.find((x) => x.id === studentId);
+    if (s) openWhatsApp(s.phone, noViaWhatsAppMessage(s));
+}
+function copyDataCheckPhones() {
+    const includeInactive = document.getElementById('dataCheckIncludeInactive').checked;
+    const list = getDataCheckStudents(includeInactive).filter((x) => x.problems.includes(DATA_CHECK_NO_VIA) && x.s.phone)
+        .map((x) => `${x.s.name}: ${x.s.phone}`).join('\n');
+    const done = () => alert('Copied:\n\n' + list);
+    if (navigator.clipboard) navigator.clipboard.writeText(list).then(done, () => prompt('Copy the numbers:', list));
+    else prompt('Copy the numbers:', list);
 }
 
 // ===== Richieste di correzione dati (from member.html "I miei dati") =====
 const DETAIL_FIELD_LABELS = {
-    nome: 'Nome', cognome: 'Cognome', codice_fiscale: 'Codice fiscale',
-    parent_nome: 'Nome genitore', parent_cognome: 'Cognome genitore', parent_codice_fiscale: 'CF genitore',
-    addr_via: 'Via', addr_civico: 'N. civico', addr_cap: 'CAP', addr_comune: 'Comune', addr_provincia: 'Provincia',
+    nome: 'First name', cognome: 'Last name', codice_fiscale: 'Codice fiscale',
+    parent_nome: 'Parent first name', parent_cognome: 'Parent last name', parent_codice_fiscale: 'Parent CF',
+    addr_via: 'Street', addr_civico: 'House no.', addr_cap: 'CAP', addr_comune: 'Comune', addr_provincia: 'Provincia',
     photo_path: 'Foto'
 };
 function detailRequestPhotoCell(path, faded) {
@@ -7511,7 +7607,7 @@ async function loadDetailRequests() {
         const changes = req.changes || {};
         const rows = Object.keys(changes).map((k) => k === 'photo_path' ? `
             <tr>
-                <td style="padding:3px 8px 3px 0; color:var(--ink-soft); white-space:nowrap;">Foto</td>
+                <td style="padding:3px 8px 3px 0; color:var(--ink-soft); white-space:nowrap;">Photo</td>
                 <td style="padding:3px 8px;">${detailRequestPhotoCell(changes[k]?.old, true)}</td>
                 <td style="padding:3px 0;">${detailRequestPhotoCell(changes[k]?.new, false)}</td>
             </tr>` : `
@@ -7525,8 +7621,8 @@ async function loadDetailRequests() {
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                     <div style="font-weight:700; font-size:0.9em;">${escapeHtml(req.student_name || ('#' + req.student_id))} <span style="font-weight:400; color:var(--ink-faint); font-size:0.85em;">· ${timeAgo(req.requested_at)}</span></div>
                     <div style="display:flex; gap:6px;">
-                        <button class="btn btn-success btn-sm" onclick="approveDetailRequest(${req.id})">${iconLabel('check', 'Approva', 14)}</button>
-                        <button class="btn btn-outline btn-sm" onclick="dismissDetailRequest(${req.id})">Rifiuta</button>
+                        <button class="btn btn-success btn-sm" onclick="approveDetailRequest(${req.id})">${iconLabel('check', 'Approve', 14)}</button>
+                        <button class="btn btn-outline btn-sm" onclick="dismissDetailRequest(${req.id})">Reject</button>
                     </div>
                 </div>
                 <table style="margin-top:8px; font-size:0.84em; border-collapse:collapse;">${rows}</table>
@@ -7537,7 +7633,7 @@ async function approveDetailRequest(requestId) {
     const req = detailRequestsCache.find((r) => r.id === requestId);
     if (!req) return;
     const s = students.find((x) => x.id === req.student_id);
-    if (!s) { alert('Allievo non trovato.'); return; }
+    if (!s) { alert('Student not found.'); return; }
     const A = window.Anagrafica;
     const an = getStudentAnagrafica(s);
     const ch = req.changes || {};
@@ -7572,10 +7668,10 @@ async function approveDetailRequest(requestId) {
     await supabaseClient.from('student_detail_requests').update({ status: 'approved', resolved_at: new Date().toISOString() }).eq('id', requestId);
     await loadAllData();
     await loadDetailRequests();
-    alert(`Dati di ${payload.name} aggiornati.` + (droppedOptionalColumns.length ? '\n\nNota: esegui student_details.sql — alcuni campi non sono stati salvati.' : ''));
+    alert(`${payload.name}'s details updated.` + (droppedOptionalColumns.length ? '\n\nNote: run student_details.sql: some fields were not saved.' : ''));
 }
 async function dismissDetailRequest(requestId) {
-    if (!confirm('Rifiutare questa correzione? I dati dell\'allievo restano invariati.')) return;
+    if (!confirm("Reject this correction? The student's details stay as they are.")) return;
     // Clean up a rejected photo the student uploaded with the request.
     const req = detailRequestsCache.find((r) => r.id === requestId);
     const rejectedPhoto = req?.changes?.photo_path?.new;
@@ -8180,6 +8276,8 @@ function applyIcons() {
     document.getElementById('securityBtnIcon').innerHTML = iconLabel('shield', 'Security', 16);
     document.getElementById('securityCloseBtn').innerHTML = icon('x', 16);
     document.getElementById('logoutBtnIcon').innerHTML = iconLabel('log-out', 'Sign Out', 16);
+    document.getElementById('adminBellBtn').innerHTML = icon('bell', 16);
+    document.getElementById('svmNotifyBtn').innerHTML = iconLabel('bell', 'Notify', 14);
     document.getElementById('cameraBtnLabel').innerHTML = iconLabel('camera', 'Fotocamera', 15);
     // Only the inner span: the label also wraps the hidden file input, and
     // replacing the label's innerHTML deleted it (Upload did nothing).
@@ -8245,7 +8343,20 @@ document.addEventListener('click', (e) => {
     }
 }, true);
 
+// Chrome treats the student/fattura forms (Nome, Via, CAP, Comune…) as the
+// admin's OWN address and keeps asking "Save address?". These are other
+// people's details, so autofill is switched off on every admin field — set on
+// focus, so it also covers fields in popups built later. Fields that already
+// say what they are (the login email/password) are left alone.
+document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.hasAttribute('autocomplete')) return;
+    el.setAttribute('autocomplete', 'off');
+    if (el.form && !el.form.hasAttribute('autocomplete')) el.form.setAttribute('autocomplete', 'off');
+}, true);
+
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('form:not([autocomplete]):not(.login-card)').forEach((f) => f.setAttribute('autocomplete', 'off'));
     applyIcons();
     window.Anagrafica.attachComunePicker(
         document.getElementById('addrComune'), document.getElementById('addrProvincia'), document.getElementById('addrCap'),

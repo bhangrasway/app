@@ -23,10 +23,10 @@ let fatturaSettings = null;
 let fattureMissing = false;
 
 const FATTURA_STATUS = {
-    created: { label: 'Creata', badge: 'badge-neutral', hint: 'XML creato, non ancora caricato su AdE' },
-    uploaded: { label: 'Caricata su AdE', badge: 'badge-warning', hint: 'Caricata in "Fatture e Corrispettivi", in attesa dell\'esito' },
-    accepted: { label: 'Accettata', badge: 'badge-success', hint: 'Esito AdE: "Consegnata" oppure "Mancata consegna" / "Impossibilità di recapito" (normale per i privati: è valida)' },
-    rejected: { label: 'Scartata', badge: 'badge-danger', hint: 'Esito AdE: "Scartata" — correggi e reinvia con lo stesso numero e data' }
+    created: { label: 'Created', badge: 'badge-neutral', hint: 'XML created, not uploaded to AdE yet' },
+    uploaded: { label: 'Uploaded to AdE', badge: 'badge-warning', hint: 'Uploaded in «Fatture e Corrispettivi», waiting for the outcome' },
+    accepted: { label: 'Accepted', badge: 'badge-success', hint: 'AdE outcome: «Consegnata», or «Mancata consegna» / «Impossibilità di recapito» (normal for private persons: the fattura is valid)' },
+    rejected: { label: 'Rejected', badge: 'badge-danger', hint: 'AdE outcome: «Scartata». Correct it and resend with the same number and date' }
 };
 const REGIME_LABELS = {
     RF19: 'Regime forfettario (art.1, c.54-89, L. 190/2014)',
@@ -55,6 +55,10 @@ async function loadFattureData() {
         fatturaSettings = st || {};
         fattureList = rows || [];
         fattureMissing = false;
+        // fatture_todo.sql: «Non serve» payments. Missing table = feature off.
+        const { data: skips, error: e3 } = await supabaseClient.from('fattura_skips').select('transaction_id');
+        fatturaTodoReady = !e3;
+        fatturaSkipIds = new Set((skips || []).map((r) => r.transaction_id));
     } catch (e) {
         console.error('Fatture not available (has fatture_xml.sql been run?):', e);
         fattureMissing = true;
@@ -62,6 +66,11 @@ async function loadFattureData() {
         fatturaSettings = null;
     }
 }
+
+let fatturaTodoReady = false;     // fatture_todo.sql run
+let fatturaSkipIds = new Set();    // recharges marked «Non serve»
+let fattureTodoView = 'todo';      // 'todo' | 'done' | 'skipped'
+const FATTURE_FROM_DEFAULT = '2025-09-29'; // P.IVA start; editable in Impostazioni
 
 // ---------- small helpers ----------
 function fmtNumeroFattura(f) { return `${f.numero}/${String(f.anno).slice(-2)}`; }
@@ -116,14 +125,14 @@ function xmlText(s) {
 function fatturaSettingsProblems(st) {
     const A = window.Anagrafica;
     const p = [];
-    if (!st) return ['Impostazioni fattura mancanti'];
-    if (!st.denominazione && (!st.nome || !st.cognome)) p.push('nome e cognome (o denominazione) dello studio');
-    if (!validatePartitaIva(st.partita_iva)) p.push('partita IVA dello studio');
-    if (!A.validateCodiceFiscale(st.codice_fiscale).valid && !validatePartitaIva(st.codice_fiscale)) p.push('codice fiscale dello studio');
-    if (!st.indirizzo) p.push('via dello studio');
-    if (!/^\d{5}$/.test(String(st.cap || ''))) p.push('CAP dello studio');
-    if (!st.comune) p.push('comune dello studio');
-    if (!/^[A-Z]{2}$/.test(String(st.provincia || ''))) p.push('provincia dello studio');
+    if (!st) return ['fattura settings missing'];
+    if (!st.denominazione && (!st.nome || !st.cognome)) p.push("studio's first and last name (or company name)");
+    if (!validatePartitaIva(st.partita_iva)) p.push("studio's partita IVA");
+    if (!A.validateCodiceFiscale(st.codice_fiscale).valid && !validatePartitaIva(st.codice_fiscale)) p.push("studio's codice fiscale");
+    if (!st.indirizzo) p.push("studio's street");
+    if (!/^\d{5}$/.test(String(st.cap || ''))) p.push("studio's CAP (postcode)");
+    if (!st.comune) p.push("studio's comune (town)");
+    if (!/^[A-Z]{2}$/.test(String(st.provincia || ''))) p.push("studio's provincia");
     if (!st.natura) p.push('natura IVA');
     return p;
 }
@@ -132,24 +141,24 @@ function fatturaDataChecks(f, { manual } = {}) {
     const A = window.Anagrafica;
     const problems = [];
     const warnings = [];
-    if (!f.recipient_nome || !f.recipient_cognome) problems.push('Nome e cognome dell\'intestatario sono obbligatori.');
+    if (!f.recipient_nome || !f.recipient_cognome) problems.push("The recipient's first and last name are required.");
     const cfv = A.validateCodiceFiscale(f.recipient_cf);
-    if (!cfv.valid) problems.push('Codice fiscale dell\'intestatario: ' + cfv.reason + '.');
+    if (!cfv.valid) problems.push("Recipient's codice fiscale: " + cfv.reason + '.');
     else if (A.cfMatchesName(f.recipient_cf, f.recipient_nome, f.recipient_cognome) === false) {
         warnings.push(A.cfMatchesName(f.recipient_cf, f.recipient_cognome, f.recipient_nome)
-            ? 'Nome e cognome sembrano invertiti rispetto al codice fiscale.'
-            : 'Il codice fiscale non corrisponde a nome e cognome.');
+            ? 'First and last name look swapped compared to the codice fiscale.'
+            : "The codice fiscale doesn't match the first and last name.");
     }
     if (!manual || [f.recipient_via, f.recipient_cap, f.recipient_comune].some(Boolean)) {
         const av = A.validateAddress({ via: f.recipient_via, civico: f.recipient_civico, cap: f.recipient_cap, comune: f.recipient_comune, provincia: f.recipient_provincia });
-        av.problems.forEach((x) => problems.push('Indirizzo: ' + x + '.'));
-        av.warnings.forEach((x) => warnings.push('Indirizzo: ' + x + '.'));
+        av.problems.forEach((x) => problems.push('Address: ' + x + '.'));
+        av.warnings.forEach((x) => warnings.push('Address: ' + x + '.'));
     }
-    if (!(Number(f.importo) > 0)) problems.push('L\'importo deve essere maggiore di zero.');
-    if (!f.descrizione) problems.push('La descrizione è obbligatoria.');
-    if (!f.data_fattura) problems.push('La data è obbligatoria.');
-    else if (f.data_fattura > formatLocalDate(new Date())) problems.push('La data non può essere nel futuro.');
-    if (!(f.numero >= 1)) problems.push('Numero fattura non valido.');
+    if (!(Number(f.importo) > 0)) problems.push('The amount must be more than zero.');
+    if (!f.descrizione) problems.push('The description is required.');
+    if (!f.data_fattura) problems.push('The date is required.');
+    else if (f.data_fattura > formatLocalDate(new Date())) problems.push("The date can't be in the future.");
+    if (!(f.numero >= 1)) problems.push('Invalid fattura number.');
     return { problems, warnings };
 }
 
@@ -331,7 +340,7 @@ function downloadBlob(blob, name) {
 }
 function downloadFatturaXml(id) {
     const f = fattureList.find((x) => x.id === id);
-    if (!f || !f.xml) { alert('Questa fattura non ha un file XML (inserita a mano).'); return; }
+    if (!f || !f.xml) { alert('This fattura has no XML file (added by hand).'); return; }
     downloadBlob(new Blob([f.xml], { type: 'application/xml' }), f.file_name || `fattura_${f.numero}_${f.anno}.xml`);
 }
 async function downloadFatturaPdf(id) {
@@ -340,7 +349,7 @@ async function downloadFatturaPdf(id) {
     const name = `Fattura_${f.numero}-${String(f.anno).slice(-2)}_${f.recipient_cognome || ''}.pdf`.replace(/\s+/g, '_');
     if (f.manual_pdf_path) {
         const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).download(f.manual_pdf_path);
-        if (error) { alert('Impossibile scaricare il PDF: ' + error.message); return; }
+        if (error) { alert('Could not download the PDF: ' + error.message); return; }
         downloadBlob(data, name);
         return;
     }
@@ -352,23 +361,17 @@ async function downloadFatturaPdf(id) {
 async function openFatturaPdf(id) {
     const f = fattureList.find((x) => x.id === id);
     if (!f) return;
-    const win = window.open('', '_blank');
-    try {
-        let blob;
-        if (f.manual_pdf_path) {
-            const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).download(f.manual_pdf_path);
-            if (error) throw error;
-            blob = data;
-        } else {
-            blob = buildFatturaPdf(fatturaSettings, f).output('blob');
+    openFileSmart({ // pdfview.js: new tab on the computer, Apri/Condividi/Scarica on the phone
+        name: `Fattura_${f.numero}-${String(f.anno).slice(-2)}_${f.recipient_cognome || ''}.pdf`.replace(/\s+/g, '_'),
+        getBlob: async () => {
+            if (f.manual_pdf_path) {
+                const { data, error } = await supabaseClient.storage.from(TAX_BUCKET).download(f.manual_pdf_path);
+                if (error) throw error;
+                return new Blob([data], { type: 'application/pdf' });
+            }
+            return buildFatturaPdf(fatturaSettings, f).output('blob');
         }
-        const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-        if (win) win.location.href = url; else window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (e) {
-        if (win) win.close();
-        alert('Impossibile aprire il PDF: ' + (e?.message || e));
-    }
+    });
 }
 
 // ---------- student PDF publishing (only while Accettata) ----------
@@ -389,11 +392,14 @@ async function unpublishFatturaPdf(f) {
     await supabaseClient.storage.from(MEMBER_DOCS_BUCKET).remove([f.pdf_token]);
 }
 
-async function setFatturaStatus(id, status) {
+// quick = the one-tap "Caricata su AdE ✓" (no confirm): every uploaded XML so
+// far has been accepted, so uploading = Accettata. If AdE ever says "Scartata",
+// switch it to Scartata from the fattura and correct it.
+async function setFatturaStatus(id, status, quick) {
     const f = fattureList.find((x) => x.id === id);
     if (!f || f.status === status) return;
-    if (status === 'accepted' && !confirm(`Segnare la fattura ${fmtNumeroFattura(f)} come ACCETTATA?\n\nUsala solo se su AdE vedi "Consegnata" oppure "Mancata consegna" / "Impossibilità di recapito" (per i privati è normale e la fattura è valida).\nL'allievo vedrà il PDF nel suo portale.`)) return;
-    if (status === 'rejected' && !confirm(`Segnare la fattura ${fmtNumeroFattura(f)} come SCARTATA?\n\nDopo potrai correggerla e scaricare il nuovo XML con lo stesso numero e data.`)) return;
+    if (status === 'accepted' && !quick && !confirm(`Mark fattura ${fmtNumeroFattura(f)} as ACCEPTED?\n\nOnly if AdE shows «Consegnata», or «Mancata consegna» / «Impossibilità di recapito» (normal for private persons: the fattura is valid).\nThe student will see the PDF in their portal.`)) return;
+    if (status === 'rejected' && !confirm(`Mark fattura ${fmtNumeroFattura(f)} as REJECTED («Scartata»)?\n\nThen you can correct it and download the new XML with the same number and date.`)) return;
     const update = { status, status_updated_at: new Date().toISOString() };
     try {
         if (status === 'accepted') {
@@ -403,14 +409,14 @@ async function setFatturaStatus(id, status) {
             update.pdf_token = null;
         }
     } catch (e) {
-        alert('Impossibile preparare il PDF per l\'allievo: ' + (e?.message || e));
+        alert("Could not prepare the student's PDF: " + (e?.message || e));
         return;
     }
     const { error } = await supabaseClient.from('fatture').update(update).eq('id', id);
-    if (error) { alert('Impossibile salvare lo stato: ' + error.message); return; }
+    if (error) { alert('Could not save the status: ' + error.message); return; }
     Object.assign(f, update);
     refreshFattureViews();
-    openFatturaView(id);
+    if (!quick || document.getElementById('fatturaModal')?.style.display === 'flex') openFatturaView(id);
 }
 
 // ---------- old fatture from the removed Reports tab (tax_records) ----------
@@ -462,7 +468,7 @@ function openLegacyImport(studentId, paymentId) {
         ...base,
         legacy: { paymentId: p.id, pdfPath: p.pdfPath || '', publicToken: p.publicToken || '', taxFileNo: p.taxFileNo || '' }
     };
-    openFatturaModalShell('Importa fattura dal vecchio archivio', `${item.student ? item.student.name : 'Allievo sconosciuto'} · ${dateIt(date)} · Tax File No: ${p.taxFileNo || '—'}`);
+    openFatturaModalShell('Import fattura from the old archive', `${item.student ? item.student.name : 'Unknown student'} · ${dateIt(date)} · Tax File No: ${p.taxFileNo || '—'}`);
     renderFatturaForm();
 }
 
@@ -474,7 +480,7 @@ async function deleteLegacyFattura(studentId, paymentId) {
     const p = (rec.payments || []).find((x) => x.id === paymentId);
     if (!p) return;
     const s = students.find((x) => x.id === studentId);
-    if (!confirm(`Eliminare definitivamente la vecchia fattura ${p.taxFileNo || ''} del ${p.date ? dateIt(p.date) : '—'}${s ? ' (' + s.name + ')' : ''}?\n\nVerranno cancellati anche il PDF e la copia visibile all'allievo. Non si può annullare.`)) return;
+    if (!confirm(`Permanently delete the old fattura ${p.taxFileNo || ''} of ${p.date ? dateIt(p.date) : '—'}${s ? ' (' + s.name + ')' : ''}?\n\nIts PDF and the copy the student can see are deleted too. This can't be undone.`)) return;
     try {
         if (p.pdfPath) await supabaseClient.storage.from(TAX_BUCKET).remove([p.pdfPath]);
         if (p.publicToken) await supabaseClient.storage.from(MEMBER_DOCS_BUCKET).remove([`${p.publicToken}.pdf`]);
@@ -498,7 +504,7 @@ function closeFatturaModal() {
     fatturaDraft = null;
 }
 function fatturaFeatureReady() {
-    if (fattureMissing) { alert('Le fatture non sono ancora attive: esegui fatture_xml.sql in Supabase, poi aggiorna la pagina.'); return false; }
+    if (fattureMissing) { alert('Fatture are not active yet: run fatture_xml.sql in Supabase, then refresh the page.'); return false; }
     return true;
 }
 
@@ -534,7 +540,7 @@ function openFatturaFromTransaction(txId) {
     if (!tx || !s) return;
     const settingsProblems = fatturaSettingsProblems(fatturaSettings);
     if (settingsProblems.length) {
-        alert('Prima completa le Impostazioni fattura:\n- ' + settingsProblems.join('\n- '));
+        alert('First complete the fattura Settings:\n- ' + settingsProblems.join('\n- '));
         openFatturaSettings();
         return;
     }
@@ -545,7 +551,7 @@ function openFatturaFromTransaction(txId) {
         data_fattura: today, anno, numero: nextFatturaNumber(anno), importo: Number(tx.amount), revision: 0,
         ...fatturaRecipientFor(s, today)
     };
-    openFatturaModalShell('Nuova fattura', `${s.name} · ricarica €${tx.amount} del ${String(tx.created_at).slice(0, 10)}`);
+    openFatturaModalShell('New fattura', `${s.name} · payment €${tx.amount} of ${dateIt(String(tx.created_at).slice(0, 10))}`);
     renderFatturaForm();
 }
 
@@ -560,7 +566,7 @@ function openManualFattura() {
         recipient_via: '', recipient_civico: '', recipient_cap: '', recipient_comune: '', recipient_provincia: '',
         descrizione: (fatturaSettings && fatturaSettings.descrizione_adulti) || 'corso di danza'
     };
-    openFatturaModalShell('Aggiungi fattura già emessa', 'Per le fatture fatte direttamente sul sito AdE (es. fino alla 9/26). Non crea un XML.');
+    openFatturaModalShell('Add a fattura already issued', 'For fatture made directly on the AdE website (e.g. up to 9/26). No XML is created.');
     renderFatturaForm();
 }
 
@@ -571,7 +577,7 @@ function startManualFatturaEdit(id) {
     const f = fattureList.find((x) => x.id === id);
     if (!f || f.source !== 'manual') return;
     fatturaDraft = { ...f, mode: 'editManual' };
-    openFatturaModalShell(`Modifica fattura ${fmtNumeroFattura(f)}`, 'Inserita a mano: correggi i dati come nel PDF. Su AdE non cambia nulla.');
+    openFatturaModalShell(`Edit fattura ${fmtNumeroFattura(f)}`, 'Added by hand: fix the data as in the PDF. Nothing changes on AdE.');
     renderFatturaForm();
 }
 
@@ -579,7 +585,7 @@ function startFatturaCorrection(id) {
     const f = fattureList.find((x) => x.id === id);
     if (!f) return;
     fatturaDraft = { ...f, mode: 'correct' };
-    openFatturaModalShell(`Correggi fattura ${fmtNumeroFattura(f)}`, 'Stesso numero e stessa data: AdE accetta il reinvio di una fattura scartata entro 5 giorni.');
+    openFatturaModalShell(`Correct fattura ${fmtNumeroFattura(f)}`, 'Same number and same date: AdE accepts the resend of a rejected fattura within 5 days.');
     renderFatturaForm();
 }
 
@@ -592,64 +598,64 @@ function renderFatturaForm() {
     const manualLike = d.mode === 'manual' || d.mode === 'editManual';
     const s = d.student_id ? students.find((x) => x.id === d.student_id) : null;
     const studentOptions = manualLike
-        ? `<div class="field"><label>Allievo (per mostrargli il PDF)</label>
+        ? `<div class="field"><label>Student (to show them the PDF)</label>
             <select id="fmStudent" onchange="onFatturaStudentChange()">
-                <option value="">— nessuno —</option>
+                <option value="">— none —</option>
                 ${students.slice().sort((a, b) => a.name.localeCompare(b.name)).map((x) => `<option value="${x.id}" ${x.id === d.student_id ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}
             </select></div>`
         : '';
-    const minorNote = d.minor ? `<div style="font-size:0.8em; color:var(--warning); font-weight:600; margin:-4px 0 10px;">Allievo minorenne: la fattura va intestata al genitore.</div>` : '';
+    const minorNote = d.minor ? `<div style="font-size:0.8em; color:var(--warning); font-weight:600; margin:-4px 0 10px;">Student under 18: the fattura goes to the parent.</div>` : '';
     body.innerHTML = `
         ${studentOptions}
         <div style="display:flex; gap:10px;">
-            <div class="field" style="flex:1;"><label>Numero</label>
+            <div class="field" style="flex:1;"><label>Number</label>
                 <div style="display:flex; align-items:center; gap:4px;">
                     <input id="fmNumero" type="number" min="1" value="${v(d.numero)}" ${manualLike ? '' : 'readonly'} style="max-width:90px;">
                     <span style="font-weight:700;">/ <span id="fmAnnoLabel">${String(d.anno).slice(-2)}</span></span>
                 </div>
             </div>
-            <div class="field" style="flex:1;"><label>Data</label><input id="fmData" type="date" value="${v(d.data_fattura)}" ${locked ? 'readonly' : ''} onblur="onFatturaDateChange()" onkeydown="if (event.key === 'Enter') this.blur();"></div>
+            <div class="field" style="flex:1;"><label>Date</label><input id="fmData" type="date" value="${v(d.data_fattura)}" ${locked ? 'readonly' : ''} onblur="onFatturaDateChange()" onkeydown="if (event.key === 'Enter') this.blur();"></div>
         </div>
-        ${s ? `<div class="field"><label>Intestata a</label>
+        ${s ? `<div class="field"><label>Issued to</label>
             <select id="fmTipo" onchange="onFatturaTipoChange()" ${locked ? 'disabled' : ''}>
-                <option value="student" ${d.recipient_type === 'student' ? 'selected' : ''}>Allievo</option>
-                <option value="parent" ${d.recipient_type === 'parent' ? 'selected' : ''}>Genitore</option>
+                <option value="student" ${d.recipient_type === 'student' ? 'selected' : ''}>Student</option>
+                <option value="parent" ${d.recipient_type === 'parent' ? 'selected' : ''}>Parent</option>
             </select></div>` : ''}
         ${minorNote}
         <div style="display:flex; gap:10px;">
-            <div class="field" style="flex:1;"><label>Nome</label><input id="fmNome" value="${v(d.recipient_nome)}" oninput="updateFatturaFormChecks()"></div>
-            <div class="field" style="flex:1;"><label>Cognome</label><input id="fmCognome" value="${v(d.recipient_cognome)}" oninput="updateFatturaFormChecks()"></div>
+            <div class="field" style="flex:1;"><label>First name («Nome»)</label><input id="fmNome" value="${v(d.recipient_nome)}" oninput="updateFatturaFormChecks()"></div>
+            <div class="field" style="flex:1;"><label>Last name («Cognome»)</label><input id="fmCognome" value="${v(d.recipient_cognome)}" oninput="updateFatturaFormChecks()"></div>
         </div>
         <div class="field"><label>Codice fiscale</label><input id="fmCf" maxlength="16" style="text-transform:uppercase;" value="${v(d.recipient_cf)}" oninput="updateFatturaFormChecks()"><div id="fmCfStatus" class="cf-status"></div></div>
         <div style="display:flex; gap:10px;">
-            <div class="field" style="flex:3;"><label>Via / Piazza</label><input id="fmVia" value="${v(d.recipient_via)}" oninput="updateFatturaFormChecks()"></div>
-            <div class="field" style="flex:1;"><label>N. civico</label><input id="fmCivico" value="${v(d.recipient_civico)}"></div>
+            <div class="field" style="flex:3;"><label>Street («Via / Piazza»)</label><input id="fmVia" value="${v(d.recipient_via)}" oninput="updateFatturaFormChecks()"></div>
+            <div class="field" style="flex:1;"><label>House no.</label><input id="fmCivico" value="${v(d.recipient_civico)}"></div>
         </div>
-        <div class="field"><label>Comune</label><input id="fmComune" placeholder="Scrivi e scegli dall'elenco…"></div>
+        <div class="field"><label>Town («Comune»)</label><input id="fmComune" placeholder="Type and pick from the list…"></div>
         <div style="display:flex; gap:10px;">
             <div class="field" style="flex:1;"><label>Provincia</label><input id="fmProvincia" maxlength="2"></div>
-            <div class="field" style="flex:1;"><label>CAP</label><input id="fmCap"></div>
+            <div class="field" style="flex:1;"><label>CAP (postcode)</label><input id="fmCap"></div>
         </div>
         <div id="fmAddrStatus" style="font-size:0.78em; font-weight:600; margin:-6px 0 10px;"></div>
-        <div class="field"><label>Descrizione</label><input id="fmDescrizione" maxlength="200" value="${v(d.descrizione)}"></div>
-        <div class="field"><label>Importo (€)</label><input id="fmImporto" type="number" step="0.01" min="0" value="${v(d.importo)}"></div>
+        <div class="field"><label>Description (printed on the fattura, in Italian)</label><input id="fmDescrizione" maxlength="200" value="${v(d.descrizione)}"></div>
+        <div class="field"><label>Amount (€)</label><input id="fmImporto" type="number" step="0.01" min="0" value="${v(d.importo)}"></div>
         ${d.mode === 'manual' && d.legacy
-            ? `<div class="field"><label>PDF della fattura</label>${d.legacy.pdfPath
-                ? `<div style="display:flex; align-items:center; gap:8px; font-size:0.86em;"><span style="color:var(--success); font-weight:700;">✓ Già caricato</span><button type="button" class="btn btn-outline btn-sm" onclick="viewTaxPdf('${escapeHtml(d.legacy.pdfPath).replace(/'/g, "\\'")}')">Apri il PDF per controllare</button></div>`
-                : '<div style="font-size:0.84em; color:var(--ink-faint);">Nessun PDF nel vecchio archivio: verrà creato dai dati.</div>'}
-                <div style="font-size:0.78em; color:var(--warning); margin-top:6px;">Controlla numero, data, intestatario e scrivi l'importo come nel PDF.</div></div>`
-            : d.mode === 'manual' ? `<div class="field"><label>PDF della fattura (facoltativo, da AdE)</label><input id="fmPdf" type="file" accept="application/pdf,.pdf"></div>`
-            : d.mode === 'editManual' ? `<div style="font-size:0.8em; color:var(--ink-faint); margin-bottom:8px;">${d.manual_pdf_path ? 'Il PDF caricato resta lo stesso.' : 'Il PDF viene rifatto con i dati corretti.'}</div>` : ''}
-        ${s && !manualLike ? `<div style="font-size:0.78em; color:var(--ink-faint);">I dati arrivano dalla scheda dell'allievo. Se qualcosa è sbagliato, correggilo anche nella scheda.</div>` : ''}`;
+            ? `<div class="field"><label>Fattura PDF</label>${d.legacy.pdfPath
+                ? `<div style="display:flex; align-items:center; gap:8px; font-size:0.86em;"><span style="color:var(--success); font-weight:700;">✓ Already uploaded</span><button type="button" class="btn btn-outline btn-sm" onclick="viewTaxPdf('${escapeHtml(d.legacy.pdfPath).replace(/'/g, "\\'")}')">Open the PDF to check</button></div>`
+                : '<div style="font-size:0.84em; color:var(--ink-faint);">No PDF in the old archive: it will be made from the data.</div>'}
+                <div style="font-size:0.78em; color:var(--warning); margin-top:6px;">Check number, date, recipient, and type the amount as in the PDF.</div></div>`
+            : d.mode === 'manual' ? `<div class="field"><label>Fattura PDF (optional, from AdE)</label><input id="fmPdf" type="file" accept="application/pdf,.pdf"></div>`
+            : d.mode === 'editManual' ? `<div style="font-size:0.8em; color:var(--ink-faint); margin-bottom:8px;">${d.manual_pdf_path ? 'The uploaded PDF stays the same.' : 'The PDF is made again with the corrected data.'}</div>` : ''}
+        ${s && !manualLike ? `<div style="font-size:0.78em; color:var(--ink-faint);">The data comes from the student's record. If something is wrong, fix it in the record too.</div>` : ''}`;
     const A = window.Anagrafica;
     const comuneEl = document.getElementById('fmComune'), provEl = document.getElementById('fmProvincia'), capEl = document.getElementById('fmCap');
     A.attachComunePicker(comuneEl, provEl, capEl, updateFatturaFormChecks);
     A.setComuneValue(comuneEl, provEl, capEl, d.recipient_comune, d.recipient_provincia, d.recipient_cap);
     A.loadComuni().then(updateFatturaFormChecks).catch(() => {});
     updateFatturaFormChecks();
-    const saveLabel = d.mode === 'create' ? 'Crea e scarica XML' : d.mode === 'correct' ? 'Salva e scarica XML corretto' : d.mode === 'editManual' ? 'Salva modifiche' : 'Salva nel registro';
+    const saveLabel = d.mode === 'create' ? 'Create and download XML' : d.mode === 'correct' ? 'Save and download corrected XML' : d.mode === 'editManual' ? 'Save changes' : 'Save to the register';
     footer.innerHTML = `
-        <button class="btn btn-outline" onclick="${d.mode === 'correct' || d.mode === 'editManual' ? `openFatturaView(${d.id})` : 'closeFatturaModal()'}">Annulla</button>
+        <button class="btn btn-outline" onclick="${d.mode === 'correct' || d.mode === 'editManual' ? `openFatturaView(${d.id})` : 'closeFatturaModal()'}">Cancel</button>
         <button class="btn btn-primary" id="fmSaveBtn" onclick="saveFatturaForm()">${saveLabel}</button>`;
 }
 
@@ -678,20 +684,20 @@ function updateFatturaFormChecks() {
     const cfEl = document.getElementById('fmCfStatus');
     if (!cfEl) return;
     const cf = A.normalizeCf(val('fmCf'));
-    if (!cf) { cfEl.className = 'cf-status bad'; cfEl.textContent = 'Obbligatorio'; }
+    if (!cf) { cfEl.className = 'cf-status bad'; cfEl.textContent = 'Required'; }
     else {
         const v = A.validateCodiceFiscale(cf);
-        if (!v.valid) { cfEl.className = 'cf-status bad'; cfEl.textContent = '✗ Non valido: ' + v.reason; }
+        if (!v.valid) { cfEl.className = 'cf-status bad'; cfEl.textContent = '✗ Not valid: ' + v.reason; }
         else if (A.cfMatchesName(cf, val('fmNome'), val('fmCognome')) === false) {
             cfEl.className = 'cf-status warn';
-            cfEl.textContent = A.cfMatchesName(cf, val('fmCognome'), val('fmNome')) ? '⚠ Nome e cognome sono invertiti' : '⚠ Non corrisponde a nome e cognome';
-        } else { cfEl.className = 'cf-status ok'; cfEl.textContent = '✓ Valido'; }
+            cfEl.textContent = A.cfMatchesName(cf, val('fmCognome'), val('fmNome')) ? '⚠ First and last name are swapped' : "⚠ Doesn't match first and last name";
+        } else { cfEl.className = 'cf-status ok'; cfEl.textContent = '✓ Valid'; }
     }
     const st = document.getElementById('fmAddrStatus');
     const av = A.validateAddress({ via: val('fmVia'), civico: val('fmCivico'), cap: val('fmCap'), comune: val('fmComune'), provincia: val('fmProvincia') });
     const all = av.problems.concat(av.warnings);
     st.style.color = all.length ? 'var(--warning)' : 'var(--success)';
-    st.textContent = all.length ? '⚠ Indirizzo: ' + all.join(', ') : '✓ Indirizzo completo';
+    st.textContent = all.length ? '⚠ Address: ' + all.join(', ') : '✓ Address complete';
 }
 function onFatturaDateChange() {
     const d = fatturaDraft;
@@ -730,12 +736,12 @@ async function saveFatturaForm() {
     const manual = d.mode === 'manual' || d.mode === 'editManual';
     const { problems, warnings } = fatturaDataChecks(d, { manual });
     if (d.mode !== 'correct') {
-        if (fattureList.some((f) => f.id !== d.id && f.anno === d.anno && f.numero === d.numero)) problems.push(`Il numero ${d.numero}/${String(d.anno).slice(-2)} è già usato.`);
+        if (fattureList.some((f) => f.id !== d.id && f.anno === d.anno && f.numero === d.numero)) problems.push(`Number ${d.numero}/${String(d.anno).slice(-2)} is already used.`);
         const last = lastFatturaDate(d.anno);
-        if (!manual && last && d.data_fattura < last) problems.push(`La data non può essere prima dell'ultima fattura dell'anno (${dateIt(last)}): numeri e date devono andare in ordine.`);
+        if (!manual && last && d.data_fattura < last) problems.push(`The date can't be before the year's last fattura (${dateIt(last)}): numbers and dates must go in order.`);
     }
-    if (problems.length) { alert('Correggi prima:\n\n- ' + problems.join('\n- ')); return; }
-    if (warnings.length && !confirm('Attenzione:\n\n- ' + warnings.join('\n- ') + '\n\nProcedere comunque?')) return;
+    if (problems.length) { alert('Fix first:\n\n- ' + problems.join('\n- ')); return; }
+    if (warnings.length && !confirm('Careful:\n\n- ' + warnings.join('\n- ') + '\n\nContinue anyway?')) return;
 
     const row = {
         anno: d.anno, numero: d.numero, data_fattura: d.data_fattura,
@@ -853,8 +859,8 @@ async function saveFatturaForm() {
     } catch (e) {
         const msg = String(e?.message || e);
         alert(/duplicate|unique/i.test(msg)
-            ? 'Questo numero (o questa ricarica) ha già una fattura. Aggiorna la pagina e riprova.'
-            : 'Impossibile salvare la fattura: ' + msg);
+            ? 'This number (or this payment) already has a fattura. Refresh the page and try again.'
+            : 'Could not save the fattura: ' + msg);
     } finally {
         fatturaSaveInProgress = false;
         if (btn) btn.disabled = false;
@@ -866,32 +872,37 @@ function openFatturaView(id) {
     if (!f) return;
     fatturaDraft = null;
     const s = f.student_id ? students.find((x) => x.id === f.student_id) : null;
-    openFatturaModalShell(`Fattura ${fmtNumeroFattura(f)}`, `${dateIt(f.data_fattura)} · €${moneyIt(f.importo)}${f.source === 'manual' ? ' · inserita a mano' : ''}`);
+    openFatturaModalShell(`Fattura ${fmtNumeroFattura(f)}`, `${dateIt(f.data_fattura)} · €${moneyIt(f.importo)}${f.source === 'manual' ? ' · added by hand' : ''}`);
     const row = (label, value) => `<div class="details-row" style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--border-soft); font-size:0.87em;"><span style="color:var(--ink-faint);">${label}</span><span style="font-weight:600; text-align:right;">${escapeHtml(value || '—')}</span></div>`;
     const statusButtons = Object.keys(FATTURA_STATUS).map((k) => `
         <button class="btn btn-sm ${f.status === k ? 'btn-primary' : 'btn-outline'}" title="${escapeHtml(FATTURA_STATUS[k].hint)}" onclick="setFatturaStatus(${f.id}, '${k}')">${FATTURA_STATUS[k].label}</button>`).join('');
     const isLatest = nextFatturaNumber(f.anno) === f.numero + 1;
     document.getElementById('fatturaModalBody').innerHTML = `
-        ${row('Intestata a', `${f.recipient_cognome}, ${f.recipient_nome}${f.recipient_type === 'parent' ? ' (genitore)' : ''}`)}
+        ${row('Issued to', `${f.recipient_cognome}, ${f.recipient_nome}${f.recipient_type === 'parent' ? ' (parent)' : ''}`)}
         ${row('Codice fiscale', f.recipient_cf)}
-        ${row('Indirizzo', [f.recipient_via, f.recipient_civico].filter(Boolean).join(' ') + (f.recipient_comune ? ` - ${f.recipient_cap || ''} ${f.recipient_comune} (${f.recipient_provincia || ''})` : ''))}
-        ${row('Descrizione', f.descrizione)}
-        ${row('Allievo', s ? s.name : '—')}
-        ${f.file_name ? row('File XML', f.file_name) : ''}
-        <div class="section-label">Stato</div>
+        ${row('Address', [f.recipient_via, f.recipient_civico].filter(Boolean).join(' ') + (f.recipient_comune ? ` - ${f.recipient_cap || ''} ${f.recipient_comune} (${f.recipient_provincia || ''})` : ''))}
+        ${row('Description', f.descrizione)}
+        ${row('Student', s ? s.name : '—')}
+        ${f.file_name ? row('XML file', f.file_name) : ''}
+        <div class="section-label">Status</div>
+        ${f.status === 'created' || f.status === 'uploaded' ? `
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; margin-bottom:10px; background:var(--success-soft); border:1px solid #bbf7d0; border-radius:var(--radius-sm);">
+            <span style="flex:1; min-width:180px; font-size:0.85em;">Uploaded the XML to AdE? One tap and the fattura is <b>Accepted</b> (the student sees the PDF).</span>
+            <button class="btn btn-success" onclick="setFatturaStatus(${f.id}, 'accepted', true)">${iconLabel('check-circle', 'Uploaded to AdE', 15)}</button>
+        </div>` : ''}
         <div style="display:flex; flex-wrap:wrap; gap:6px;">${statusButtons}</div>
         <div style="font-size:0.78em; color:var(--ink-soft); margin-top:8px; line-height:1.5;">
             ${escapeHtml(FATTURA_STATUS[f.status]?.hint || '')}<br>
-            Controlla l'esito su AdE: Fatture e Corrispettivi → Monitoraggio → Fatture emesse.
-            ${f.status === 'accepted' ? (f.pdf_token ? '<br><strong style="color:var(--success);">L\'allievo vede il PDF nel suo portale.</strong>' : (f.student_id ? '' : '<br>Nessun allievo collegato: il PDF non è nel portale.')) : '<br>L\'allievo vedrà il PDF solo quando è Accettata.'}
+            Check the outcome on AdE: «Fatture e Corrispettivi» → «Monitoraggio» → «Fatture emesse».
+            ${f.status === 'accepted' ? (f.pdf_token ? '<br><strong style="color:var(--success);">The student sees the PDF in their portal.</strong>' : (f.student_id ? '' : '<br>No student linked: the PDF is not in a portal.')) : '<br>The student sees the PDF only once it is Accepted.'}
         </div>`;
     document.getElementById('fatturaModalFooter').innerHTML = `
-        ${f.status === 'created' || f.source === 'manual' ? `<button class="btn btn-danger" onclick="deleteFattura(${f.id})" title="Elimina dal registro">${icon('trash', 15)}</button>` : ''}
+        ${f.status === 'created' || f.source === 'manual' ? `<button class="btn btn-danger" onclick="deleteFattura(${f.id})" title="Delete from the register">${icon('trash', 15)}</button>` : ''}
         <div style="display:flex; gap:8px; margin-left:auto; flex-wrap:wrap;">
-            ${f.status === 'rejected' ? `<button class="btn btn-outline" onclick="startFatturaCorrection(${f.id})">Correggi</button>` : ''}
-            ${f.source === 'manual' ? `<button class="btn btn-outline" onclick="startManualFatturaEdit(${f.id})">${iconLabel('edit', 'Modifica', 14)}</button>` : ''}
+            ${f.status === 'rejected' ? `<button class="btn btn-outline" onclick="startFatturaCorrection(${f.id})">Correct</button>` : ''}
+            ${f.source === 'manual' ? `<button class="btn btn-outline" onclick="startManualFatturaEdit(${f.id})">${iconLabel('edit', 'Edit', 14)}</button>` : ''}
             ${f.xml ? `<button class="btn btn-outline" onclick="downloadFatturaXml(${f.id})">${iconLabel('download', 'XML', 14)}</button>` : ''}
-            <button class="btn btn-primary" onclick="downloadFatturaPdf(${f.id})">${iconLabel('download', 'PDF', 14)}</button>
+            <button class="btn btn-primary" onclick="openFatturaPdf(${f.id})">${iconLabel('file-text', 'PDF', 14)}</button>
         </div>`;
 }
 
@@ -900,10 +911,10 @@ async function deleteFattura(id) {
     if (!f || (f.status !== 'created' && f.source !== 'manual')) return;
     const isLatest = nextFatturaNumber(f.anno) === f.numero + 1;
     const msg = f.source === 'manual'
-        ? `Togliere la fattura ${fmtNumeroFattura(f)} dal registro?\n\nSu AdE non cambia nulla.`
-            + (f.legacy_payment_id ? '\nTornerà nell\'elenco «da importare», così puoi reimportarla con i dati giusti.' : '')
-        : `Eliminare la fattura ${fmtNumeroFattura(f)}?\n\nUsalo solo se NON l'hai caricata su AdE.`
-            + (isLatest ? '' : `\n\nAttenzione: non è l'ultima fattura dell'anno, quindi il numero ${f.numero} resterà vuoto nella numerazione.`);
+        ? `Remove fattura ${fmtNumeroFattura(f)} from the register?\n\nNothing changes on AdE.`
+            + (f.legacy_payment_id ? '\nIt goes back to the «to import» list, so you can import it again with the right data.' : '')
+        : `Delete fattura ${fmtNumeroFattura(f)}?\n\nOnly if you have NOT uploaded it to AdE.`
+            + (isLatest ? '' : `\n\nCareful: it is not the year's last fattura, so number ${f.numero} will stay empty in the numbering.`);
     if (!confirm(msg)) return;
     // Its own published PDF goes too — but not an imported one's, which is
     // still the old entry's file (shown again once re-imported).
@@ -911,7 +922,7 @@ async function deleteFattura(id) {
         try { await unpublishFatturaPdf(f); } catch (e) { console.error('Could not remove published PDF:', e); }
     }
     const { error } = await supabaseClient.from('fatture').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-    if (error) { alert('Impossibile eliminare: ' + error.message); return; }
+    if (error) { alert('Could not delete: ' + error.message); return; }
     fattureList = fattureList.filter((x) => x.id !== id);
     closeFatturaModal();
     refreshFattureViews();
@@ -924,44 +935,47 @@ function openFatturaSettings() {
     const v = (x) => escapeHtml(x == null ? '' : String(x));
     const opt = (list, cur) => Object.keys(list).map((k) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${k} — ${escapeHtml(list[k])}</option>`).join('');
     document.getElementById('fatturaSettingsBody').innerHTML = `
-        <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">Compilati una volta, usati su ogni fattura. Copia i dati dalla tua ultima fattura accettata da AdE.</p>
-        <div class="section-label" style="margin-top:0;">Studio (cedente)</div>
+        <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">Filled in once, used on every fattura. Copy the data from your last fattura accepted by AdE.</p>
+        <div class="section-label" style="margin-top:0;">Studio («cedente»)</div>
         <div style="display:flex; gap:10px;">
-            <div class="field" style="flex:1;"><label>Nome</label><input id="fsNome" value="${v(st.nome)}"></div>
-            <div class="field" style="flex:1;"><label>Cognome</label><input id="fsCognome" value="${v(st.cognome)}"></div>
+            <div class="field" style="flex:1;"><label>First name («Nome»)</label><input id="fsNome" value="${v(st.nome)}"></div>
+            <div class="field" style="flex:1;"><label>Last name («Cognome»)</label><input id="fsCognome" value="${v(st.cognome)}"></div>
         </div>
-        <div class="field"><label>Denominazione (solo se società; altrimenti vuoto)</label><input id="fsDenominazione" value="${v(st.denominazione)}"></div>
+        <div class="field"><label>Company name («Denominazione», only for a company; otherwise empty)</label><input id="fsDenominazione" value="${v(st.denominazione)}"></div>
         <div style="display:flex; gap:10px;">
             <div class="field" style="flex:1;"><label>Partita IVA</label><input id="fsPartitaIva" maxlength="11" value="${v(st.partita_iva)}"></div>
             <div class="field" style="flex:1;"><label>Codice fiscale</label><input id="fsCodiceFiscale" maxlength="16" style="text-transform:uppercase;" value="${v(st.codice_fiscale)}"></div>
         </div>
-        <div class="field"><label>Regime fiscale</label><select id="fsRegime">${opt(REGIME_LABELS, st.regime_fiscale || 'RF19')}</select></div>
+        <div class="field"><label>Tax regime («Regime fiscale»)</label><select id="fsRegime">${opt(REGIME_LABELS, st.regime_fiscale || 'RF19')}</select></div>
         <div style="display:flex; gap:10px;">
-            <div class="field" style="flex:3;"><label>Via</label><input id="fsIndirizzo" value="${v(st.indirizzo)}"></div>
-            <div class="field" style="flex:1;"><label>N. civico</label><input id="fsCivico" value="${v(st.numero_civico)}"></div>
+            <div class="field" style="flex:3;"><label>Street («Via»)</label><input id="fsIndirizzo" value="${v(st.indirizzo)}"></div>
+            <div class="field" style="flex:1;"><label>House no.</label><input id="fsCivico" value="${v(st.numero_civico)}"></div>
         </div>
-        <div class="field"><label>Comune</label><input id="fsComune" placeholder="Scrivi e scegli dall'elenco…"></div>
+        <div class="field"><label>Town («Comune»)</label><input id="fsComune" placeholder="Type and pick from the list…"></div>
         <div style="display:flex; gap:10px;">
             <div class="field" style="flex:1;"><label>Provincia</label><input id="fsProvincia" maxlength="2"></div>
-            <div class="field" style="flex:1;"><label>CAP</label><input id="fsCap"></div>
+            <div class="field" style="flex:1;"><label>CAP (postcode)</label><input id="fsCap"></div>
         </div>
         <div class="section-label">IVA</div>
-        <div class="field"><label>Natura (IVA 0%)</label><select id="fsNatura">${opt(NATURA_LABELS, st.natura || 'N2.2')}</select></div>
-        <div class="field"><label>Riferimento normativo (facoltativo)</label><input id="fsRifNormativo" maxlength="100" value="${v(st.riferimento_normativo)}"></div>
-        <div class="section-label">Testi</div>
-        <div class="field"><label>Descrizione per maggiorenni</label><input id="fsDescAdulti" maxlength="200" value="${v(st.descrizione_adulti || 'corso di danza')}"></div>
-        <div class="field"><label>Descrizione per minorenni ({allievo} = nome dell'allievo)</label><input id="fsDescMinori" maxlength="200" value="${v(st.descrizione_minori || 'corso di danza (per bambini - {allievo})')}"></div>
+        <div class="field"><label>«Natura» (VAT 0%)</label><select id="fsNatura">${opt(NATURA_LABELS, st.natura || 'N2.2')}</select></div>
+        <div class="field"><label>«Riferimento normativo» (optional)</label><input id="fsRifNormativo" maxlength="100" value="${v(st.riferimento_normativo)}"></div>
+        <div class="section-label">Texts (printed on the fattura, in Italian)</div>
+        <div class="field"><label>Description for adults</label><input id="fsDescAdulti" maxlength="200" value="${v(st.descrizione_adulti || 'corso di danza')}"></div>
+        <div class="field"><label>Description for under-18s ({allievo} = the student's name)</label><input id="fsDescMinori" maxlength="200" value="${v(st.descrizione_minori || 'corso di danza (per bambini - {allievo})')}"></div>
         <label style="display:flex; align-items:center; gap:8px; font-size:0.86em; font-weight:600; margin-bottom:8px; cursor:pointer;">
-            <input type="checkbox" id="fsIncludeCausale" ${st.include_causale ? 'checked' : ''} style="width:16px; height:16px; margin:0;"> Aggiungi la causale
+            <input type="checkbox" id="fsIncludeCausale" ${st.include_causale ? 'checked' : ''} style="width:16px; height:16px; margin:0;"> Add the «causale»
         </label>
-        <div class="field"><label>Causale</label><input id="fsCausale" maxlength="200" value="${v(st.causale)}"></div>
-        <div class="field"><label>Nota in fondo al PDF</label><input id="fsPdfFooter" maxlength="200" value="${v(st.pdf_footer)}"></div>
-        <div class="section-label">Numerazione</div>
+        <div class="field"><label>«Causale»</label><input id="fsCausale" maxlength="200" value="${v(st.causale)}"></div>
+        <div class="field"><label>Note at the bottom of the PDF</label><input id="fsPdfFooter" maxlength="200" value="${v(st.pdf_footer)}"></div>
+        <div class="section-label">Numbering</div>
         <div style="display:flex; gap:10px;">
-            <div class="field" style="flex:1;"><label>Prossimo numero libero</label><input id="fsStartNumber" type="number" min="1" value="${v(st.start_number || '')}" placeholder="10"></div>
-            <div class="field" style="flex:1;"><label>…nell'anno</label><input id="fsStartYear" type="number" min="2020" value="${v(st.start_year || new Date().getFullYear())}"></div>
+            <div class="field" style="flex:1;"><label>Next free number</label><input id="fsStartNumber" type="number" min="1" value="${v(st.start_number || '')}" placeholder="10"></div>
+            <div class="field" style="flex:1;"><label>…in the year</label><input id="fsStartYear" type="number" min="2020" value="${v(st.start_year || new Date().getFullYear())}"></div>
         </div>
-        <div style="font-size:0.78em; color:var(--ink-faint);">Se l'ultima fattura su AdE è la 9/26, scrivi 10 e 2026. Le fatture aggiunte nel registro contano comunque.</div>`;
+        <div style="font-size:0.78em; color:var(--ink-faint);">If the last fattura on AdE is 9/26, write 10 and 2026. Fatture added to the register count anyway.</div>
+        <div class="section-label">To invoice</div>
+        <div class="field"><label>Invoice payments from</label><input id="fsInvoiceFrom" type="date" value="${v(String(st.invoice_from || FATTURE_FROM_DEFAULT).slice(0, 10))}" ${fatturaTodoReady ? '' : 'disabled'}></div>
+        <div style="font-size:0.78em; color:var(--ink-faint);">Payments from this date on without a fattura appear in «To invoice».${fatturaTodoReady ? '' : ' (Run fatture_todo.sql to change it.)'}</div>`;
     const A = window.Anagrafica;
     const c = document.getElementById('fsComune'), p = document.getElementById('fsProvincia'), cap = document.getElementById('fsCap');
     A.attachComunePicker(c, p, cap, null);
@@ -988,10 +1002,11 @@ async function saveFatturaSettings() {
         start_year: Number(val('fsStartYear')) || new Date().getFullYear(),
         updated_at: new Date().toISOString()
     };
+    if (fatturaTodoReady) st.invoice_from = val('fsInvoiceFrom') || FATTURE_FROM_DEFAULT;
     const problems = fatturaSettingsProblems(st);
-    if (problems.length && !confirm('Mancano o non sono validi:\n- ' + problems.join('\n- ') + '\n\nSalvare comunque? (Non potrai creare fatture finché non sono corretti.)')) return;
+    if (problems.length && !confirm('Missing or not valid:\n- ' + problems.join('\n- ') + "\n\nSave anyway? (You can't create fatture until they are correct.)")) return;
     const { error } = await supabaseClient.from('fattura_settings').upsert(st, { onConflict: 'id' });
-    if (error) { alert('Impossibile salvare: ' + error.message); return; }
+    if (error) { alert('Could not save: ' + error.message); return; }
     fatturaSettings = st;
     closeFatturaSettings();
     refreshFattureViews();
@@ -1005,11 +1020,102 @@ function refreshFattureViews() {
         if (s) renderStudentViewModal(s);
     }
 }
+// ---------- «Da fatturare» / «Fatturati» ----------
+function fattureFromDate() {
+    return String((fatturaSettings && fatturaSettings.invoice_from) || FATTURE_FROM_DEFAULT).slice(0, 10);
+}
+// Recharges since fattureFromDate() without a fattura, grouped by student.
+// skipped=true returns the «Non serve» ones instead.
+function rechargesToInvoice(skipped) {
+    const from = fattureFromDate();
+    const rows = (typeof v2CreditTransactions === 'undefined' ? [] : v2CreditTransactions)
+        .filter((t) => t.type === 'recharge' && !t.deleted_at && t.id && String(t.created_at).slice(0, 10) >= from)
+        .filter((t) => !fatturaForTransaction(t.id))
+        .filter((t) => fatturaSkipIds.has(t.id) === !!skipped)
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    const groups = new Map();
+    rows.forEach((t) => {
+        if (!groups.has(t.student_id)) groups.set(t.student_id, { student: students.find((x) => x.id === t.student_id), txs: [] });
+        groups.get(t.student_id).txs.push(t);
+    });
+    return [...groups.values()].sort((a, b) => String(a.student?.name || '').localeCompare(String(b.student?.name || '')));
+}
+// Students with fatture dated since fattureFromDate(), plus how many recharges still miss one.
+function studentsInvoiced() {
+    const from = fattureFromDate();
+    const missing = new Map(rechargesToInvoice(false).map((g) => [g.student?.id, g.txs.length]));
+    const map = new Map();
+    fattureList.filter((f) => f.student_id && String(f.data_fattura).slice(0, 10) >= from).forEach((f) => {
+        if (!map.has(f.student_id)) map.set(f.student_id, { student: students.find((x) => x.id === f.student_id), count: 0, total: 0 });
+        const g = map.get(f.student_id);
+        g.count++; g.total += Number(f.importo || 0);
+    });
+    return [...map.values()].map((g) => ({ ...g, missing: missing.get(g.student?.id) || 0 }))
+        .sort((a, b) => String(a.student?.name || '').localeCompare(String(b.student?.name || '')));
+}
+async function skipFatturaFor(txId, skip) {
+    const { error } = skip
+        ? await supabaseClient.from('fattura_skips').insert({ transaction_id: txId })
+        : await supabaseClient.from('fattura_skips').delete().eq('transaction_id', txId);
+    if (error) { alert('Could not save: ' + error.message); return; }
+    if (skip) fatturaSkipIds.add(txId); else fatturaSkipIds.delete(txId);
+    refreshFattureViews();
+}
+function setFattureTodoView(v) { fattureTodoView = v; renderFattureTab(); }
+function fattureTodoCardHtml() {
+    const todo = rechargesToInvoice(false);
+    const skipped = fatturaTodoReady ? rechargesToInvoice(true) : [];
+    const done = studentsInvoiced();
+    const nTodo = todo.reduce((n, g) => n + g.txs.length, 0);
+    const nSkipped = skipped.reduce((n, g) => n + g.txs.length, 0);
+    const view = fattureTodoView === 'skipped' && !nSkipped ? 'todo' : fattureTodoView;
+    const tab = (key, label) => `<button class="btn btn-sm ${view === key ? 'btn-primary' : 'btn-outline'}" onclick="setFattureTodoView('${key}')">${label}</button>`;
+    const txRow = (t, skippedRow) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0 5px 12px; font-size:0.85em;">
+            <span>${dateIt(String(t.created_at).slice(0, 10))} · <b>€${moneyIt(t.amount)}</b></span>
+            <span style="display:flex; gap:6px;">${skippedRow
+                ? `<button class="btn btn-outline btn-sm" onclick="skipFatturaFor(${t.id}, false)">Restore</button>`
+                : `<button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})">Make fattura</button>
+                   ${fatturaTodoReady ? `<button class="btn btn-outline btn-sm" title="This payment won't get a fattura from the app" onclick="skipFatturaFor(${t.id}, true)">Not needed</button>` : ''}`}
+            </span>
+        </div>`;
+    const groupHtml = (g, skippedRows) => `
+        <div style="padding:8px 0; border-top:1px solid var(--border-soft);">
+            <div style="font-weight:700; font-size:0.9em; cursor:pointer;" onclick="${g.student ? `openStudentViewModal(${g.student.id})` : ''}">${escapeHtml(g.student ? g.student.name : 'Deleted student')}
+                <span style="font-weight:400; color:var(--ink-faint);">· ${g.txs.length} payment${g.txs.length === 1 ? '' : 's'}</span></div>
+            ${g.txs.map((t) => txRow(t, skippedRows)).join('')}
+        </div>`;
+    let body;
+    if (view === 'done') {
+        body = done.length ? done.map((g) => `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0; border-top:1px solid var(--border-soft); font-size:0.87em; cursor:pointer;" onclick="${g.student ? `openStudentViewModal(${g.student.id})` : ''}">
+                <span><b>${escapeHtml(g.student ? g.student.name : 'Deleted student')}</b> · ${g.count} fattur${g.count === 1 ? 'a' : 'e'} · €${moneyIt(g.total)}</span>
+                ${g.missing ? `<span class="badge badge-warning">${g.missing} missing</span>` : '<span class="badge badge-success">all invoiced ✓</span>'}
+            </div>`).join('') : '<div style="font-size:0.85em; color:var(--ink-faint); padding:6px 0;">No fatture yet.</div>';
+    } else if (view === 'skipped') {
+        body = `<div style="font-size:0.8em; color:var(--ink-faint); margin-bottom:4px;">Payments marked «Not needed». «Restore» puts them back in «To invoice».</div>` + skipped.map((g) => groupHtml(g, true)).join('');
+    } else {
+        body = todo.length ? todo.map((g) => groupHtml(g, false)).join('')
+            : '<div style="font-size:0.88em; color:var(--success); font-weight:600; padding:6px 0;">Every payment has its fattura ✓</div>';
+    }
+    return `
+        <div class="card" style="padding:14px 16px; margin-bottom:14px;">
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+                ${tab('todo', `To invoice (${nTodo})`)}
+                ${tab('done', `Invoiced (${done.length} student${done.length === 1 ? '' : 's'})`)}
+                ${nSkipped ? tab('skipped', `Hidden (${nSkipped})`) : ''}
+                <span style="margin-left:auto; font-size:0.78em; color:var(--ink-faint);">payments from ${dateIt(fattureFromDate())}</span>
+            </div>
+            ${fatturaTodoReady ? '' : '<div style="font-size:0.8em; color:var(--warning); margin-bottom:6px;">Run fatture_todo.sql in Supabase for the «Not needed» button and to change the date.</div>'}
+            <div style="max-height:420px; overflow-y:auto;">${body}</div>
+        </div>`;
+}
+
 function renderFattureTab() {
     const panel = document.getElementById('fattureTabContent');
     if (!panel) return;
     if (fattureMissing) {
-        panel.innerHTML = `<div class="placeholder-card">${icon('warning', 26)}<h3>Fatture non ancora attive</h3><div style="color:var(--ink-soft); font-size:0.88em;">Esegui student_details.sql e poi fatture_xml.sql in Supabase, poi aggiorna la pagina.</div></div>`;
+        panel.innerHTML = `<div class="placeholder-card">${icon('warning', 26)}<h3>Fatture not active yet</h3><div style="color:var(--ink-soft); font-size:0.88em;">Run student_details.sql, then fatture_xml.sql in Supabase, then refresh the page.</div></div>`;
         return;
     }
     const yearSel = document.getElementById('fattureYear');
@@ -1030,43 +1136,44 @@ function renderFattureTab() {
     const total = ofYear.reduce((sum, f) => sum + Number(f.importo || 0), 0);
     const count = (k) => ofYear.filter((f) => f.status === k).length;
     const settingsWarn = fatturaSettingsProblems(fatturaSettings).length
-        ? `<div class="card" style="padding:12px 16px; margin-bottom:14px; border-color:#fbdca0; font-size:0.86em;">${icon('warning', 14)} Completa le <a href="#" onclick="openFatturaSettings(); return false;">Impostazioni fattura</a> prima di creare la prima fattura.</div>`
+        ? `<div class="card" style="padding:12px 16px; margin-bottom:14px; border-color:#fbdca0; font-size:0.86em;">${icon('warning', 14)} Complete the <a href="#" onclick="openFatturaSettings(); return false;">fattura Settings</a> before creating the first fattura.</div>`
         : '';
     const legacy = legacyFattureToImport(null);
     const legacyHtml = legacy.length ? `
         <div class="card" style="padding:14px 16px; margin-bottom:14px; border-color:#fbdca0;">
-            <div style="font-weight:700; font-size:0.92em; margin-bottom:4px;">Da importare dal vecchio archivio (${legacy.length})</div>
-            <div style="font-size:0.82em; color:var(--ink-soft); margin-bottom:10px;">Le fatture salvate nella vecchia sezione Reports. Apri il PDF, controlla i dati, scrivi l'importo e salva: entrano nel registro.</div>
+            <div style="font-weight:700; font-size:0.92em; margin-bottom:4px;">To import from the old archive (${legacy.length})</div>
+            <div style="font-size:0.82em; color:var(--ink-soft); margin-bottom:10px;">Fatture saved in the old Reports section. Open the PDF, check the data, type the amount and save: they go into the register.</div>
             ${legacy.map((x) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 0; border-top:1px solid var(--border-soft); font-size:0.86em;">
-                    <span><strong>${escapeHtml(x.payment.taxFileNo || '—')}</strong> · ${x.payment.date ? dateIt(x.payment.date) : '—'} · ${escapeHtml(x.student ? x.student.name : 'Allievo #' + x.studentId)}</span>
+                    <span><strong>${escapeHtml(x.payment.taxFileNo || '—')}</strong> · ${x.payment.date ? dateIt(x.payment.date) : '—'} · ${escapeHtml(x.student ? x.student.name : 'Student #' + x.studentId)}</span>
                     <span style="display:flex; gap:6px;">
                         ${x.payment.pdfPath ? `<button class="btn btn-outline btn-sm" onclick="viewTaxPdf('${escapeHtml(x.payment.pdfPath).replace(/'/g, "\\'")}')">PDF</button>` : ''}
-                        <button class="btn btn-primary btn-sm" onclick="openLegacyImport(${x.studentId}, '${escapeHtml(x.payment.id)}')">Importa</button>
-                        <button class="btn btn-danger btn-sm" title="Elimina definitivamente" onclick="deleteLegacyFattura(${x.studentId}, '${escapeHtml(x.payment.id)}')">${icon('trash', 14)}</button>
+                        <button class="btn btn-primary btn-sm" onclick="openLegacyImport(${x.studentId}, '${escapeHtml(x.payment.id)}')">Import</button>
+                        <button class="btn btn-danger btn-sm" title="Delete permanently" onclick="deleteLegacyFattura(${x.studentId}, '${escapeHtml(x.payment.id)}')">${icon('trash', 14)}</button>
                     </span>
                 </div>`).join('')}
         </div>` : '';
     panel.innerHTML = `
         ${settingsWarn}
+        ${fattureTodoCardHtml()}
         ${legacyHtml}
         <div class="card" style="padding:14px 16px; margin-bottom:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
-            <div class="field" style="margin:0; min-width:110px;"><label>Anno</label>
+            <div class="field" style="margin:0; min-width:110px;"><label>Year</label>
                 <select id="fattureYear" onchange="renderFattureTab()">${years.map((y) => `<option value="${y}" ${y === chosenYear ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
-            <div class="field" style="margin:0; min-width:150px;"><label>Stato</label>
+            <div class="field" style="margin:0; min-width:150px;"><label>Status</label>
                 <select id="fattureStatusFilter" onchange="renderFattureTab()">
-                    <option value="all">Tutti</option>
+                    <option value="all">All</option>
                     ${Object.keys(FATTURA_STATUS).map((k) => `<option value="${k}" ${k === statusFilter ? 'selected' : ''}>${FATTURA_STATUS[k].label}</option>`).join('')}
                 </select></div>
-            <div class="field" style="margin:0; flex:1; min-width:180px;"><label>Cerca</label><input id="fattureSearch" value="${escapeHtml(term)}" placeholder="Nome, CF, numero…" oninput="renderFattureTab(); const el=document.getElementById('fattureSearch'); el.focus(); el.setSelectionRange(el.value.length, el.value.length);"></div>
+            <div class="field" style="margin:0; flex:1; min-width:180px;"><label>Search</label><input id="fattureSearch" value="${escapeHtml(term)}" placeholder="Name, CF, number…" oninput="renderFattureTab(); const el=document.getElementById('fattureSearch'); el.focus(); el.setSelectionRange(el.value.length, el.value.length);"></div>
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:14px;">
             <div class="stat-tile"><div class="label">Fatture ${chosenYear}</div><div class="value">${ofYear.length}</div></div>
-            <div class="stat-tile"><div class="label">Totale</div><div class="value">€${moneyIt(total)}</div></div>
-            <div class="stat-tile"><div class="label">Accettate</div><div class="value" style="color:var(--success);">${count('accepted')}</div></div>
-            <div class="stat-tile"><div class="label">Caricate</div><div class="value" style="color:var(--warning);">${count('uploaded')}</div></div>
-            <div class="stat-tile"><div class="label">Da caricare</div><div class="value">${count('created')}</div></div>
-            <div class="stat-tile"><div class="label">Scartate</div><div class="value" style="color:var(--danger);">${count('rejected')}</div></div>
+            <div class="stat-tile"><div class="label">Total</div><div class="value">€${moneyIt(total)}</div></div>
+            <div class="stat-tile"><div class="label">Accepted</div><div class="value" style="color:var(--success);">${count('accepted')}</div></div>
+            <div class="stat-tile"><div class="label">Uploaded</div><div class="value" style="color:var(--warning);">${count('uploaded')}</div></div>
+            <div class="stat-tile"><div class="label">To upload</div><div class="value">${count('created')}</div></div>
+            <div class="stat-tile"><div class="label">Rejected</div><div class="value" style="color:var(--danger);">${count('rejected')}</div></div>
         </div>
         ${shown.length ? shown.map((f) => {
             const s = f.student_id ? students.find((x) => x.id === f.student_id) : null;
@@ -1076,30 +1183,32 @@ function renderFattureTab() {
                 <div style="min-width:64px; font-weight:800;">${fmtNumeroFattura(f)}</div>
                 <div class="student-info" style="flex:1 1 220px;">
                     <div>
-                        <div style="font-weight:700;">${escapeHtml(`${f.recipient_cognome}, ${f.recipient_nome}`)}${f.recipient_type === 'parent' ? ' <span style="font-weight:400; color:var(--ink-faint); font-size:0.85em;">(genitore)</span>' : ''}</div>
-                        <div class="student-meta">${dateIt(f.data_fattura)} · ${escapeHtml(f.recipient_cf)}${s && f.recipient_type === 'parent' ? ' · allievo: ' + escapeHtml(s.name) : ''}${f.source === 'manual' ? ' · inserita a mano' : ''}</div>
+                        <div style="font-weight:700;">${escapeHtml(`${f.recipient_cognome}, ${f.recipient_nome}`)}${f.recipient_type === 'parent' ? ' <span style="font-weight:400; color:var(--ink-faint); font-size:0.85em;">(parent)</span>' : ''}</div>
+                        <div class="student-meta">${dateIt(f.data_fattura)} · ${escapeHtml(f.recipient_cf)}${s && f.recipient_type === 'parent' ? ' · student: ' + escapeHtml(s.name) : ''}${f.source === 'manual' ? ' · added by hand' : ''}</div>
                     </div>
                 </div>
                 <div style="font-weight:800;">€${moneyIt(f.importo)}</div>
-                <button type="button" class="btn btn-primary btn-sm" title="Apri il PDF" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">${iconLabel('file-text', 'PDF', 13)}</button>
-                <span class="badge ${st.badge}" title="${escapeHtml(st.hint)}">${st.label}</span>
+                <button type="button" class="btn btn-primary btn-sm" title="Open the PDF" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">${iconLabel('file-text', 'PDF', 13)}</button>
+                ${f.status === 'created' || f.status === 'uploaded'
+                    ? `<button type="button" class="btn btn-success btn-sm" title="XML uploaded to AdE: mark Accepted" onclick="event.stopPropagation(); setFatturaStatus(${f.id}, 'accepted', true)">${iconLabel('check-circle', 'Uploaded to AdE', 13)}</button>`
+                    : `<span class="badge ${st.badge}" title="${escapeHtml(st.hint)}">${st.label}</span>`}
             </div>`;
-        }).join('') : `<div class="placeholder-card">${icon('file-text', 24)}<h3>Nessuna fattura</h3></div>`}`;
+        }).join('') : `<div class="placeholder-card">${icon('file-text', 24)}<h3>No fatture</h3></div>`}`;
 }
 
 function exportFattureCsv() {
     const chosenYear = Number(document.getElementById('fattureYear')?.value) || new Date().getFullYear();
     const rows = fattureList.filter((f) => f.anno === chosenYear).sort((a, b) => a.numero - b.numero);
     const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
-    const header = ['Numero', 'Data', 'Cognome', 'Nome', 'Codice fiscale', 'Intestata a', 'Allievo', 'Descrizione', 'Importo', 'Stato', 'Origine'];
+    const header = ['Number', 'Date', 'Last name', 'First name', 'Codice fiscale', 'Issued to', 'Student', 'Description', 'Amount', 'Status', 'Source'];
     const lines = rows.map((f) => {
         const s = f.student_id ? students.find((x) => x.id === f.student_id) : null;
         return [fmtNumeroFattura(f), dateIt(f.data_fattura), f.recipient_cognome, f.recipient_nome, f.recipient_cf,
-            f.recipient_type === 'parent' ? 'Genitore' : 'Allievo', s ? s.name : '', f.descrizione, moneyIt(f.importo),
-            (FATTURA_STATUS[f.status] || {}).label || f.status, f.source === 'manual' ? 'Inserita a mano' : 'App'].map(q).join(';');
+            f.recipient_type === 'parent' ? 'Parent' : 'Student', s ? s.name : '', f.descrizione, moneyIt(f.importo),
+            (FATTURA_STATUS[f.status] || {}).label || f.status, f.source === 'manual' ? 'Added by hand' : 'App'].map(q).join(';');
     });
     const total = rows.reduce((sum, f) => sum + Number(f.importo || 0), 0);
-    lines.push(['', '', '', '', '', '', '', 'TOTALE', moneyIt(total), '', ''].map(q).join(';'));
+    lines.push(['', '', '', '', '', '', '', 'TOTAL', moneyIt(total), '', ''].map(q).join(';'));
     downloadBlob(new Blob(['﻿' + [header.map(q).join(';'), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' }), `fatture_${chosenYear}.csv`);
 }
 
@@ -1110,18 +1219,18 @@ function renderStudentFatture(s) {
     if (!label || !list) return;
     if (fattureMissing) {
         label.innerHTML = iconLabel('file-text', 'Fatture', 13);
-        list.innerHTML = `<div style="color:var(--warning); font-size:0.85em; margin-bottom:6px;">Fatture non ancora attive: esegui student_details.sql e fatture_xml.sql in Supabase, poi aggiorna la pagina.</div>`;
+        list.innerHTML = `<div style="color:var(--warning); font-size:0.85em; margin-bottom:6px;">Fatture not active yet: run student_details.sql and fatture_xml.sql in Supabase, then refresh the page.</div>`;
         return;
     }
     const mine = fattureOfStudent(s.id).sort((a, b) => b.anno - a.anno || b.numero - a.numero);
     const legacy = legacyFattureToImport(s.id);
     label.innerHTML = iconLabel('file-text', 'Fatture', 13);
     const legacyRows = legacy.map((x) => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;">
-                <span><strong>${escapeHtml(x.payment.taxFileNo || '—')}</strong> · ${x.payment.date ? dateIt(x.payment.date) : '—'} <span style="color:var(--warning);">· da importare</span></span>
+                <span><strong>${escapeHtml(x.payment.taxFileNo || '—')}</strong> · ${x.payment.date ? dateIt(x.payment.date) : '—'} <span style="color:var(--warning);">· to import</span></span>
                 <span style="display:flex; gap:6px;">
                     ${x.payment.pdfPath ? `<button type="button" class="btn btn-outline btn-sm" onclick="viewTaxPdf('${escapeHtml(x.payment.pdfPath).replace(/'/g, "\\'")}')">PDF</button>` : ''}
-                    <button type="button" class="btn btn-primary btn-sm" onclick="openLegacyImport(${s.id}, '${escapeHtml(x.payment.id)}')">Importa</button>
-                    <button type="button" class="btn btn-danger btn-sm" title="Elimina definitivamente" onclick="deleteLegacyFattura(${s.id}, '${escapeHtml(x.payment.id)}')">${icon('trash', 14)}</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="openLegacyImport(${s.id}, '${escapeHtml(x.payment.id)}')">Import</button>
+                    <button type="button" class="btn btn-danger btn-sm" title="Delete permanently" onclick="deleteLegacyFattura(${s.id}, '${escapeHtml(x.payment.id)}')">${icon('trash', 14)}</button>
                 </span>
             </div>`).join('');
     list.innerHTML = legacyRows + (mine.length
@@ -1131,11 +1240,11 @@ function renderStudentFatture(s) {
                 <span><strong>${fmtNumeroFattura(f)}</strong> · ${dateIt(f.data_fattura)} · €${moneyIt(f.importo)}</span>
                 <span style="display:flex; gap:6px; align-items:center;">
                     <span class="badge ${st.badge}">${st.label}</span>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation(); downloadFatturaPdf(${f.id})">PDF</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">PDF</button>
                 </span>
             </div>`;
         }).join('')
-        : (legacy.length ? '' : `<div style="color:var(--ink-faint); font-size:0.85em; margin-bottom:6px;">Nessuna fattura. Usa «Fattura» su una ricarica qui sotto.</div>`));
+        : (legacy.length ? '' : `<div style="color:var(--ink-faint); font-size:0.85em; margin-bottom:6px;">No fatture. Use «Fattura» on a payment below.</div>`));
 }
 // Small button for a recharge row in the student's ledger.
 function fatturaLedgerButton(t) {

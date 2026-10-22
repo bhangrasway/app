@@ -55,19 +55,24 @@
         return i >= 0 ? String(i) : ch;
     }
 
+    // Messages: Italian by default (member portal); admin.html sets
+    // window.ANAGRAFICA_LANG = 'en' before loading this file.
+    const EN = (typeof window !== 'undefined' && window.ANAGRAFICA_LANG === 'en');
+    const msg = (it, en) => (EN ? en : it);
+
     // { valid, reason, birthDate: 'YYYY-MM-DD', sex: 'M'|'F' }
     function validateCodiceFiscale(cfRaw, refDate) {
         const cf = normalizeCf(cfRaw);
-        if (!cf) return { valid: false, reason: 'mancante' };
-        if (cf.length !== 16) return { valid: false, reason: 'deve avere 16 caratteri' };
-        if (!CF_RE.test(cf)) return { valid: false, reason: 'formato non valido' };
-        if (cfCheckChar(cf.slice(0, 15)) !== cf[15]) return { valid: false, reason: 'carattere di controllo errato (probabile errore di battitura)' };
+        if (!cf) return { valid: false, reason: msg('mancante', 'missing') };
+        if (cf.length !== 16) return { valid: false, reason: msg('deve avere 16 caratteri', 'must have 16 characters') };
+        if (!CF_RE.test(cf)) return { valid: false, reason: msg('formato non valido', 'wrong format') };
+        if (cfCheckChar(cf.slice(0, 15)) !== cf[15]) return { valid: false, reason: msg('carattere di controllo errato (probabile errore di battitura)', 'wrong check letter (probably a typo)') };
         const yy = Number(deOmocodia(cf[6]) + deOmocodia(cf[7]));
         const month = MONTHS.indexOf(cf[8]) + 1;
         let day = Number(deOmocodia(cf[9]) + deOmocodia(cf[10]));
         const sex = day > 40 ? 'F' : 'M';
         if (day > 40) day -= 40;
-        if (day < 1 || day > 31) return { valid: false, reason: 'giorno di nascita non valido' };
+        if (day < 1 || day > 31) return { valid: false, reason: msg('giorno di nascita non valido', 'invalid birth day') };
         const ref = refDate ? new Date(refDate) : new Date();
         const currentYY = ref.getFullYear() % 100;
         const year = yy > currentYY ? 1900 + yy : 2000 + yy;
@@ -199,17 +204,17 @@
     function validateAddress(a) {
         const problems = [];
         const warnings = [];
-        if (!String(a.via || '').trim()) problems.push('via mancante');
-        else if (!hasToponimo(a.via)) warnings.push('scrivi anche il tipo di via (es. "Via Trento", non "Trento")');
-        if (!String(a.comune || '').trim()) problems.push('comune mancante');
-        if (!/^[A-Z]{2}$/.test(String(a.provincia || ''))) problems.push('provincia non valida');
-        if (!/^\d{5}$/.test(String(a.cap || ''))) problems.push('CAP non valido');
+        if (!String(a.via || '').trim()) problems.push(msg('via mancante', 'street missing'));
+        else if (!hasToponimo(a.via)) warnings.push(msg('scrivi anche il tipo di via (es. "Via Trento", non "Trento")', 'write the street type too (e.g. "Via Trento", not "Trento")'));
+        if (!String(a.comune || '').trim()) problems.push(msg('comune mancante', 'comune (town) missing'));
+        if (!/^[A-Z]{2}$/.test(String(a.provincia || ''))) problems.push(msg('provincia non valida', 'invalid provincia'));
+        if (!/^\d{5}$/.test(String(a.cap || ''))) problems.push(msg('CAP non valido', 'invalid CAP'));
         if (comuni && a.comune) {
             const c = findComune(a.comune, a.provincia);
-            if (!c) problems.push('comune non trovato nell\'elenco ufficiale');
+            if (!c) problems.push(msg('comune non trovato nell\'elenco ufficiale', 'comune not found in the official list'));
             else {
-                if (a.provincia && c.s !== a.provincia) problems.push(`provincia errata (${a.comune} è ${c.s})`);
-                if (/^\d{5}$/.test(String(a.cap || '')) && !c.c.includes(a.cap)) problems.push(`CAP non corrisponde al comune (${c.c.length === 1 ? c.c[0] : c.c[0] + '…'})`);
+                if (a.provincia && c.s !== a.provincia) problems.push(msg(`provincia errata (${a.comune} è ${c.s})`, `wrong provincia (${a.comune} is ${c.s})`));
+                if (/^\d{5}$/.test(String(a.cap || '')) && !c.c.includes(a.cap)) problems.push(msg(`CAP non corrisponde al comune (${c.c.length === 1 ? c.c[0] : c.c[0] + '…'})`, `CAP doesn't match the comune (${c.c.length === 1 ? c.c[0] : c.c[0] + '…'})`));
             }
         }
         return { ok: problems.length === 0, problems, warnings };
