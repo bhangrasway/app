@@ -268,9 +268,12 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     <div class="login-card">
         <img src="logo.png" alt="Bhangra Sway" style="height:56px; width:auto; border-radius:10px; box-shadow:var(--shadow-md); margin-bottom:16px;">
         <h1>Check your email</h1>
-        <p>This browser isn't recognized. We sent a sign-in link to your email — open it <u>in this same browser</u> to continue.</p>
+        <p>First time on this phone/browser. We sent a 6-digit code to your email: type it here.</p>
+        <div class="field" style="text-align:left;"><label>Code from the email</label>
+            <input id="otpCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="letter-spacing:4px; font-size:1.2em; text-align:center;" onkeydown="if (event.key === 'Enter') handleOtpCode();"></div>
+        <button type="button" class="btn btn-primary" style="width:100%; margin-bottom:10px;" id="otpCodeBtn" onclick="handleOtpCode()">Verify code</button>
         <div id="otpChallengeError" class="login-error"></div>
-        <button type="button" class="btn btn-outline" style="width:100%;" onclick="handleOtpResend()">Resend link</button>
+        <button type="button" class="btn btn-outline" style="width:100%;" onclick="handleOtpResend()">Send a new code</button>
         <button type="button" class="btn btn-ghost btn-sm" style="width:100%; margin-top:10px;" onclick="handleOtpChallengeCancel()">Not you? Sign out</button>
     </div>
 </div>
@@ -1631,12 +1634,17 @@ function arrivedViaEmailLink() {
 }
 async function proceedPastLogin() {
     if (isDeviceTrusted()) { showApp(); return; }
+    // New device: a 6-digit code is emailed (Supabase «Magic Link» template with
+    // {{ .Token }}, custom SMTP) and typed here. A code from a trusted device
+    // (Security → «Add a new device») is accepted too.
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('otpChallengePage').style.display = 'flex';
     const errorEl = document.getElementById('otpChallengeError');
     errorEl.classList.remove('show');
+    document.getElementById('otpCodeInput').value = '';
+    document.getElementById('otpCodeInput').focus();
     const { error } = await supabaseClient.auth.signInWithOtp({ email: ADMIN_EMAIL, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname } });
-    if (error) { errorEl.textContent = 'Could not send the link by email. Try "Resend link" in a moment.'; errorEl.classList.add('show'); }
+    if (error) { errorEl.textContent = 'Could not send the code by email. Tap «Send a new code» in a moment.'; errorEl.classList.add('show'); }
 }
 async function handleOtpResend() {
     const errorEl = document.getElementById('otpChallengeError');
@@ -1644,8 +1652,29 @@ async function handleOtpResend() {
     const { error } = await supabaseClient.auth.signInWithOtp({ email: ADMIN_EMAIL, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname } });
     errorEl.style.color = error ? 'var(--danger)' : 'var(--success)';
     errorEl.style.background = error ? 'var(--danger-soft)' : 'var(--success-soft)';
-    errorEl.textContent = error ? 'Could not resend. Try again shortly.' : 'A new link has been sent.';
+    errorEl.textContent = error ? 'Could not send the email. Try again shortly.' : `A new code was sent to ${ADMIN_EMAIL}.`;
     errorEl.classList.add('show');
+}
+// The same email also carries a code ({{ .Token }} in the Supabase «Magic Link»
+// template). Typing it proves the email just like opening the link, and works
+// where the link can't land — the iPhone home-screen app (no address bar, own
+// storage, links always open in Safari).
+async function handleOtpCode() {
+    const errorEl = document.getElementById('otpChallengeError');
+    const btn = document.getElementById('otpCodeBtn');
+    const token = document.getElementById('otpCodeInput').value.replace(/\D/g, '');
+    errorEl.classList.remove('show');
+    errorEl.style.color = ''; errorEl.style.background = '';
+    if (token.length < 6) { errorEl.textContent = 'Type the code from the email (6 or more digits).'; errorEl.classList.add('show'); return; }
+    btn.disabled = true;
+    // 1. a code shown by an already-trusted device (admin_device_codes.sql)
+    const { data: ok } = await supabaseClient.rpc('consume_admin_device_code', { p_code: token });
+    // 2. otherwise an emailed code ({{ .Token }}, only if the email template has it)
+    const error = ok ? null : (await supabaseClient.auth.verifyOtp({ email: ADMIN_EMAIL, token, type: 'email' })).error;
+    btn.disabled = false;
+    if (!ok && error) { errorEl.style.color = ''; errorEl.style.background = ''; errorEl.textContent = 'Wrong or expired code. Tap «Send a new code» for a new one.'; errorEl.classList.add('show'); return; }
+    document.getElementById('otpChallengePage').style.display = 'none';
+    document.getElementById('trustConfirmPage').style.display = 'flex';
 }
 async function handleOtpChallengeCancel() {
     await supabaseClient.auth.signOut();
@@ -1701,11 +1730,25 @@ function renderSecurityStatusView() {
         ? `<span class="badge badge-success">${iconLabel('check-circle', 'Trusted', 13)}</span>`
         : `<span class="badge badge-neutral">New</span>`;
     hintEl.textContent = trusted
-        ? `Signing in from any browser other than this one always emails a sign-in link to ${ADMIN_EMAIL} first — the password alone isn't enough there.`
+        ? `A new phone or browser needs, after the password, a 6-digit code sent to ${ADMIN_EMAIL}. (Or a code from this device: «Add a new device».)`
         : `You chose not to remember this browser. Every sign-in here needs a fresh emailed link, unless you trust it below.`;
     footerEl.innerHTML = trusted
-        ? `<button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);" onclick="handleForgetDevice()">Forget this browser</button>`
+        ? `<button class="btn btn-primary" onclick="handleAddDeviceCode()">Add a new device</button>
+           <button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);" onclick="handleForgetDevice()">Forget this browser</button>`
         : `<button class="btn btn-primary" onclick="handleTrustThisDeviceNow()">Trust this browser</button>`;
+}
+// Trusted device only: a 6-digit code (10 minutes, one use) to type on the new
+// device's «Check your email» screen (admin_device_codes.sql).
+async function handleAddDeviceCode() {
+    const n = new Uint32Array(1);
+    crypto.getRandomValues(n);
+    const code = String(n[0] % 1000000).padStart(6, '0');
+    const { error } = await supabaseClient.from('admin_device_codes').insert({ code, expires_at: new Date(Date.now() + 10 * 60000).toISOString() });
+    const hintEl = document.getElementById('securityStatusHint');
+    if (error) { hintEl.textContent = 'Could not create a code: ' + error.message + (/admin_device_codes/.test(error.message) ? ' (run admin_device_codes.sql in Supabase)' : ''); return; }
+    hintEl.innerHTML = `On the new device, sign in with the password, then type this code on the «Check your email» screen:
+        <div style="font-size:2em; font-weight:800; letter-spacing:8px; text-align:center; margin:12px 0; color:var(--ink);">${code}</div>
+        Valid for 10 minutes, one time only.`;
 }
 function handleTrustThisDeviceNow() {
     markDeviceTrusted();
