@@ -21,7 +21,7 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=21"></script>
+<script src="i18n.js?v=22"></script>
 <script src="anagrafica.js?v=2"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1067,8 +1067,22 @@ async function refreshReportSilently() {
     }
 }
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && Date.now() - lastReportAt > 5000) refreshReportSilently();
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastReportAt > 5000) refreshReportSilently();
+    // Back from the phone's Settings (location/notifications changed there):
+    // re-read the real state so the switches show it without restarting.
+    refreshPermissionUi();
 });
+window.addEventListener('focus', () => refreshPermissionUi());
+function refreshPermissionUi() {
+    if (typeof renderLocInfoCard === 'function') renderLocInfoCard();
+    if (typeof refreshPushState === 'function' && selectedMember) refreshPushState();
+}
+// Where the browser can tell us, update the moment the permission changes.
+try {
+    navigator.permissions?.query({ name: 'geolocation' }).then((p) => { p.onchange = () => refreshPermissionUi(); }).catch(() => {});
+    navigator.permissions?.query({ name: 'notifications' }).then((p) => { p.onchange = () => refreshPermissionUi(); }).catch(() => {});
+} catch (e) { /* older browsers */ }
 setInterval(() => { if (document.visibilityState === 'visible') refreshReportSilently(); }, 60000);
 
 document.getElementById('startOverBtn').addEventListener('click', () => { forgetLogin(); backToPhoneEntry(''); });
@@ -1768,8 +1782,8 @@ async function checkLocationStatus() {
     if (!navigator.geolocation || !myLocation) return 'unknown';
     return await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-            (pos) => resolve(haversineMeters(pos.coords.latitude, pos.coords.longitude, myLocation.lat, myLocation.lng) <= myLocation.radius_meters ? 'confirmed' : 'too-far'),
-            () => resolve('unknown'),
+            (pos) => { rememberLocationOk(true); resolve(haversineMeters(pos.coords.latitude, pos.coords.longitude, myLocation.lat, myLocation.lng) <= myLocation.radius_meters ? 'confirmed' : 'too-far'); },
+            (err) => { if (err && err.code === 1) rememberLocationOk(false); resolve('unknown'); },
             { timeout: 8000, maximumAge: 60000 }
         );
     });
@@ -1818,19 +1832,27 @@ async function initAttendance() {
     // friendly explanation; the phone's popup comes only after their tap.
     switchTab('attendance');
     const perm = await geoPermissionState();
-    if (perm === 'granted') { await attnCheckLocation(); return; }
+    if (perm === 'granted' || perm === 'remembered') { await attnCheckLocation(); return; }
     if (perm === 'denied') { attnLocStatus = 'unknown'; renderAttnLocBlock(); showAttn('attnTooFar'); return; }
     showAttn('attnLocAsk');
 }
-// 'granted' | 'denied' | 'prompt' (not asked yet, or the browser can't tell)
+// 'granted' | 'denied' | 'prompt' (not asked yet / phone asks each time) |
+// 'remembered' (the phone still says "ask", but it was allowed here before —
+// iPhone websites ask at every launch unless Safari's Location is «Allow»).
 async function geoPermissionState() {
+    let state = 'prompt';
     try {
         if (navigator.permissions && navigator.permissions.query) {
-            const p = await navigator.permissions.query({ name: 'geolocation' });
-            return p.state;
+            state = (await navigator.permissions.query({ name: 'geolocation' })).state;
         }
     } catch (e) { /* older Safari: unknown */ }
-    return 'prompt';
+    if (state === 'prompt' && locationOkBefore()) return 'remembered';
+    return state;
+}
+const LOC_OK_KEY = 'bs_loc_ok';
+function locationOkBefore() { try { return localStorage.getItem(LOC_OK_KEY) === '1'; } catch (e) { return false; } }
+function rememberLocationOk(ok) {
+    try { if (ok) localStorage.setItem(LOC_OK_KEY, '1'); else localStorage.removeItem(LOC_OK_KEY); } catch (e) {}
 }
 async function attnAllowLocation() {
     showAttn('attnLoading');
@@ -1869,14 +1891,16 @@ async function renderLocInfoCard() {
     if (card) {
         let dismissed = false;
         try { dismissed = Date.now() - Number(localStorage.getItem(LOC_INFO_KEY) || 0) < 7 * 86400000; } catch (e) {}
-        card.classList.toggle('hidden', perm === 'granted' || perm === 'denied' || dismissed);
+        card.classList.toggle('hidden', perm === 'granted' || perm === 'remembered' || perm === 'denied' || dismissed);
     }
     const txt = document.getElementById('locSettingsText');
     if (txt) {
-        txt.textContent = perm === 'granted' ? t('loc_state_on') : perm === 'denied' ? locHelp('on') : t('loc_state_off');
-        txt.style.color = perm === 'granted' ? 'var(--success)' : 'var(--ink-faint)';
-        txt.style.fontWeight = perm === 'granted' ? '600' : '';
-        document.getElementById('locSwitch').checked = perm === 'granted';
+        const on = perm === 'granted' || perm === 'remembered';
+        txt.textContent = on ? t('loc_state_on') + (perm === 'remembered' && isIos() ? ' ' + t('loc_ios_stop_asking') : '')
+            : perm === 'denied' ? locHelp('on') : t('loc_state_off');
+        txt.style.color = on ? 'var(--success)' : 'var(--ink-faint)';
+        txt.style.fontWeight = on ? '600' : '';
+        document.getElementById('locSwitch').checked = on;
     }
 }
 // Turning on asks the phone. A website can't take the permission back by itself,
@@ -1902,8 +1926,9 @@ function locHelp(which) {
 function allowLocationNow(explainIfBlocked) {
     if (!navigator.geolocation) { alert(locHelp('on')); return; }
     navigator.geolocation.getCurrentPosition(
-        () => renderLocInfoCard(),
+        () => { rememberLocationOk(true); renderLocInfoCard(); },
         (err) => {
+            if (err && err.code === 1) rememberLocationOk(false);
             // 1 = PERMISSION_DENIED: blocked before, the phone shows no popup anymore.
             if (explainIfBlocked && err && err.code === 1) alert(locHelp('on'));
             renderLocInfoCard();
