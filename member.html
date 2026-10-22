@@ -21,7 +21,7 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=22"></script>
+<script src="i18n.js?v=23"></script>
 <script src="anagrafica.js?v=2"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1896,8 +1896,7 @@ async function renderLocInfoCard() {
     const txt = document.getElementById('locSettingsText');
     if (txt) {
         const on = perm === 'granted' || perm === 'remembered';
-        txt.textContent = on ? t('loc_state_on') + (perm === 'remembered' && isIos() ? ' ' + t('loc_ios_stop_asking') : '')
-            : perm === 'denied' ? locHelp('on') : t('loc_state_off');
+        txt.textContent = on ? t('loc_state_on') : perm === 'denied' ? locHelp('on') : t('loc_state_off');
         txt.style.color = on ? 'var(--success)' : 'var(--ink-faint)';
         txt.style.fontWeight = on ? '600' : '';
         document.getElementById('locSwitch').checked = on;
