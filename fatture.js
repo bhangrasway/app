@@ -1131,10 +1131,11 @@ function fattureFromDate() {
 // Done = on AdE (Uploaded / Accepted). An XML only created, or a rejected
 // fattura, still needs work: the payment stays in «To invoice».
 function fatturaIsDone(f) { return !!f && (f.status === 'accepted' || f.status === 'uploaded'); }
-function rechargesToInvoice(skipped) {
+function rechargesToInvoice(skipped, year) {
     const from = fattureFromDate();
     const rows = (typeof v2CreditTransactions === 'undefined' ? [] : v2CreditTransactions)
         .filter((t) => t.type === 'recharge' && !t.deleted_at && t.id && String(t.created_at).slice(0, 10) >= from)
+        .filter((t) => !year || String(t.created_at).slice(0, 4) === String(year))
         .filter((t) => !fatturaIsDone(fatturaForTransaction(t.id)))
         .filter((t) => fatturaSkipIds.has(t.id) === !!skipped)
         .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
@@ -1146,11 +1147,12 @@ function rechargesToInvoice(skipped) {
     return [...groups.values()].sort((a, b) => String(a.student?.name || '').localeCompare(String(b.student?.name || '')));
 }
 // Students with fatture dated since fattureFromDate(), plus how many recharges still miss one.
-function studentsInvoiced() {
+function studentsInvoiced(year) {
     const from = fattureFromDate();
-    const missing = new Map(rechargesToInvoice(false).map((g) => [g.student?.id, g.txs.length]));
+    const missing = new Map(rechargesToInvoice(false, year).map((g) => [g.student?.id, g.txs.length]));
     const map = new Map();
-    fattureList.filter((f) => f.student_id && fatturaIsDone(f) && String(f.data_fattura).slice(0, 10) >= from).forEach((f) => {
+    fattureList.filter((f) => f.student_id && fatturaIsDone(f) && String(f.data_fattura).slice(0, 10) >= from
+        && (!year || String(f.data_fattura).slice(0, 4) === String(year))).forEach((f) => {
         if (!map.has(f.student_id)) map.set(f.student_id, { student: students.find((x) => x.id === f.student_id), count: 0, total: 0 });
         const g = map.get(f.student_id);
         g.count++; g.total += Number(f.importo || 0);
@@ -1167,14 +1169,19 @@ async function skipFatturaFor(txId, skip) {
     refreshFattureViews();
 }
 function setFattureTodoView(v) { fattureTodoView = v; renderFattureTab(); }
-function fattureTodoCardHtml() {
-    const todo = rechargesToInvoice(false);
-    const skipped = fatturaTodoReady ? rechargesToInvoice(true) : [];
-    const done = studentsInvoiced();
-    const nTodo = todo.reduce((n, g) => n + g.txs.length, 0);
-    const nSkipped = skipped.reduce((n, g) => n + g.txs.length, 0);
+function fattureTodoCardHtml(year) {
+    const todo = rechargesToInvoice(false, year);
+    const skipped = fatturaTodoReady ? rechargesToInvoice(true, year) : [];
+    const done = studentsInvoiced(year);
+    // fatture · students · € for each tab
+    const sumTx = (groups) => ({ n: groups.reduce((n, g) => n + g.txs.length, 0), stu: groups.length, eur: groups.reduce((e, g) => e + g.txs.reduce((x, t) => x + Number(t.amount || 0), 0), 0) });
+    const todoS = sumTx(todo), skipS = sumTx(skipped);
+    const doneS = { n: done.reduce((n, g) => n + g.count, 0), stu: done.length, eur: done.reduce((e, g) => e + g.total, 0) };
+    const nTodo = todoS.n, nSkipped = skipS.n;
     const view = fattureTodoView === 'skipped' && !nSkipped ? 'todo' : fattureTodoView;
-    const tab = (key, label) => `<button class="btn btn-sm ${view === key ? 'btn-primary' : 'btn-outline'}" onclick="setFattureTodoView('${key}')">${label}</button>`;
+    const eur0 = (v) => '€' + (Math.round(v * 100) / 100).toLocaleString('it-IT', { maximumFractionDigits: 2 });
+    const tab = (key, label, st, tip) => `<button class="btn btn-sm ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" style="display:flex; flex-direction:column; align-items:flex-start; line-height:1.2; padding-top:5px; padding-bottom:5px;" onclick="setFattureTodoView('${key}')">
+        <span>${label}</span><span style="font-size:0.78em; opacity:0.85; font-weight:600;">${st.n} · ${st.stu} · ${eur0(st.eur)}</span></button>`;
     const txRow = (t, skippedRow) => {
         const f = fatturaForTransaction(t.id);
         let state = '', buttons;
@@ -1219,11 +1226,12 @@ function fattureTodoCardHtml() {
     return `
         <div class="card" style="padding:14px 16px; margin-bottom:14px;">
             <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
-                ${tab('todo', `To invoice (${nTodo})`)}
-                ${tab('done', `Invoiced (${done.length} student${done.length === 1 ? '' : 's'})`)}
-                ${nSkipped ? tab('skipped', `Hidden (${nSkipped})`) : ''}
-                <span style="margin-left:auto; font-size:0.78em; color:var(--ink-faint);">payments from ${dateIt(fattureFromDate())}</span>
+                ${tab('todo', 'To invoice', todoS, 'To invoice')}
+                ${tab('done', 'Invoiced', doneS, 'Invoiced')}
+                ${nSkipped ? tab('skipped', 'Hidden', skipS, 'Hidden') : ''}
+                <span style="margin-left:auto; font-size:0.78em; color:var(--ink-faint);">year ${year || ''}</span>
             </div>
+            <div style="font-size:0.72em; color:var(--ink-faint); margin:-4px 0 8px;">fatture · students · €</div>
             ${fatturaTodoReady ? '' : '<div style="font-size:0.8em; color:var(--warning); margin-bottom:6px;">Run fatture_todo.sql in Supabase for the «Not needed» button and to change the date.</div>'}
             <div style="max-height:420px; overflow-y:auto;">${body}</div>
         </div>`;
@@ -1293,7 +1301,7 @@ function renderFattureTab() {
     panel.innerHTML = `
         ${settingsWarn}
         ${xmlNotUploadedCardHtml()}
-        ${fattureTodoCardHtml()}
+        ${fattureTodoCardHtml(chosenYear)}
         ${legacyHtml}
         <div class="card" style="padding:14px 16px; margin-bottom:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
             <div class="field" style="margin:0; min-width:110px;"><label>Year</label>
