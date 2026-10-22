@@ -1289,8 +1289,8 @@ function fattureTodoCardHtml(year) {
     const nTodo = todoS.n, nSkipped = skipS.n;
     const view = fattureTodoView === 'skipped' && !nSkipped ? 'todo' : fattureTodoView;
     const eur0 = (v) => '€' + (Math.round(v * 100) / 100).toLocaleString('it-IT', { maximumFractionDigits: 2 });
-    const tab = (key, label, st, tip) => `<button class="btn ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" style="flex:1 1 0; min-width:110px; height:auto; display:flex; flex-direction:column; align-items:flex-start; gap:2px; line-height:1.25; padding:9px 14px; border-radius:var(--radius-sm); text-align:left;" onclick="setFattureTodoView('${key}')">
-        <span style="font-size:0.95em; font-weight:700;">${label}</span><span style="font-size:0.82em; opacity:0.9; font-weight:600;">${st.n} · ${st.stu} · ${eur0(st.eur)}</span></button>`;
+    const tab = (key, label, st, tip) => `<button class="btn ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" style="flex:1 1 140px; max-width:210px; height:auto; display:flex; flex-direction:column; align-items:flex-start; gap:2px; line-height:1.25; padding:9px 14px; border-radius:var(--radius-sm); text-align:left;" onclick="setFattureTodoView('${key}')">
+        <span style="font-size:0.95em; font-weight:700;">${label}</span></button>`;
     const txRow = (t, skippedRow) => {
         const f = fatturaForTransaction(t.id);
         let state = '', buttons;
@@ -1343,8 +1343,8 @@ function fattureTodoCardHtml(year) {
                 ${tab('done', 'Invoiced', doneS, 'Invoiced')}
                 ${nSkipped ? tab('skipped', 'Hidden', skipS, 'Hidden') : ''}
             </div>
-            <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:0.74em; color:var(--ink-faint); margin-bottom:8px;">
-                <span>fatture · students · €</span><span>Invoiced: year ${year || ''}</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.74em; color:var(--ink-faint); margin-bottom:8px;">
+                <span style="font-size:1.25em; font-weight:700; color:var(--ink-soft);">${(() => { const st = view === 'done' ? doneS : view === 'skipped' ? skipS : todoS; return `${st.n} fattur${st.n === 1 ? "a" : "e"} · ${st.stu} student${st.stu === 1 ? "" : "s"} · ${eur0(st.eur)}`; })()}</span><span>Invoiced: year ${year || ''}</span>
             </div>
             ${(() => { const n = autoLinkPairs().length; return n ? `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:8px 10px; margin-bottom:8px; background:var(--accent-soft); border-radius:var(--radius-sm); font-size:0.84em;">
                 <span>${n} fattur${n === 1 ? 'a' : 'e'} added by hand can be linked to ${n === 1 ? 'its payment' : 'their payments'} automatically.</span>
