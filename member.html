@@ -21,7 +21,7 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=17"></script>
+<script src="i18n.js?v=20"></script>
 <script src="anagrafica.js?v=2"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,6 +62,18 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 #langPicker .lang-dd-toggle:hover{ border-color:var(--ink-faint); }
 .icon{ display:inline-flex; flex-shrink:0; vertical-align:middle; }
 .hidden{ display:none !important; }
+/* iPhone-style on/off switch (Settings: notifications, location) */
+.setting-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.setting-row h3{ margin:0; }
+.setting-text{ margin:8px 0 0 !important; }
+.ios-switch{ position:relative; display:inline-block; width:51px; height:31px; flex-shrink:0; }
+.ios-switch input{ opacity:0; width:0; height:0; position:absolute; }
+.ios-switch span{ position:absolute; inset:0; cursor:pointer; background:#d1d5db; border-radius:31px; transition:background 0.2s; }
+.ios-switch span::before{ content:''; position:absolute; width:27px; height:27px; left:2px; top:2px; background:#fff; border-radius:50%;
+    box-shadow:0 2px 4px rgba(0,0,0,0.25); transition:transform 0.2s; }
+.ios-switch input:checked + span{ background:#34c759; }
+.ios-switch input:checked + span::before{ transform:translateX(20px); }
+.ios-switch input:disabled + span{ opacity:0.5; cursor:not-allowed; }
 
 .btn{
     display:inline-flex; align-items:center; justify-content:center; gap:6px;
@@ -332,7 +344,10 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                 <div style="font-weight:700; font-size:0.92em;" data-i18n="loc_info_title">About your location</div>
                 <div style="font-size:0.82em; color:var(--ink-soft); margin-top:2px;" data-i18n="loc_info_text">On class days the app asks your location once, only to confirm your check-in at the studio. Never in the background, no battery drain.</div>
             </div>
-            <button class="btn btn-outline btn-sm" onclick="dismissLocInfo()" data-i18n="loc_info_ok">OK</button>
+            <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
+                <button class="btn btn-primary btn-sm" onclick="allowLocationNow()" data-i18n="loc_allow_btn">Allow location</button>
+                <button class="link-btn" style="font-size:0.78em;" onclick="dismissLocInfo()" data-i18n="pwa_not_now">Not now</button>
+            </div>
         </div>
 
         <!-- "Turn on notifications" (push). On iPhone only inside the installed app. -->
@@ -603,10 +618,19 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         </div>
 
         <div class="report-block">
-            <h3 data-i18n="pwa_push_heading">Notifications</h3>
-            <p class="empty-note" style="margin:0 0 12px;" id="pushSettingsText"></p>
-            <button class="btn btn-outline hidden" id="pushSettingsOnBtn" onclick="enablePush()" data-i18n="pwa_push_btn">Turn on</button>
-            <button class="btn btn-outline hidden" id="pushSettingsOffBtn" onclick="disablePush()" data-i18n="pwa_push_turn_off">Turn off on this phone</button>
+            <div class="setting-row">
+                <h3 data-i18n="pwa_push_heading">Notifications</h3>
+                <label class="ios-switch"><input type="checkbox" id="pushSwitch" onchange="onPushSwitch(this.checked)"><span></span></label>
+            </div>
+            <p class="empty-note setting-text" id="pushSettingsText"></p>
+        </div>
+
+        <div class="report-block">
+            <div class="setting-row">
+                <h3 data-i18n="loc_settings_heading">Location</h3>
+                <label class="ios-switch"><input type="checkbox" id="locSwitch" onchange="onLocSwitch(this.checked)"><span></span></label>
+            </div>
+            <p class="empty-note setting-text" id="locSettingsText"></p>
         </div>
 
         <div class="report-block">
@@ -943,6 +967,7 @@ function openSettingsScreen() {
     document.getElementById('resetPasscodeDefault').classList.remove('hidden');
     document.getElementById('resetPasscodeSent').classList.add('hidden');
     renderProfilePhotoCard(selectedMember);
+    renderLocInfoCard();
     document.getElementById('settingsScreen').classList.remove('hidden');
 }
 function closeSettingsScreen() {
@@ -1002,6 +1027,7 @@ async function loadDashboard(member) {
     if (report?.status !== 'ok') { backToPhoneEntry('Verification failed.'); return; }
 
     lastReport = report;
+    lastReportAt = Date.now();
     saveLogin();
     if (report.student?.location_id) await loadMyLocation(report.student.location_id);
     renderReport(report);
@@ -1011,6 +1037,39 @@ async function loadDashboard(member) {
     initAttendance();
     initPerform();
 }
+
+// ---- Keep the account up to date without logging in again ----
+// The report (credit, payments, attendance) was loaded once at login, so a
+// change made by the studio (a payment deleted, a recharge added) only showed
+// after reopening. Now it reloads quietly — no spinner, same tab — when the
+// app comes back to the screen and every minute while it is open.
+let lastReportAt = 0;
+let reportRefreshing = false;
+async function refreshReportSilently() {
+    if (reportRefreshing || !selectedMember || document.getElementById('dashboardState').classList.contains('hidden')) return;
+    // Never while the student is typing or has a screen/popup open (no lost input).
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+    if (!document.getElementById('detailsScreen').classList.contains('hidden')
+        || !document.getElementById('settingsScreen').classList.contains('hidden')
+        || document.getElementById('memberCameraModal').style.display === 'flex') return;
+    reportRefreshing = true;
+    try {
+        const { data: report, error } = await supabaseClient.rpc('get_student_report_v2_by_phone', {
+            p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+        });
+        if (error || report?.status !== 'ok') return;
+        lastReport = report;
+        lastReportAt = Date.now();
+        renderReport(report);
+    } finally {
+        reportRefreshing = false;
+    }
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - lastReportAt > 5000) refreshReportSilently();
+});
+setInterval(() => { if (document.visibilityState === 'visible') refreshReportSilently(); }, 60000);
 
 document.getElementById('startOverBtn').addEventListener('click', () => { forgetLogin(); backToPhoneEntry(''); });
 
@@ -1801,18 +1860,40 @@ async function attnCheckLocation() {
     await handleAttnConfirm();
 }
 // ---- the one-time "About your location" card ----
-const LOC_INFO_KEY = 'bs_loc_info_seen';
+// Dashboard card «Allow location» (hidden once allowed; «Not now» = 7 days)
+// and the «Location» section in Settings (status + the same button).
+const LOC_INFO_KEY = 'bs_loc_info_dismissed';
 async function renderLocInfoCard() {
     const card = document.getElementById('locInfoCard');
-    if (!card) return;
-    let seen = false;
-    try { seen = localStorage.getItem(LOC_INFO_KEY) === '1'; } catch (e) {}
-    const perm = seen ? 'granted' : await geoPermissionState();
-    card.classList.toggle('hidden', seen || perm === 'granted');
+    const perm = await geoPermissionState();
+    if (card) {
+        let dismissed = false;
+        try { dismissed = Date.now() - Number(localStorage.getItem(LOC_INFO_KEY) || 0) < 7 * 86400000; } catch (e) {}
+        card.classList.toggle('hidden', perm === 'granted' || perm === 'denied' || dismissed);
+    }
+    const txt = document.getElementById('locSettingsText');
+    if (txt) {
+        txt.textContent = t(perm === 'granted' ? 'loc_state_on' : perm === 'denied' ? 'loc_state_blocked' : 'loc_state_off');
+        txt.style.color = perm === 'granted' ? 'var(--success)' : 'var(--ink-faint)';
+        txt.style.fontWeight = perm === 'granted' ? '600' : '';
+        document.getElementById('locSwitch').checked = perm === 'granted';
+    }
+}
+// Turning on asks the phone. A website can't take the permission back by itself,
+// so turning off explains where to do it (the switch stays as the phone says).
+function onLocSwitch(want) {
+    if (want) { allowLocationNow(); return; }
+    alert(t('loc_turn_off_help'));
+    renderLocInfoCard();
 }
 function dismissLocInfo() {
-    try { localStorage.setItem(LOC_INFO_KEY, '1'); } catch (e) {}
+    try { localStorage.setItem(LOC_INFO_KEY, String(Date.now())); } catch (e) {}
     renderLocInfoCard();
+}
+// The phone's own «Allow location?» question, asked right after the tap.
+function allowLocationNow() {
+    if (!navigator.geolocation) { alert(t('loc_state_blocked')); return; }
+    navigator.geolocation.getCurrentPosition(() => renderLocInfoCard(), () => renderLocInfoCard(), { timeout: 10000, maximumAge: 60000 });
 }
 function renderAttnLocBlock() {
     const unknown = attnLocStatus === 'unknown';
@@ -2590,9 +2671,13 @@ function renderPushUi() {
     const text = !supported ? (isIos() && !isInstalledApp() ? t('pwa_push_need_install') : t('pwa_push_unsupported'))
         : blocked ? t('pwa_push_blocked')
         : on ? t('pwa_push_on') : t('pwa_push_off');
-    document.getElementById('pushSettingsText').textContent = text;
-    document.getElementById('pushSettingsOnBtn').classList.toggle('hidden', !supported || blocked || on);
-    document.getElementById('pushSettingsOffBtn').classList.toggle('hidden', !on);
+    const textEl = document.getElementById('pushSettingsText');
+    textEl.textContent = text;
+    textEl.style.color = on ? 'var(--accent)' : 'var(--danger)';
+    textEl.style.fontWeight = '600';
+    const sw = document.getElementById('pushSwitch');
+    sw.checked = on;
+    sw.disabled = !supported || blocked;
 }
 async function enablePush() {
     const errEl = document.getElementById('pushCardError');
@@ -2613,6 +2698,10 @@ async function enablePush() {
         return;
     }
     renderPushUi();
+}
+async function onPushSwitch(want) {
+    if (want) await enablePush(); else await disablePush();
+    renderPushUi(); // the switch always shows the real state
 }
 async function disablePush() {
     if (pushSubscription) {
