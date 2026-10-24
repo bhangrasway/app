@@ -74,6 +74,11 @@ let fattureTodoView = 'todo';      // 'todo' | 'done' | 'skipped'
 const FATTURE_FROM_DEFAULT = '2025-09-29'; // P.IVA start; editable in Impostazioni
 
 // ---------- small helpers ----------
+// Imposta di bollo: fatture without IVA (forfettario) above €77.47 carry a €2
+// bollo, declared in the XML (virtual, paid quarterly via AdE / F24 2521-2524).
+// The studio pays it: no extra line, the total stays what the student paid.
+const BOLLO_SOGLIA = 77.47;
+function fatturaNeedsBollo(f) { return Number(f && f.importo) > BOLLO_SOGLIA; }
 function fmtNumeroFattura(f) { return `${f.numero}/${String(f.anno).slice(-2)}`; }
 function money2(n) { return (Math.round(Number(n || 0) * 100) / 100).toFixed(2); }
 function moneyIt(n) { return money2(n).replace('.', ','); }
@@ -203,6 +208,7 @@ function buildFatturaXml(st, f) {
         + '<TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa>'
         + `<Data>${String(f.data_fattura).slice(0, 10)}</Data>`
         + `<Numero>${fmtNumeroFattura(f)}</Numero>`
+        + (fatturaNeedsBollo(f) ? '<DatiBollo><BolloVirtuale>SI</BolloVirtuale><ImportoBollo>2.00</ImportoBollo></DatiBollo>' : '')
         + `<ImportoTotaleDocumento>${importo}</ImportoTotaleDocumento>`
         + causale
         + '</DatiGeneraliDocumento></DatiGenerali>'
@@ -324,6 +330,10 @@ function buildFatturaPdf(st, f) {
     font('bolditalic', 9); doc.text('TOTALE', 128, y + 7);
     font('bolditalic', 12); doc.text(moneyIt(f.importo), 182, y + 7.3, { align: 'right' });
     font('bolditalic', 6.5); doc.text('(EUR)', 183, y + 7.3);
+    if (fatturaNeedsBollo(f)) {
+        font('italic', 7.5);
+        doc.text('Imposta di bollo assolta in modo virtuale ai sensi del D.M. 17/06/2014: \u20ac 2,00', R, y + 22, { align: 'right' });
+    }
 
     if (st.pdf_footer) {
         font('italic', 7);
@@ -722,7 +732,8 @@ function renderFatturaForm() {
         </div>
         <div id="fmAddrStatus" style="font-size:0.78em; font-weight:600; margin:-6px 0 10px;"></div>
         <div class="field"><label>Description (printed on the fattura, in Italian)</label><input id="fmDescrizione" maxlength="200" value="${v(d.descrizione)}"></div>
-        <div class="field"><label>Amount (€)</label><input id="fmImporto" type="number" step="0.01" min="0" value="${v(d.importo)}"></div>
+        <div class="field"><label>Amount (€)</label><input id="fmImporto" type="number" step="0.01" min="0" value="${v(d.importo)}" oninput="updateBolloNote()">
+            <div id="fmBolloNote" style="font-size:0.78em; color:var(--ink-faint); margin-top:4px;"></div></div>
         ${d.mode === 'manual' && d.legacy
             ? `<div class="field"><label>Fattura PDF</label>${d.legacy.pdfPath
                 ? `<div style="display:flex; align-items:center; gap:8px; font-size:0.86em;"><span style="color:var(--success); font-weight:700;">✓ Already uploaded</span><button type="button" class="btn btn-outline btn-sm" onclick="viewTaxPdf('${escapeHtml(d.legacy.pdfPath).replace(/'/g, "\\'")}')">Open the PDF to check</button></div>`
@@ -764,7 +775,14 @@ function readFatturaForm() {
     if (txEl) d.transaction_id = Number(txEl.value) || null;
     return d;
 }
+function updateBolloNote() {
+    const el = document.getElementById('fmBolloNote');
+    if (!el) return;
+    const v = Number(document.getElementById('fmImporto')?.value || 0);
+    el.textContent = v > BOLLO_SOGLIA ? '+ €2 bollo (above €77,47: declared in the XML, paid by the studio each quarter)' : '';
+}
 function updateFatturaFormChecks() {
+    updateBolloNote();
     const A = window.Anagrafica;
     const val = (id) => (document.getElementById(id)?.value || '').trim();
     const cfEl = document.getElementById('fmCfStatus');

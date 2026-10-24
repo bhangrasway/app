@@ -32,6 +32,28 @@ async function loadPushData() {
     lowCreditSaved = { title: (st && st.low_credit_title) || '', body: (st && st.low_credit_body) || '' };
 }
 
+// Ready messages for the «Send notification» window: pick one, it fills title,
+// message and (optional) link; edit if you like, then send. {nome} = first name.
+const GOOGLE_REVIEW_URL = 'https://g.page/r/CVJVpuKR5ThQEAE/review';
+const PUSH_TEMPLATES = [
+    { label: '⏳ 3 hours left', title: '⏳ 3 ore alla lezione!', body: 'Ciao {nome}! Tra 3 ore si balla 🥁 Scarpe pronte? 👟🔥' },
+    { label: '⏰ 1 hour left', title: '⏰ Manca 1 ora!', body: 'Acqua 💧 energia ⚡ sorriso 😄 … ci vediamo tra un\'ora!' },
+    { label: '🚀 Starting soon', title: '🚀 Si parte!', body: 'Loading Bhangra… ▓▓▓▓▓▓▓▓░░ 80% 🕺 Arriva in sala, si comincia!' },
+    { label: '⭐ Rate us on Google', title: '⭐ Com\'era la lezione?', body: 'Ti è piaciuta? Lasciaci 5 stelle su Google ⭐⭐⭐⭐⭐ Tocca qui, bastano 10 secondi 🙏', url: GOOGLE_REVIEW_URL },
+    { label: '🙏 Thanks for today', title: '🙏 Grazie {nome}!', body: 'Che energia oggi! 🔥 Riposa le gambe, alla prossima 💛' },
+    { label: '💪 Practice at home', title: '💪 Compito di oggi', body: '10 minuti di Bhangra a casa = 💪 alla prossima lezione. Il divano può aspettare 🛋️😜' },
+    { label: '🌧️ Rain? Class is on', title: '🌧️ Piove? Noi balliamo!', body: 'La lezione c\'è, la pioggia non ci ferma ☔🕺 Ci vediamo in sala!' },
+    { label: '🎉 Weekend', title: '🎉 Weekend = Bhangra', body: 'Lavoro finito? Ora tocca al dhol 🥁 Ci vediamo questo weekend!' },
+    { label: '📸 Photos online', title: '📸 Foto online!', body: 'Le foto dell\'ultima lezione sono pronte 😍 Chiedile nel gruppo WhatsApp!' }
+];
+function applyPushTemplate(i) {
+    const tpl = PUSH_TEMPLATES[Number(i)];
+    if (!tpl) return;
+    document.getElementById('pushTitle').value = tpl.title;
+    document.getElementById('pushBody').value = tpl.body;
+    document.getElementById('pushLink').value = tpl.url || '';
+}
+
 // Every audience the admin can pick: all, each location, each batch, a hand-picked list, one student.
 function pushAudiences() {
     const active = students.filter((s) => isStudentActive(s));
@@ -85,8 +107,15 @@ async function openPushModal(presetKey) {
             <div id="pushPickList" style="max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 8px;"></div>
         </div>
         <div id="pushReach" style="font-size:0.84em; margin:-4px 0 12px;"></div>
+        <div class="field"><label>Template (optional)</label>
+            <select id="pushTemplate" onchange="applyPushTemplate(this.value)" style="width:100%;">
+                <option value="">— write your own —</option>
+                ${PUSH_TEMPLATES.map((tpl, i) => `<option value="${i}">${escapeHtml(tpl.label)}</option>`).join('')}
+            </select></div>
         <div class="field"><label>Title</label><input id="pushTitle" maxlength="80" placeholder="e.g. Lezione annullata"></div>
         <div class="field"><label>Message</label><textarea id="pushBody" maxlength="400" rows="3" placeholder="e.g. Oggi la lezione delle 15:30 è annullata. Ci vediamo sabato!"></textarea></div>
+        <div class="field"><label>Link (optional: opens when they tap the notification)</label>
+            <input id="pushLink" type="url" placeholder="Empty = opens the Bhangra Sway app" style="width:100%;"></div>
         <button type="button" class="btn btn-outline btn-sm hidden" id="pushSaveCreditBtn" style="margin:-4px 0 10px;" onclick="saveLowCreditMessage()">Save as my credit message</button>
         <div style="font-size:0.8em; color:var(--ink-faint); margin-bottom:14px;">Write it in the language your students read: the message is sent exactly as written. <b>{nome}</b> becomes each student's first name.</div>
         <div style="font-weight:700; font-size:0.85em; margin-bottom:4px;">Last messages</div>${history}`,
@@ -171,7 +200,7 @@ async function sendPush() {
     const btn = document.getElementById('pushSendBtn');
     btn.disabled = true; btn.textContent = 'Sending…';
     const { data, error } = await supabaseClient.functions.invoke('send-push', {
-        body: { title, body, student_ids: a.ids, target_label: label, url: 'member.html' }
+        body: { title, body, student_ids: a.ids, target_label: label, url: (document.getElementById('pushLink').value || '').trim() || 'member.html' }
     });
     btn.disabled = false; btn.textContent = 'Send';
     if (error || data?.error) { alert('Not sent: ' + await pushErrorText(error, data)); return; }
@@ -273,6 +302,11 @@ async function sendAdminTestPush() {
 // The same default lists live in supabase/functions/send-push (used when a
 // list here is left empty).
 const AUTO_DEFAULT_REMINDERS = [
+    '🌟 {nome}, sei a un passo dalla tua versione migliore: domani alle {ora} si balla! 💪🥁',
+    '👣 One step closer to your best Bhangra! See you tomorrow at {ora} 💫',
+    'Ogni lezione è un passo avanti 👣 Domani alle {ora} facciamone un altro insieme! 🔥',
+    'Tomorrow {ora}: one more step, one more beat, one more smile 🥁😄',
+    '✨ Domani alle {ora} non è solo una lezione: è il tuo momento. Ti aspettiamo, {nome}!',
     '👟 Shoes tied, {nome}? Tomorrow {ora} we dance! 🔥',
     '🥁 Domani alle {ora} si balla! Pronto/a? 💃',
     'Sofa 0 – Bhangra 1 🛋️➡️🕺 Tomorrow {ora}!',

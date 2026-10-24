@@ -7,8 +7,9 @@
     <meta name="description" content="Learn authentic Punjabi Bhangra in Cremona, Italy. Weekly classes for all levels, event performances, and a free trial class for new dancers.">
     <link rel="canonical" href="https://bhangrasway.com/">
     <link rel="icon" type="image/png" href="logo.png">
-    <link rel="apple-touch-icon" href="logo.png">
-    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-180.png">
+    <!-- Installing from the website gives the same member app (same id as member.html) -->
+    <link rel="manifest" href="member.webmanifest">
     <meta name="theme-color" content="#667eea">
 
     <!-- Open Graph / Twitter: how the page looks when shared on WhatsApp,
@@ -57,7 +58,7 @@
     }
     </script>
 
-    <script src="i18n.js?v=5"></script>
+    <script src="i18n.js?v=23"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -971,6 +972,7 @@
                 <a href="#gallery" data-i18n="nav_gallery">Gallery</a>
                 <a href="#contact" data-i18n="nav_contact">Contact</a>
                 <a class="members-link" href="member.html"><svg class="icon"><use href="#icon-home"/></svg><span data-i18n="nav_members">Members</span></a>
+                <a class="members-link hidden" href="#" id="navAppBtn" onclick="installSiteApp(); return false;">📱 <span data-i18n="nav_app">App</span></a>
                 <div id="langPicker"></div>
             </div>
         </div>
@@ -1780,5 +1782,31 @@
         loadSiteContent();
         window.onLangChange = () => { renderInstagram(); renderVideos(); renderGallery(); renderEvents(); renderRecentEvents(); };
     </script>
+<script>
+// «📱 App» in the top menu: Android only. It appears only when the browser
+// offers to install (beforeinstallprompt): never on iPhone (any browser), never
+// on a computer, never when the app is already installed or opened as the app.
+(function () {
+    let installEvent = null;
+    const btn = document.getElementById('navAppBtn');
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    window.addEventListener('beforeinstallprompt', (e) => {
+        if (!isAndroid || standalone) return;
+        e.preventDefault();
+        installEvent = e;
+        btn.classList.remove('hidden');
+    });
+    window.addEventListener('appinstalled', () => { installEvent = null; btn.classList.add('hidden'); });
+    window.installSiteApp = async function () {
+        if (!installEvent) return;
+        installEvent.prompt();
+        try { await installEvent.userChoice; } catch (e) {}
+        installEvent = null;
+        btn.classList.add('hidden');
+    };
+})();
+</script>
 </body>
 </html>

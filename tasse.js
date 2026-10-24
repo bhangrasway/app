@@ -250,6 +250,8 @@ function renderTaxTab() {
     el.innerHTML = `
         ${summary}
 
+        ${bolloCardHtml()}
+
         <div class="section-label">Next deadline (prossima scadenza)</div>
         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">${nowList.map((d) => taxDeadlineCardHtml(d, d.date <= soonS)).join('') || '<div class="card" style="padding:12px 16px; font-size:0.88em;">Nothing to do now.</div>'}</div>
         ${laterList.length ? `<details style="margin-bottom:10px;"><summary style="cursor:pointer; font-size:0.86em; color:var(--ink-soft); padding:4px 0;">Later deadlines — estimates only, nothing to do now (${laterList.length})</summary>
@@ -590,6 +592,104 @@ async function saveTaxSettings() {
 }
 
 // Students-tab reminder: the next F24 deadline within 30 days, not done yet.
+// ---------- Imposta di bollo (€2 on fatture above €77.47) ----------
+// Every quarter AdE lists the fatture with the bollo (Elenco A: declared in the
+// XML) and the ones that should have had it (Elenco B, e.g. older ones made
+// without it). Paid from «Fatture e Corrispettivi» or by F24 2521–2524.
+const BOLLO_QUARTERS = {
+    1: { code: '2521', months: 'Jan–Mar', due: (y) => `${y}-05-31` },
+    2: { code: '2522', months: 'Apr–Jun', due: (y) => `${y}-09-30` },
+    3: { code: '2523', months: 'Jul–Sep', due: (y) => `${y}-11-30` },
+    4: { code: '2524', months: 'Oct–Dec', due: (y) => `${y + 1}-02-${(y + 1) % 4 === 0 ? '29' : '28'}` }
+};
+function bolloAddDays(iso, n) {
+    const d = new Date(iso + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+// AdE can't debit on Saturday/Sunday: the next weekday from a date.
+function bolloWeekday(iso) {
+    let d = iso;
+    while ([0, 6].includes(new Date(d + 'T12:00:00Z').getUTCDay())) d = bolloAddDays(d, 1);
+    return d;
+}
+function bolloSuggestedDate(x) {
+    const today = formatLocalDate(new Date());
+    return bolloWeekday(today > x.from ? today : x.from);
+}
+function bolloQuarters() {
+    if (typeof fattureList === 'undefined') return [];
+    const map = new Map();
+    fattureList.filter((f) => f.status !== 'rejected' && Number(f.importo) > 77.47).forEach((f) => {
+        const d = String(f.data_fattura).slice(0, 10);
+        const y = Number(d.slice(0, 4)), q = Math.floor((Number(d.slice(5, 7)) - 1) / 3) + 1;
+        const key = `bollo-${y}-Q${q}`;
+        if (!map.has(key)) map.set(key, { key, y, q, ...BOLLO_QUARTERS[q], due: BOLLO_QUARTERS[q].due(y), fatture: [] });
+        map.get(key).fatture.push(f);
+    });
+    return [...map.values()].map((x) => {
+        const endMonth = x.q * 3;                                   // 3, 6, 9, 12
+        const fromY = endMonth === 12 ? x.y + 1 : x.y;
+        const fromM = endMonth === 12 ? 1 : endMonth + 1;
+        const from = `${fromY}-${String(fromM).padStart(2, '0')}-15`; // AdE list ready
+        const target = bolloAddDays(from, 14);                       // pay within 2 weeks
+        return { ...x, from, target, amount: 2 * x.fatture.length, paid: taxF24ForDeadline(x.key) };
+    })
+        .sort((a, b) => a.due.localeCompare(b.due));
+}
+function bolloCardHtml() {
+    const all = bolloQuarters();
+    if (!all.length) return '';
+    const today = formatLocalDate(new Date());
+    const fmt = (iso) => iso.split('-').reverse().join('/');
+    const open = all.filter((x) => !x.paid), done = all.filter((x) => x.paid);
+    const row = (x) => {
+        const late = !x.paid && x.due < today;
+        const chips = x.fatture.map((f) => {
+            const st = (typeof students !== 'undefined' && students.find((s) => s.id === f.student_id)) || null;
+            const inXml = String(f.xml || '').includes('<DatiBollo>');
+            return `<span class="badge ${inXml ? 'badge-neutral' : 'badge-warning'}" title="${inXml ? 'Bollo in the XML: AdE lists it in Elenco A' : 'Made without bollo: AdE lists it in Elenco B, confirm it there'}">${f.numero}/${String(f.anno).slice(-2)} · ${escapeHtml(st ? st.name : (f.recipient_cognome || ''))} · €${Number(f.importo).toFixed(2).replace('.', ',')}${inXml ? '' : ' · Elenco B'}</span>`;
+        }).join(' ');
+        return `<div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:8px; font-size:0.86em;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span><b>Q${x.q} ${x.y}</b> (${x.months}) · ${x.fatture.length} fattur${x.fatture.length === 1 ? 'a' : 'e'} · <b>${eur(x.amount)}</b> · code <b>${x.code}</b> · pay <b>${fmt(x.from)} – ${fmt(x.target)}</b>${x.paid ? '' : ` · suggested date <b>${fmt(bolloSuggestedDate(x))}</b>`} <span style="color:var(--ink-faint);">(deadline ${fmt(x.due)})</span></span>
+                ${x.paid ? `<span class="badge badge-success">Paid ${formatShortDate(x.paid.data)}</span> <button class="btn btn-outline btn-sm" onclick="deleteTaxF24(${x.paid.id})">Undo</button>`
+                    : `<span style="display:flex; gap:6px; align-items:center;">${late ? '<span class="badge badge-danger">Overdue</span>' : ''}<button class="btn btn-success btn-sm" onclick="markBolloPaid('${x.key}')">Mark paid</button></span>`}
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">${chips}</div>
+        </div>`;
+    };
+    return `
+        <div class="section-label">Imposta di bollo (€2 on fatture above €77,47)</div>
+        <div class="card" style="padding:14px 16px; margin-bottom:22px;">
+            ${open.length ? open.map(row).join('') : '<div style="font-size:0.86em; color:var(--success); font-weight:600; margin-bottom:6px;">All bollo quarters paid ✓</div>'}
+            <details style="font-size:0.84em; color:var(--ink-soft); margin-top:4px;">
+                <summary style="cursor:pointer; font-weight:600;">How to pay (step by step)</summary>
+                <ol style="margin:8px 0 0 18px; padding:0; line-height:1.6;">
+                    <li>Open <a href="https://ivaservizi.agenziaentrate.gov.it/portale/" target="_blank" rel="noopener">«Fatture e Corrispettivi»</a> and log in with SPID/CIE.</li>
+                    <li><b>«Fatture elettroniche e altri dati IVA»</b> → <b>«Pagamento imposta di bollo»</b>.</li>
+                    <li>Choose the <b>year</b> and the <b>quarter</b> («trimestre»).</li>
+                    <li><b>Elenco A</b>: fatture with the bollo in the XML. <b>Elenco B</b>: fatture that should have it (like the old ones made without bollo, marked «Elenco B» here) → <b>select them and confirm</b>.</li>
+                    <li><b>«Procedi al pagamento»</b> → your <b>IBAN</b> (account in your name) → <b>«Data versamento»</b>: a weekday (the suggested date above) → tick both boxes → <b>«Inoltra pagamento»</b>. (Or an F24: code above, year of the fattura.)</li>
+                    <li>Come back here → <b>Mark paid</b>.</li>
+                </ol>
+                <div style="margin-top:6px; color:var(--ink-faint);">AdE prepares the list by the 15th of the month after the quarter: pay within the next 2 weeks. The «Data versamento» can't be a Saturday or Sunday (the suggested date is always a weekday). Legal deadlines: Q1 31/05 · Q2 30/09 · Q3 30/11 · Q4 28/02.</div>
+            </details>
+            ${done.length ? `<details style="font-size:0.84em; margin-top:8px;"><summary style="cursor:pointer; color:var(--ink-soft);">Paid quarters (${done.length})</summary><div style="margin-top:8px;">${done.map(row).join('')}</div></details>` : ''}
+        </div>`;
+}
+async function markBolloPaid(key) {
+    const x = bolloQuarters().find((q) => q.key === key);
+    if (!x) return;
+    if (!confirm(`Mark the bollo of Q${x.q} ${x.y} (${eur(x.amount)}, code ${x.code}) as paid today?`)) return;
+    const { error } = await supabaseClient.from('tax_f24').insert({
+        data: formatLocalDate(new Date()), scadenza: key, descrizione: `Imposta di bollo Q${x.q} ${x.y}`,
+        righe: [{ sezione: 'ERARIO', codice: x.code, anno: x.y, tipo: 'bollo', debito: x.amount, credito: 0 }], totale: x.amount
+    });
+    if (error) { alert('Could not save: ' + error.message); return; }
+    await loadTaxData(); renderTaxTab(); renderTaxReminder();
+}
+
 function renderTaxReminder() {
     const card = document.getElementById('taxReminderCard');
     if (!card) return;
@@ -600,10 +700,16 @@ function renderTaxReminder() {
     const next = [...taxDeadlinesFor(nowY), ...taxDeadlinesFor(nowY + 1)]
         .filter((d) => d.lines && d.lines.length && !taxF24ForDeadline(d.key) && d.date <= limit && d.date >= addDaysToDate(today, -60))
         .sort((a, b) => a.date.localeCompare(b.date))[0];
-    card.classList.toggle('hidden', !next);
-    if (!next) return;
-    const draft = taxApplyCredits(next.lines);
+    const bollo = bolloQuarters().filter((x) => !x.paid && today >= x.from)[0];
+    card.classList.toggle('hidden', !next && !bollo);
+    if (!next && !bollo) return;
+    const lines = [];
+    if (next) {
+        const draft = taxApplyCredits(next.lines);
+        lines.push(`<b>Tax deadline:</b> ${next.title} · F24 total <b>${eur(draft.totale)}</b>${draft.totale === 0 ? ' («F24 a saldo zero» — still to send)' : ''}`);
+    }
+    if (bollo) lines.push(`<b>Imposta di bollo</b> Q${bollo.q} ${bollo.y}: <b>${eur(bollo.amount)}</b> (${bollo.fatture.length} fattur${bollo.fatture.length === 1 ? 'a' : 'e'}) · pay on <b>${bolloSuggestedDate(bollo).split('-').reverse().join('/')}</b> (weekday)${today > bollo.target ? ' · <b style="color:var(--danger);">please pay now</b>' : ''}`);
     card.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-        <span style="font-size:0.9em;"><b>Tax deadline:</b> ${next.title} · F24 total <b>${eur(draft.totale)}</b>${draft.totale === 0 ? ' («F24 a saldo zero» — still to send)' : ''}</span>
+        <span style="font-size:0.9em; line-height:1.6;">${lines.join('<br>')}</span>
         <button class="btn btn-primary btn-sm" onclick="switchTab('tasse')">Open Taxes</button></div>`;
 }

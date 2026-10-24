@@ -21,6 +21,8 @@ self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     const url = new URL((event.notification.data && event.notification.data.url) || 'member.html', self.registration.scope).href;
     event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+        // A link outside the app (e.g. the Google review page): open it as is.
+        if (!url.startsWith(self.registration.scope)) return self.clients.openWindow(url);
         const open = list.find((c) => c.url.startsWith(self.registration.scope));
         if (open) {
             // «Tap to check in»: reload the open app so the check-in runs again.

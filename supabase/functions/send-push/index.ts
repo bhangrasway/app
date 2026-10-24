@@ -111,11 +111,11 @@ Deno.serve(async (req) => {
         const nameOf = new Map((names ?? []).map((s: Record<string, unknown>) => [Number(s.id), firstName(s)]));
         for (const s of byEndpoint.values()) {
             const n = nameOf.get(Number(s.student_id)) || '';
-            const ok = await sendTo(admin, [s], fill(title, { nome: n }).replace(/\s+([!,.])/g, '$1'), fill(body, { nome: n }).replace(/\s+([!,.])/g, '$1'), 'push_subscriptions');
+            const ok = await sendTo(admin, [s], fill(title, { nome: n }).replace(/\s+([!,.])/g, '$1'), fill(body, { nome: n }).replace(/\s+([!,.])/g, '$1'), 'push_subscriptions', safeUrl(input.url));
             if (ok) sent++; else failed++;
         }
     } else {
-        ({ sent, failed, gone } = await deliver([...byEndpoint.values()], input.url || 'member.html'));
+        ({ sent, failed, gone } = await deliver([...byEndpoint.values()], safeUrl(input.url)));
         if (gone.length) await admin.from('push_subscriptions').delete().in('endpoint', gone);
     }
 
@@ -138,6 +138,11 @@ type Db = any;
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DEFAULT_REMINDERS = [
+    '🌟 {nome}, sei a un passo dalla tua versione migliore: domani alle {ora} si balla! 💪🥁',
+    '👣 One step closer to your best Bhangra! See you tomorrow at {ora} 💫',
+    'Ogni lezione è un passo avanti 👣 Domani alle {ora} facciamone un altro insieme! 🔥',
+    'Tomorrow {ora}: one more step, one more beat, one more smile 🥁😄',
+    '✨ Domani alle {ora} non è solo una lezione: è il tuo momento. Ti aspettiamo, {nome}!',
     '👟 Shoes tied, {nome}? Tomorrow {ora} we dance! 🔥',
     '🥁 Domani alle {ora} si balla! Pronto/a? 💃',
     'Sofa 0 – Bhangra 1 🛋️➡️🕺 Tomorrow {ora}!',
@@ -163,6 +168,11 @@ const DEFAULT_BIRTHDAYS = [
     '🎂 Tanti auguri {nome}! Un anno pieno di energia e sorrisi ✨'
 ];
 
+// A tap opens our app page, or an https link the admin chose (e.g. Google review).
+function safeUrl(u?: string) {
+    const v = String(u || '').trim();
+    return /^https:\/\//i.test(v) || /^[a-z0-9_-]+\.html(\?.*)?$/i.test(v) ? v : 'member.html';
+}
 function romeNow() {
     const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
