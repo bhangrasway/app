@@ -1090,9 +1090,13 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <button class="icon-btn-close" onclick="closeRateEdit()" id="rateCloseBtn"></button>
         </div>
         <div class="modal-body">
-            <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">Everyone pays €10 a class by default. Enter a different amount to put this student on their own rate — every class they attend from now on, marked here or self-checked-in from the member portal, deducts that amount instead. Leave the box empty to put them back on the standard rate.</p>
-            <div class="field"><label>Amount per class (€)</label><input type="number" id="rateAmountInput" step="0.5" min="0" placeholder="10"></div>
-            <div style="font-size:0.78em; color:var(--ink-faint);">Only affects future classes — classes already deducted keep the amount they were charged.</div>
+            <p style="font-size:0.84em; color:var(--ink-soft); margin-top:0;">Everyone pays €10 a class by default. Enter a different amount to put this student on their own rate — every class they attend, marked here or self-checked-in from the member portal, deducts that amount instead. Leave the box empty to put them back on the standard rate.</p>
+            <div class="field"><label>Amount per class (€)</label><input type="number" id="rateAmountInput" step="0.5" min="0" placeholder="10" oninput="updateRatePastPreview()"></div>
+            <label style="display:flex; gap:8px; align-items:flex-start; font-size:0.84em; cursor:pointer;">
+                <input type="checkbox" id="rateApplyPast" checked onchange="updateRatePastPreview()" style="margin-top:3px;">
+                <span>Also change past classes to this rate</span>
+            </label>
+            <div id="ratePastPreview" style="font-size:0.78em; color:var(--ink-faint); margin-top:6px;"></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closeRateEdit()">Cancel</button>
@@ -8120,7 +8124,37 @@ function openRateEdit() {
     const s = students.find((x) => x.id === currentViewingStudentId);
     if (!s) return;
     document.getElementById('rateAmountInput').value = s.perClassRate ?? '';
+    document.getElementById('rateApplyPast').checked = true;
+    updateRatePastPreview();
     document.getElementById('rateModal').style.display = 'flex';
+}
+// Past class charges (active class_deduction rows) whose amount differs from
+// the rate typed in the box. Practice fees, extra charges and recharges are
+// never touched; free/demo classes have no row, so they stay free.
+function ratePastChanges(s, rate) {
+    return v2CreditTransactions.filter((t) => t.student_id === s.id && t.type === 'class_deduction' && !t.deleted_at && Number(t.amount) !== -rate);
+}
+function ratePreviewValue() {
+    const raw = String(document.getElementById('rateAmountInput').value).trim();
+    if (raw === '') return DEFAULT_CLASS_RATE;
+    const v = Number(raw);
+    return Number.isFinite(v) && v > 0 ? v : null;
+}
+function updateRatePastPreview() {
+    const el = document.getElementById('ratePastPreview');
+    const s = students.find((x) => x.id === currentViewingStudentId);
+    if (!el || !s) return;
+    const rate = ratePreviewValue();
+    if (rate === null) { el.textContent = ''; return; }
+    const rows = ratePastChanges(s, rate);
+    if (!document.getElementById('rateApplyPast').checked) {
+        el.textContent = 'Only new classes use this rate — past classes keep what they were charged.';
+        return;
+    }
+    if (!rows.length) { el.textContent = 'All past classes are already at this rate.'; return; }
+    const diff = rows.reduce((sum, t) => sum + (-rate - Number(t.amount)), 0);
+    const before = Number(s.v2CreditBalance || 0);
+    el.innerHTML = `${rows.length} past class${rows.length === 1 ? '' : 'es'} → €${rate} each · balance <b>€${before.toFixed(2)}</b> → <b>€${(before + diff).toFixed(2)}</b>`;
 }
 function closeRateEdit() { document.getElementById('rateModal').style.display = 'none'; }
 async function confirmRateEdit() {
@@ -8136,6 +8170,20 @@ async function confirmRateEdit() {
     const { error } = await supabaseClient.from('students').update({ per_class_rate: value }).eq('id', s.id);
     if (error) { alert('Could not update the rate: ' + error.message); return; }
     s.perClassRate = value;
+
+    if (document.getElementById('rateApplyPast').checked) {
+        const rate = value === null ? DEFAULT_CLASS_RATE : value;
+        const rows = ratePastChanges(s, rate);
+        if (rows.length) {
+            const { error: txError } = await supabaseClient.from('v2_credit_transactions').update({ amount: -rate })
+                .in('id', rows.map((t) => t.id));
+            if (txError) { alert('The rate is saved, but the past classes could not be changed: ' + txError.message); }
+            else {
+                rows.forEach((t) => { t.amount = -rate; });
+                await recomputeV2Balance(s.id);
+            }
+        }
+    }
     closeRateEdit();
     renderStudentsList();
     renderPaymentsList();
