@@ -1145,20 +1145,21 @@ async function renderCreditStatus(student, totalClasses) {
     const classesLeftEl = document.getElementById('creditClassesLeftLine');
 
     amountEl.textContent = `€${balance}`;
+    let classesLeftText;
     if (balance > 0) {
         card.style.background = 'linear-gradient(160deg, var(--success-soft), #ecfdf3)';
         card.style.border = '1px solid #bbf0d1';
         amountEl.style.color = 'var(--ink)';
         pillEl.className = 'badge badge-success';
         pillEl.innerHTML = iconLabel('check-circle', 'Ready', 13);
-        classesLeftEl.textContent = `${Math.floor(balance / rate)} class${Math.floor(balance / rate) === 1 ? '' : 'es'} left`;
+        classesLeftText = `${Math.floor(balance / rate)} class${Math.floor(balance / rate) === 1 ? '' : 'es'} left`;
     } else {
         card.style.background = 'linear-gradient(160deg, var(--warning-soft), #fff7ed)';
         card.style.border = `1px solid ${balance < 0 ? '#f6d4ce' : '#fbdca0'}`;
         amountEl.style.color = balance < 0 ? 'var(--danger)' : 'var(--ink)';
         pillEl.className = balance < 0 ? 'badge badge-danger' : 'badge badge-warning';
         pillEl.innerHTML = iconLabel('warning', 'Needs recharge', 13);
-        classesLeftEl.textContent = balance < 0 ? `${Math.ceil(Math.abs(balance) / rate)} class${Math.ceil(Math.abs(balance) / rate) === 1 ? '' : 'es'} on credit` : '0 classes left';
+        classesLeftText = balance < 0 ? `${Math.ceil(Math.abs(balance) / rate)} class${Math.ceil(Math.abs(balance) / rate) === 1 ? '' : 'es'} on credit` : '0 classes left';
     }
     document.getElementById('creditTotalClassesLine').textContent = `${totalClasses} classes total attended`;
     renderCreditSubtitle();
@@ -1167,6 +1168,15 @@ async function renderCreditStatus(student, totalClasses) {
         p_student_id: student.id, p_phone: enteredPhone, p_passcode: enteredPasscode
     });
     const rows = (!error && ledger) ? ledger : [];
+
+    // «N classes left» only for students on the plain €10 rate. A custom rate
+    // or the €5 Friday practice makes the count misleading (the balance is
+    // not simply N × €10), so the line is hidden for them.
+    const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const onPractice = rows.some((r) => r.type === 'practice_fee' && String(r.attendance_date || r.created_at).slice(0, 10) >= since);
+    const hideClassesLeft = rate !== DEFAULT_CLASS_RATE || onPractice;
+    classesLeftEl.textContent = hideClassesLeft ? '' : classesLeftText;
+    classesLeftEl.style.display = hideClassesLeft ? 'none' : '';
     const lastRecharge = rows.find((r) => r.type === 'recharge');
     document.getElementById('creditLastRechargeLine').textContent = lastRecharge
         ? `Last recharge: ${String(lastRecharge.created_at).slice(0, 10)} (€${lastRecharge.amount})`
