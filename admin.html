@@ -25,11 +25,11 @@
 </script>
 <script src="membership.js?v=2"></script>
 <script>window.ANAGRAFICA_LANG = 'en';</script>
-<script src="anagrafica.js?v=3"></script>
+<script src="anagrafica.js?v=4"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="pdfview.js?v=2"></script>
-<script src="fatture.js?v=25"></script>
-<script src="tasse.js?v=19"></script>
+<script src="fatture.js?v=29"></script>
+<script src="tasse.js?v=20"></script>
 <script src="notifiche.js?v=9"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -116,9 +116,13 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); }
 .field{ margin-bottom:14px; }
 .field label{ display:block; font-size:0.76em; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin-bottom:5px; }
-.field input, .field select{
+.field input, .field select, .share-row select, .share-row input{
     width:100%; padding:8px 11px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.92em; color:var(--ink); background:var(--surface);
 }
+.share-row{ display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+.share-row select{ flex:1; min-width:0; }
+.share-row input{ width:80px; flex:none; }
+.share-row .share-me{ flex:1; font-size:0.88em; font-weight:600; color:var(--ink); padding:8px 0; }
 .field input:focus, .field select:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 
 .badge{ display:inline-flex; align-items:center; gap:4px; font-size:0.74em; font-weight:700; padding:3px 9px; border-radius:999px; }
@@ -275,6 +279,11 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     #floatingPlayPauseBtn.hidden{ display:none; }
     #floatingPlayPauseBtn:not(.hidden){ display:flex; }
 }
+.pay-seg { flex:1; position:relative; margin:0 !important; cursor:pointer; }
+.pay-seg input { position:absolute; opacity:0; width:1px; height:1px; pointer-events:none; }
+.pay-seg span { display:block; text-align:center; padding:10px 12px; border-radius:var(--radius-sm); background:var(--border-soft); color:var(--ink-soft); border:1px solid var(--border); font-weight:700; font-size:0.92rem; text-transform:none; letter-spacing:normal; transition:background .15s, color .15s; }
+.pay-seg input:checked + span { background:var(--accent); border-color:var(--accent); color:#fff; }
+.pay-seg input:focus-visible + span { outline:2px solid var(--accent-ink); outline-offset:2px; }
 </style>
 </head>
 <body>
@@ -457,6 +466,11 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                     <div class="field" id="initialRechargeRow">
                         <label>Ricarica iniziale (€)</label>
                         <input type="number" id="initialRechargeInput" step="1" value="0">
+                        <select id="initialRechargeMethod" style="margin-top:6px;">
+                            <option value="">Metodo di pagamento…</option>
+                            <option value="cash">Contanti</option>
+                            <option value="bonifico">Bonifico</option>
+                        </select>
                     </div>
                 </div>
                 <div style="display:flex; gap:8px;">
@@ -1035,12 +1049,6 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <div class="section-label" id="svmOverviewLabel"></div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:6px;" id="svmOverviewGrid"></div>
 
-            <div class="section-label" id="svmPreCutoverAttendanceLabel"></div>
-            <div id="svmPreCutoverAttendanceList" style="margin-bottom:6px;"></div>
-
-            <div class="section-label" id="svmOldPaymentsLabel"></div>
-            <div id="svmOldPaymentsList" style="margin-bottom:6px;"></div>
-
             <div class="section-label" id="svmDoctorLabel"></div>
             <div id="svmDoctorCard"></div>
 
@@ -1067,10 +1075,24 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="modal-body">
             <div class="field"><label>Date</label><input type="date" id="rechargeDateInput"></div>
             <div class="field">
-                <label>Amount (€)</label>
-                <input type="number" id="rechargeAmountInput" step="1" placeholder="40">
+                <label id="rechargeAmountLabel">Amount (€)</label>
+                <input type="number" id="rechargeAmountInput" step="1" placeholder="40" oninput="if (rechargeShares.length) splitRechargeEvenly(); else renderRechargeShareTotal();">
                 <div style="font-size:0.78em; color:var(--ink-faint); margin-top:5px;">Positive = recharge. Negative = manual adjustment/debit.</div>
             </div>
+            <div class="field">
+                <label>Payment method (required for a recharge)</label>
+                <div style="display:flex; gap:8px;">
+                    <label class="pay-seg"><input type="radio" name="rechargeMethod" value="cash" onchange="onRechargeMethodChange()"><span>Cash</span></label>
+                    <label class="pay-seg"><input type="radio" name="rechargeMethod" value="bonifico" onchange="onRechargeMethodChange()"><span>Bonifico</span></label>
+                </div>
+            </div>
+            <div id="rechargeShareBox" class="hidden" style="margin-bottom:12px; padding:10px 12px; background:var(--accent-soft); border-radius:var(--radius-sm);">
+                <div style="font-size:0.82em; font-weight:700; color:var(--accent-ink); margin-bottom:6px;">Same payment also for:</div>
+                <div id="rechargeShareRows"></div>
+                <button type="button" class="btn btn-outline btn-sm" onclick="addRechargeShareRow()">+ Add student</button>
+                <div id="rechargeShareTotal" style="font-size:0.8em; color:var(--ink-soft); margin-top:8px;"></div>
+            </div>
+            <div id="rechargeLockNote" class="hidden" style="font-size:0.8em; color:var(--warning); font-weight:600;"></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-danger hidden" id="rechargeDeleteBtn" onclick="deleteRechargeTransaction()"></button>
@@ -7245,6 +7267,11 @@ async function saveStudent(event) {
     // Same switch and default as admin.html, deliberately unadvertised.
     const directJoin = document.getElementById('directJoin')?.checked || false;
     const initialRechargeAmount = Number(document.getElementById('initialRechargeInput')?.value || 0);
+    const initialRechargeMethod = document.getElementById('initialRechargeMethod')?.value || '';
+    if (!currentEditingStudentId && initialRechargeAmount > 0 && !initialRechargeMethod) {
+        alert('Scegli il metodo di pagamento della ricarica iniziale: Contanti o Bonifico.');
+        return;
+    }
 
     try {
         let studentId = currentEditingStudentId;
@@ -7290,7 +7317,7 @@ async function saveStudent(event) {
             try {
                 const { data: inserted, error: rechargeError } = await supabaseClient
                     .from('v2_credit_transactions')
-                    .insert({ student_id: studentId, type: 'recharge', amount: initialRechargeAmount, note: 'Manual recharge', created_at: new Date().toISOString() })
+                    .insert({ student_id: studentId, type: initialRechargeAmount > 0 ? 'recharge' : 'adjustment', amount: initialRechargeAmount, note: initialRechargeAmount > 0 ? 'Manual recharge' : 'Manual adjustment', payment_method: initialRechargeAmount > 0 ? initialRechargeMethod : null, created_at: new Date().toISOString() })
                     .select().single();
                 if (!rechargeError) {
                     v2CreditTransactions.push(inserted);
@@ -7482,6 +7509,7 @@ function resetStudentForm() {
     document.getElementById('directJoin').checked = false;
     document.getElementById('initialRechargeRow').classList.remove('hidden');
     document.getElementById('initialRechargeInput').value = 0;
+    document.getElementById('initialRechargeMethod').value = '';
     clearStudentPhotoInput();
     studentPhotoDirty = false;
 }
@@ -7912,31 +7940,6 @@ function renderStudentViewModal(s) {
         </div>
     `;
 
-    // Pre-cutover attendance never creates a v2_credit_transactions row (no
-    // deduction happened back then), so it's otherwise invisible anywhere in
-    // this modal — pulled straight from the shared attendance table instead.
-    document.getElementById('svmPreCutoverAttendanceLabel').innerHTML = iconLabel('clock', 'Attendance History', 13);
-    const preCutoverDates = Object.entries(attendance)
-        .filter(([date, day]) => date < CUTOVER_DATE && day && day[s.id])
-        .map(([date]) => date)
-        .sort()
-        .reverse();
-    document.getElementById('svmPreCutoverAttendanceList').innerHTML = preCutoverDates.length
-        ? `<div style="display:flex; flex-wrap:wrap; gap:6px;">${preCutoverDates.map((d) => `<span class="badge" style="background:var(--accent-soft); color:var(--accent-ink);">${formatShortDate(d)}</span>`).join('')}</div>`
-        : `<div style="color:var(--ink-faint); font-size:0.85em;">No earlier attendance recorded.</div>`;
-
-    // Old payments — same reference-only treatment: real dates/amounts from
-    // the shared fees_paid table, never summed into the live balance above.
-    document.getElementById('svmOldPaymentsLabel').innerHTML = iconLabel('credit-card', 'Payment History', 13);
-    const oldPaymentRows = getOldPaymentsForStudent(s.id);
-    document.getElementById('svmOldPaymentsList').innerHTML = oldPaymentRows.length
-        ? oldPaymentRows.map((r) => `
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;">
-                <span>${formatShortDate(r.date)}</span>
-                <strong style="color:var(--ink-soft);">€${r.amount}</strong>
-            </div>`).join('')
-        : `<div style="color:var(--ink-faint); font-size:0.85em;">No earlier payments recorded.</div>`;
-
     document.getElementById('svmDocsLabel').innerHTML = iconLabel('file-text', 'Transaction Ledger', 13);
     // This modal is the screen you'd have open in front of a parent — a
     // struck-through "Deleted €50" here would raise awkward questions.
@@ -7969,11 +7972,16 @@ function renderStudentViewModal(s) {
     document.getElementById('svmDocuments').innerHTML = rows.length
         ? rows.map((t) => {
             const isCharge = t.type === 'class_deduction' || t.type === 'practice_fee' || t.type === 'extra_charge';
+            const lock = t.type === 'recharge' && typeof paymentLock === 'function' ? paymentLock(t) : null;
             const clickable = !isCharge && t.type !== 'demo_class';
-            const label = t.type === 'recharge' ? 'Recharge' : t.type === 'class_deduction' ? 'Class attended' : t.type === 'practice_fee' ? 'Competition practice' : t.type === 'extra_charge' ? escapeHtml(t.note || 'Charge') : t.type === 'demo_class' ? 'Demo class' : 'Adjustment';
+            const shareRows = t.type === 'recharge' && t.payment_group && typeof paymentGroupRows === 'function' ? paymentGroupRows(t) : [];
+            const method = (t.type !== 'recharge' ? '' : t.payment_method === 'cash' ? ' · Cash' : t.payment_method === 'bonifico' ? ' · Bonifico'
+                : ' · <span style="color:var(--warning); font-weight:600;">method?</span>')
+                + (shareRows.length > 1 ? ` · <span style="color:var(--accent-ink);">shared €${paymentGroupTotal(t)} with ${escapeHtml(shareRows.filter((x) => x.id !== t.id).map((x) => (students.find((st) => st.id === x.student_id) || {}).name || '?').join(', '))}</span>` : '');
+            const label = t.type === 'recharge' ? 'Recharge' + method : t.type === 'class_deduction' ? 'Class attended' : t.type === 'practice_fee' ? 'Competition practice' : t.type === 'extra_charge' ? escapeHtml(t.note || 'Charge') : t.type === 'demo_class' ? 'Demo class' : 'Adjustment';
             const showNote = t.note && t.type !== 'practice_fee' && t.type !== 'extra_charge';
             return `
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;${clickable ? ' cursor:pointer;' : ''}"${clickable ? ` onclick="openEditRechargeModal(${t.id})"` : ''}>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;${clickable ? ' cursor:pointer;' : ''}"${clickable ? ` onclick="openEditRechargeModal(${t.id})"` : ''}${lock ? ` title="${escapeHtml(lock.msg)}"` : ''}>
                 <span>${label}${showNote ? ' — ' + escapeHtml(t.note) : ''} · ${formatShortDate(t._effectiveDate)}</span>
                 <span style="display:flex; align-items:center; gap:8px; text-align:right; white-space:nowrap;">
                     <strong style="color:${Number(t.amount) > 0 ? 'var(--success)' : 'var(--ink-soft)'};">${Number(t.amount) > 0 ? '+' : ''}€${t.amount}</strong>
@@ -8006,6 +8014,83 @@ function renderStudentViewModal(s) {
 // ===== Recharge / adjustment =====
 let rechargeStudentId = null;
 let rechargeEditingId = null;
+let rechargeLocked = null; // paymentLock() of the payment being edited
+function rechargeMethodValue() {
+    const el = document.querySelector('input[name="rechargeMethod"]:checked');
+    return el ? el.value : '';
+}
+function setRechargeMethod(value) {
+    document.querySelectorAll('input[name="rechargeMethod"]').forEach((el) => { el.checked = el.value === value; el.disabled = false; });
+}
+// Locked (invoiced) payment: only an empty method can still be filled in.
+function setRechargeLockedUi(lock, t) {
+    rechargeLocked = lock;
+    document.getElementById('rechargeDateInput').disabled = !!lock;
+    document.getElementById('rechargeAmountInput').disabled = !!lock;
+    const note = document.getElementById('rechargeLockNote');
+    note.classList.toggle('hidden', !lock);
+    note.textContent = lock ? lock.msg : '';
+}
+// One payment (cash or bonifico) for several students (siblings, a friend): extra shares,
+// saved as one recharge each with the same payment_group.
+let rechargeShares = []; // [{ studentId, amount }]
+function rechargeShareCandidates() {
+    const me = students.find((x) => x.id === rechargeStudentId);
+    const phone = String((me && me.phone) || '').replace(/\D/g, '').slice(-9);
+    const others = students.filter((x) => x.id !== rechargeStudentId).sort((a, b) => a.name.localeCompare(b.name));
+    const family = phone.length >= 6 ? others.filter((x) => String(x.phone || '').replace(/\D/g, '').slice(-9) === phone) : [];
+    return { family, rest: others.filter((x) => !family.includes(x)) };
+}
+function renderRechargeShares() {
+    const { family, rest } = rechargeShareCandidates();
+    const opts = (sel) => `<option value="">Choose a student…</option>`
+        + (family.length ? `<optgroup label="Same family">${family.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</optgroup>` : '')
+        + `<optgroup label="All students">${rest.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${escapeHtml(x.name)}</option>`).join('')}</optgroup>`;
+    const me = students.find((x) => x.id === rechargeStudentId);
+    document.getElementById('rechargeShareRows').innerHTML = (rechargeShares.length && me ? `
+        <div class="share-row"><span class="share-me">${escapeHtml(me.name)}</span><span id="rechargeMyShare" style="width:80px; text-align:right; font-weight:700; font-size:0.9em;"></span><span style="width:26px;"></span></div>` : '')
+        + rechargeShares.map((r, i) => `
+        <div class="share-row">
+            <select onchange="rechargeShares[${i}].studentId = Number(this.value) || null; renderRechargeShareTotal();">${opts(r.studentId)}</select>
+            <input type="number" step="0.5" min="0.5" value="${r.amount}" oninput="rechargeShares[${i}].amount = Number(this.value); renderRechargeShareTotal();">
+            <button type="button" class="icon-btn-close" title="Remove" onclick="rechargeShares.splice(${i}, 1); splitRechargeEvenly();">${icon('x', 14)}</button>
+        </div>`).join('');
+    document.getElementById('rechargeAmountLabel').textContent = rechargeShares.length ? 'Payment total (€)' : 'Amount (€)';
+    renderRechargeShareTotal();
+}
+// The Amount box is the whole payment: split it evenly (€10 → €5 + €5);
+// the other students' shares can then be changed, this student gets the rest.
+function splitRechargeEvenly() {
+    const total = Number(document.getElementById('rechargeAmountInput').value) || 0;
+    const each = Math.floor((total / (rechargeShares.length + 1)) * 2) / 2; // to €0.50
+    rechargeShares.forEach((r) => { r.amount = each; });
+    renderRechargeShares();
+}
+function addRechargeShareRow() {
+    rechargeShares.push({ studentId: null, amount: 0 });
+    splitRechargeEvenly();
+}
+function rechargeMyShare() {
+    const total = Number(document.getElementById('rechargeAmountInput').value) || 0;
+    return Math.round((total - rechargeShares.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)) * 100) / 100;
+}
+function renderRechargeShareTotal() {
+    const el = document.getElementById('rechargeShareTotal');
+    if (!el) return;
+    const me = students.find((x) => x.id === rechargeStudentId);
+    if (!rechargeShares.length || !me) { el.textContent = ''; return; }
+    const total = Number(document.getElementById('rechargeAmountInput').value) || 0;
+    const mine = rechargeMyShare();
+    const myEl = document.getElementById('rechargeMyShare');
+    if (myEl) { myEl.textContent = `€${mine}`; myEl.style.color = mine > 0 ? 'var(--ink)' : 'var(--danger)'; }
+    const parts = [`${me.name} €${mine}`, ...rechargeShares.map((r) => `${(students.find((x) => x.id === r.studentId) || {}).name || '?'} €${Number(r.amount) || 0}`)];
+    el.innerHTML = `Total <b>€${total}</b> = ${escapeHtml(parts.join(' + '))}`
+        + (mine > 0 ? '' : ` <b style="color:var(--danger);">· the shares are more than the total</b>`);
+}
+function onRechargeMethodChange() {
+    const show = !rechargeEditingId && !!rechargeMethodValue(); // cash or bonifico
+    document.getElementById('rechargeShareBox').classList.toggle('hidden', !show);
+}
 function openRechargeModal(studentId) {
     const s = students.find((x) => x.id === studentId);
     if (!s) return;
@@ -8015,6 +8100,11 @@ function openRechargeModal(studentId) {
     document.getElementById('rechargeModalSubtitle').textContent = `${s.name} — current balance €${s.v2CreditBalance}`;
     document.getElementById('rechargeDateInput').valueAsDate = new Date();
     document.getElementById('rechargeAmountInput').value = 0;
+    setRechargeMethod('');
+    setRechargeLockedUi(null);
+    rechargeShares = [];
+    renderRechargeShares();
+    onRechargeMethodChange();
     document.getElementById('rechargeDeleteBtn').classList.add('hidden');
     document.getElementById('rechargeModal').style.display = 'flex';
 }
@@ -8025,13 +8115,21 @@ function openEditRechargeModal(txId) {
     if (!t) return;
     const s = students.find((x) => x.id === t.student_id);
     if (!s) return;
+    const lock = typeof paymentLock === 'function' ? paymentLock(t) : null;
     rechargeStudentId = s.id;
     rechargeEditingId = txId;
     document.getElementById('rechargeModalTitle').textContent = 'Edit Transaction';
-    document.getElementById('rechargeModalSubtitle').textContent = `${s.name} — current balance €${s.v2CreditBalance}`;
+    const shared = t.payment_group && typeof paymentGroupRows === 'function' ? paymentGroupRows(t) : [];
+    document.getElementById('rechargeModalSubtitle').textContent = `${s.name} — current balance €${s.v2CreditBalance}`
+        + (shared.length > 1 ? ` · part of a €${paymentGroupTotal(t)} payment with ${shared.filter((x) => x.id !== t.id).map((x) => (students.find((st) => st.id === x.student_id) || {}).name || '?').join(', ')}` : '');
+    rechargeShares = [];
+    renderRechargeShares();
+    document.getElementById('rechargeShareBox').classList.add('hidden');
     document.getElementById('rechargeDateInput').value = String(t.created_at).slice(0, 10);
     document.getElementById('rechargeAmountInput').value = t.amount;
-    document.getElementById('rechargeDeleteBtn').classList.remove('hidden');
+    setRechargeMethod(t.payment_method || '');
+    setRechargeLockedUi(lock, t);
+    document.getElementById('rechargeDeleteBtn').classList.toggle('hidden', !!lock);
     document.getElementById('rechargeModal').style.display = 'flex';
 }
 
@@ -8043,6 +8141,20 @@ async function confirmRecharge() {
     if (!dateValue) { alert('Pick a date.'); return; }
     if (dateValue > new Date().toISOString().slice(0, 10)) { alert("Can't record a transaction for a future date."); return; }
     if (!Number.isFinite(amount) || amount === 0) { alert('Enter a valid amount.'); return; }
+    const method = rechargeMethodValue();
+    if (amount > 0 && !method) { alert('Choose the payment method: Cash or Bonifico.'); return; }
+
+    // Invoiced payment: only the method can change (it isn't in the fattura).
+    const editingTx = rechargeEditingId ? v2CreditTransactions.find((t) => t.id === rechargeEditingId) : null;
+    const lockNow = editingTx && typeof paymentLock === 'function' ? paymentLock(editingTx) : null;
+    if (lockNow) {
+        const { error } = await supabaseClient.from('v2_credit_transactions').update({ payment_method: method }).eq('id', editingTx.id);
+        if (error) { alert('Could not save: ' + error.message); return; }
+        editingTx.payment_method = method;
+        closeRechargeModal();
+        if (currentViewingStudentId === s.id) renderStudentViewModal(s);
+        return;
+    }
 
     const createdAt = new Date(dateValue + 'T12:00:00').toISOString();
     const type = amount > 0 ? 'recharge' : 'adjustment';
@@ -8051,18 +8163,36 @@ async function confirmRecharge() {
     if (rechargeEditingId) {
         const { error } = await supabaseClient
             .from('v2_credit_transactions')
-            .update({ amount, created_at: createdAt })
+            .update({ amount, created_at: createdAt, type, payment_method: amount > 0 ? method : null })
             .eq('id', rechargeEditingId);
         if (error) { alert('Could not save: ' + error.message); return; }
         const tx = v2CreditTransactions.find((t) => t.id === rechargeEditingId);
-        if (tx) { tx.amount = amount; tx.created_at = createdAt; }
+        if (tx) { tx.amount = amount; tx.created_at = createdAt; tx.type = type; tx.payment_method = amount > 0 ? method : null; }
+    } else if (rechargeShares.length) {
+        // one payment for several students: «amount» is the whole payment
+        const myShare = rechargeMyShare();
+        if (myShare <= 0) { alert(`The shares are more than the payment total (€${amount}). Lower them so ${s.name} gets something too.`); return; }
+        const ids = [s.id];
+        for (const r of rechargeShares) {
+            if (!r.studentId) { alert('Choose the student for each share (or remove the empty row).'); return; }
+            if (!(Number(r.amount) > 0)) { alert('Each share needs an amount above €0.'); return; }
+            if (ids.includes(r.studentId)) { alert('The same student is chosen twice.'); return; }
+            ids.push(r.studentId);
+        }
+        const group = crypto.randomUUID();
+        const rows = [{ student_id: s.id, amount: myShare }, ...rechargeShares.map((r) => ({ student_id: r.studentId, amount: Number(r.amount) }))]
+            .map((r) => ({ ...r, type: 'recharge', note: 'Manual recharge', payment_method: method, payment_group: group, created_at: createdAt }));
+        const { data: inserted, error } = await supabaseClient.from('v2_credit_transactions').insert(rows).select();
+        if (error) { alert('Could not save: ' + error.message); return; }
+        v2CreditTransactions.push(...(inserted || rows));
+        for (const id of ids.slice(1)) await recomputeV2Balance(id);
     } else {
         const { data: inserted, error } = await supabaseClient
             .from('v2_credit_transactions')
-            .insert({ student_id: s.id, type, amount, note, created_at: createdAt })
+            .insert({ student_id: s.id, type, amount, note, payment_method: amount > 0 ? method : null, created_at: createdAt })
             .select().single();
         if (error) { alert('Could not save: ' + error.message); return; }
-        v2CreditTransactions.push(inserted || { student_id: s.id, type, amount, note, created_at: createdAt });
+        v2CreditTransactions.push(inserted || { student_id: s.id, type, amount, note, payment_method: amount > 0 ? method : null, created_at: createdAt });
     }
 
     await recomputeV2Balance(s.id);
@@ -8073,14 +8203,24 @@ async function confirmRecharge() {
 }
 async function deleteRechargeTransaction() {
     if (!rechargeEditingId) return;
-    if (!confirm('Delete this entry?')) return;
+    const lockedTx = v2CreditTransactions.find((t) => t.id === rechargeEditingId);
+    if (!lockedTx) return;
+    const lockDel = lockedTx && typeof paymentLock === 'function' ? paymentLock(lockedTx) : null;
+    if (lockDel) { alert(lockDel.msg); return; }
+    // A shared payment (several students) is deleted for all of them together.
+    const rows = lockedTx && typeof paymentGroupRows === 'function' ? paymentGroupRows(lockedTx) : (lockedTx ? [lockedTx] : []);
+    const lockedShare = rows.map((t) => paymentLock(t)).find(Boolean);
+    if (lockedShare) { alert(lockedShare.msg); return; }
+    const msg = rows.length > 1
+        ? `This is one shared payment of €${paymentGroupTotal(lockedTx)}: ${paymentShareText(rows)}.\n\nDelete it for all of them?`
+        : 'Delete this entry?';
+    if (!confirm(msg)) return;
     const sid = rechargeStudentId;
     const deletedAt = new Date().toISOString();
-    const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).eq('id', rechargeEditingId);
+    const { error } = await supabaseClient.from('v2_credit_transactions').update({ deleted_at: deletedAt }).in('id', rows.map((t) => t.id));
     if (error) { alert('Could not delete: ' + error.message); return; }
-    const tx = v2CreditTransactions.find((t) => t.id === rechargeEditingId);
-    if (tx) tx.deleted_at = deletedAt;
-    await recomputeV2Balance(sid);
+    rows.forEach((t) => { t.deleted_at = deletedAt; });
+    for (const id of new Set(rows.map((t) => t.student_id))) await recomputeV2Balance(id);
     closeRechargeModal();
     renderStudentsList();
     renderPaymentsList();

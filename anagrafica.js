@@ -166,13 +166,44 @@
         const starts = [];
         const contains = [];
         for (const c of comuni) {
-            const ck = keyOf(c.n);
+            const ck = c._k || (c._k = keyOf(c.n));
             if (ck === k) exact.push(c);
             else if (ck.startsWith(k)) starts.push(c);
             else if (ck.includes(k)) contains.push(c);
         }
         const byRank = (a, b) => rank(a) - rank(b);
-        return exact.sort(byRank).concat(starts.sort(byRank), contains.sort(byRank)).slice(0, limit || 8);
+        const found = exact.sort(byRank).concat(starts.sort(byRank), contains.sort(byRank));
+        // Spelling mistakes ("cremnoa", "castelvedro"): also the closest names,
+        // compared with the whole name or with its start of the same length.
+        if (found.length < (limit || 8) && k.length >= 3) {
+            const max = k.length <= 4 ? 1 : k.length <= 8 ? 2 : 3;
+            const near = [];
+            for (const c of comuni) {
+                if (found.includes(c)) continue;
+                const ck = c._k || (c._k = keyOf(c.n));
+                const d = Math.min(editDistance(k, ck.slice(0, k.length), max), Math.abs(ck.length - k.length) <= max ? editDistance(k, ck, max) : max + 1);
+                if (d <= max) near.push({ c, d });
+            }
+            near.sort((a, b) => a.d - b.d || rank(a.c) - rank(b.c));
+            near.forEach((x) => found.push(x.c));
+        }
+        return found.slice(0, limit || 8);
+    }
+    // Levenshtein distance, giving up early once it is above max.
+    function editDistance(a, b, max) {
+        if (Math.abs(a.length - b.length) > max) return max + 1;
+        let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+        for (let i = 1; i <= a.length; i++) {
+            const cur = [i];
+            let best = i;
+            for (let j = 1; j <= b.length; j++) {
+                cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                if (cur[j] < best) best = cur[j];
+            }
+            if (best > max) return max + 1;
+            prev = cur;
+        }
+        return prev[b.length];
     }
     // Exact match by name (and sigla, when given). Accepts sloppy input:
     // "mornico al serio" / "Mornico al Serio", provincia "bg" / "Bergamo (BG)".

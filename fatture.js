@@ -55,10 +55,9 @@ async function loadFattureData() {
         fatturaSettings = st || {};
         fattureList = rows || [];
         fattureMissing = false;
-        // fatture_todo.sql: «Non serve» payments. Missing table = feature off.
-        const { data: skips, error: e3 } = await supabaseClient.from('fattura_skips').select('transaction_id');
+        // fatture_todo.sql run? (it adds invoice_from — the «Invoice payments from» setting)
+        const { error: e3 } = await supabaseClient.from('fattura_skips').select('transaction_id').limit(1);
         fatturaTodoReady = !e3;
-        fatturaSkipIds = new Set((skips || []).map((r) => r.transaction_id));
         setTimeout(checkXmlUploads, 1500);
     } catch (e) {
         console.error('Fatture not available (has fatture_xml.sql been run?):', e);
@@ -69,8 +68,7 @@ async function loadFattureData() {
 }
 
 let fatturaTodoReady = false;     // fatture_todo.sql run
-let fatturaSkipIds = new Set();    // recharges marked «Non serve»
-let fattureTodoView = 'todo';      // 'todo' | 'done' | 'skipped'
+let fattureTodoView = 'todo';      // 'todo' | 'done'
 const FATTURE_FROM_DEFAULT = '2025-09-29'; // P.IVA start; editable in Impostazioni
 
 // ---------- small helpers ----------
@@ -87,8 +85,113 @@ function plainIt(n) { // 30 -> "30", 30.5 -> "30,5" (AdE PDF shows the unit pric
     return String(v).replace('.', ',');
 }
 function dateIt(d) { const [y, m, dd] = String(d).slice(0, 10).split('-'); return `${dd}.${m}.${y}`; }
-function fatturaForTransaction(txId) { return fattureList.find((f) => f.transaction_id === txId) || null; }
-function fattureOfStudent(studentId) { return fattureList.filter((f) => f.student_id === studentId); }
+function fatturaExtraIds(f) { return Array.isArray(f && f.extra_transaction_ids) ? f.extra_transaction_ids.map(Number) : []; }
+function fatturaForTransaction(txId) {
+    return fattureList.find((f) => f.transaction_id === txId || fatturaExtraIds(f).includes(txId)) || null;
+}
+// A student's fatture: their own, plus a shared one (siblings) covering one of their payments.
+function fattureOfStudent(studentId) {
+    return fattureList.filter((f) => f.student_id === studentId || fatturaExtraIds(f).some((id) => {
+        const t = v2CreditTransactions.find((x) => x.id === id);
+        return t && t.student_id === studentId;
+    }));
+}
+
+// ---- One payment (cash or bonifico) for several students (payment_group) ----
+// Every share of the bonifico, oldest id first (or just the payment itself).
+function paymentGroupRows(t) {
+    if (!t) return [];
+    if (!t.payment_group) return [t];
+    return v2CreditTransactions.filter((x) => x.payment_group === t.payment_group && !x.deleted_at && x.type === 'recharge')
+        .sort((a, b) => a.id - b.id);
+}
+function paymentGroupTotal(t) { return paymentGroupRows(t).reduce((sum, x) => sum + Number(x.amount || 0), 0); }
+// Who this payment's fattura would go to (the parent for a minor).
+function recipientCfForPayment(t) {
+    const st = students.find((x) => x.id === t.student_id);
+    try {
+        const cf = st && fatturaRecipientFor(st, fatturaDateForPayment(t)).recipient_cf;
+        return String(cf || '').trim().toUpperCase() || `tx${t.id}`;
+    } catch (e) { return `tx${t.id}`; }
+}
+// The shares that go on ONE fattura with this payment: same bonifico, same
+// recipient CF (siblings → the same parent), not invoiced yet. A friend or an
+// adult brother has another CF, so he gets his own fattura.
+function fatturaBundleFor(t) {
+    if (!t.payment_group) return [t];
+    const cf = recipientCfForPayment(t);
+    return paymentGroupRows(t).filter((x) => x.id === t.id || (!fatturaForTransaction(x.id) && recipientCfForPayment(x) === cf));
+}
+function paymentShareText(rows) {
+    return rows.map((x) => `${(students.find((st) => st.id === x.student_id) || {}).name || '?'} €${moneyIt(x.amount)}`).join(' + ');
+}
+
+// 🔒 A payment with a fattura (any status except rejected — a draft XML too)
+// can't be edited or deleted. The database enforces the same (payment_lock.sql).
+function paymentLock(t) {
+    if (!t || t.type !== 'recharge' || !t.id) return null;
+    const f = fatturaForTransaction(t.id);
+    if (!f || f.status === 'rejected') return null;
+    const nr = fmtNumeroFattura(f);
+    return {
+        f,
+        msg: fatturaIsDone(f) ? `🔒 Invoiced (${nr}): amount and date can't change (only the payment method can).`
+            : `🔒 XML ${nr} made. Delete that draft fattura first to change this payment.`
+    };
+}
+
+function daysBetween(a, b) {
+    return Math.round((Date.parse(String(b).slice(0, 10) + 'T12:00:00Z') - Date.parse(String(a).slice(0, 10) + 'T12:00:00Z')) / 86400000);
+}
+// Fattura date for a payment: the payment date while the payment is at most
+// 10 days old, otherwise today. Never before the year's last fattura
+// (numbers and dates must go in order).
+const FATTURA_PAYMENT_DATE_DAYS = 10;
+const FATTURA_DEADLINE_DAYS = 12;
+function fatturaDateForPayment(tx, today) {
+    today = today || formatLocalDate(new Date());
+    const paid = String(tx.created_at).slice(0, 10);
+    let date = daysBetween(paid, today) <= FATTURA_PAYMENT_DATE_DAYS ? paid : today;
+    const last = lastFatturaDate(Number(date.slice(0, 4)));
+    if (last && date < last) date = last;
+    return date;
+}
+
+// Two fatture to the same person on the same day that together pass €77.47
+// look like a split to avoid the €2 bollo — never allowed. (Old payments
+// get today's date, so the backlog is spread one per person per day.)
+function bolloSplitRisk(d) {
+    const cf = String(d.recipient_cf || '').trim().toUpperCase();
+    const date = String(d.data_fattura || '').slice(0, 10);
+    if (!cf || !date) return null;
+    const same = fattureList.filter((f) => f.id !== d.id && f.status !== 'rejected'
+        && String(f.data_fattura).slice(0, 10) === date && String(f.recipient_cf || '').trim().toUpperCase() === cf);
+    if (!same.length) return null;
+    const total = same.reduce((sum, f) => sum + Number(f.importo || 0), Number(d.importo || 0));
+    if (total <= BOLLO_SOGLIA) return null;
+    const who = `${d.recipient_nome || ''} ${d.recipient_cognome || ''}`.trim() || cf;
+    const when = date === formatLocalDate(new Date()) ? 'today' : `on ${dateIt(date)}`;
+    return {
+        same, total,
+        msg: `Already a fattura to ${who} ${when} (${same.map((f) => `${fmtNumeroFattura(f)}, €${moneyIt(f.importo)}`).join('; ')}). `
+            + `Together it would be €${moneyIt(total)}, above €77,47 (bollo). Make this one tomorrow or later.`
+    };
+}
+// The fattura a payment would get right now: date, recipient and the split check.
+// If the payment date clashes with a fattura of that day, today is tried instead.
+function planFatturaForPayment(tx, s) {
+    const today = formatLocalDate(new Date());
+    const build = (date) => {
+        const d = { data_fattura: date, importo: Number(tx.amount), ...fatturaRecipientFor(s, date) };
+        return { d, risk: bolloSplitRisk(d) };
+    };
+    let plan = build(fatturaDateForPayment(tx, today));
+    if (plan.risk && plan.d.data_fattura !== today) {
+        const alt = build(fatturaDateForPayment({ created_at: today }, today));
+        if (!alt.risk) plan = alt;
+    }
+    return plan;
+}
 
 function nextFatturaNumber(anno) {
     const nums = fattureList.filter((f) => f.anno === anno).map((f) => f.numero);
@@ -633,14 +736,34 @@ function openFatturaFromTransaction(txId) {
         openFatturaSettings();
         return;
     }
-    const today = formatLocalDate(new Date());
-    const anno = Number(today.slice(0, 4));
+    const bundle = fatturaBundleFor(tx);
+    const first = bundle[0];
+    const s0 = students.find((x) => x.id === first.student_id) || s;
+    const total = bundle.reduce((sum, x) => sum + Number(x.amount || 0), 0);
+    const plan = planFatturaForPayment({ ...first, amount: total }, s0);
+    if (plan.risk) { alert(plan.risk.msg); return; }
+    const date = plan.d.data_fattura;
+    const anno = Number(date.slice(0, 4));
     fatturaDraft = {
-        mode: 'create', student_id: s.id, transaction_id: tx.id, source: 'app',
-        data_fattura: today, anno, numero: nextFatturaNumber(anno), importo: Number(tx.amount), revision: 0,
-        ...fatturaRecipientFor(s, today)
+        mode: 'create', student_id: s0.id, transaction_id: first.id, source: 'app',
+        anno, numero: nextFatturaNumber(anno), revision: 0, ...plan.d,
+        extra_transaction_ids: bundle.slice(1).map((x) => x.id),
+        paymentDate: String(first.created_at).slice(0, 10)
     };
-    openFatturaModalShell('New fattura', `${s.name} · payment €${tx.amount} of ${dateIt(String(tx.created_at).slice(0, 10))}`);
+    if (bundle.length > 1) {
+        // siblings: «corso di danza (per bambini - Ravi Singh, Simran Singh)»
+        const names = bundle.map((x) => {
+            const an = getStudentAnagrafica(students.find((st) => st.id === x.student_id) || {});
+            return `${an.nome || ''} ${an.cognome || ''}`.trim();
+        }).filter(Boolean).join(', ');
+        const st = fatturaSettings || {};
+        fatturaDraft.descrizione = fatturaDraft.recipient_type === 'parent'
+            ? String(st.descrizione_minori || 'corso di danza (per bambini - {allievo})').replace('{allievo}', names)
+            : `${st.descrizione_adulti || 'corso di danza'} (${names})`;
+    }
+    openFatturaModalShell('New fattura', bundle.length > 1
+        ? `Shared payment of ${dateIt(String(first.created_at).slice(0, 10))}: ${paymentShareText(bundle)} = €${moneyIt(total)}`
+        : `${s.name} · payment €${tx.amount} of ${dateIt(String(tx.created_at).slice(0, 10))}`);
     renderFatturaForm();
 }
 
@@ -708,8 +831,11 @@ function renderFatturaForm() {
                     <span style="font-weight:700;">/ <span id="fmAnnoLabel">${String(d.anno).slice(-2)}</span></span>
                 </div>
             </div>
-            <div class="field" style="flex:1;"><label>Date</label><input id="fmData" type="date" value="${v(d.data_fattura)}" ${locked ? 'readonly' : ''} onblur="onFatturaDateChange()" onkeydown="if (event.key === 'Enter') this.blur();"></div>
+            <div class="field" style="flex:1;"><label>Date</label><input id="fmData" type="date" value="${v(d.data_fattura)}" ${locked || d.mode === 'create' ? 'readonly' : ''} onblur="onFatturaDateChange()" onkeydown="if (event.key === 'Enter') this.blur();"></div>
         </div>
+        ${d.mode === 'create' && d.paymentDate ? `<div style="font-size:0.78em; color:var(--ink-faint); margin:-6px 0 10px;">Payment of ${dateIt(d.paymentDate)}. ${d.paymentDate === d.data_fattura ? 'Fattura date = payment date.'
+            : daysBetween(d.paymentDate, formatLocalDate(new Date())) > FATTURA_PAYMENT_DATE_DAYS ? 'Paid more than 10 days ago: the fattura gets today\'s date.'
+            : 'Dated after the year\'s last fattura, so the numbers stay in order.'}${d.paymentDate.slice(0, 4) !== String(d.data_fattura).slice(0, 4) ? ` <b style="color:var(--warning);">Payment of ${d.paymentDate.slice(0, 4)}, fattura dated ${String(d.data_fattura).slice(0, 4)}.</b>` : ''}</div>` : ''}
         ${s ? `<div class="field"><label>Issued to</label>
             <select id="fmTipo" onchange="onFatturaTipoChange()" ${locked ? 'disabled' : ''}>
                 <option value="student" ${d.recipient_type === 'student' ? 'selected' : ''}>Student</option>
@@ -874,6 +1000,10 @@ async function saveFatturaForm() {
         const last = lastFatturaDate(d.anno);
         if (!manual && last && d.data_fattura < last) problems.push(`The date can't be before the year's last fattura (${dateIt(last)}): numbers and dates must go in order.`);
     }
+    if (d.mode === 'create') {
+        const risk = bolloSplitRisk(d);
+        if (risk) problems.push(risk.msg);
+    }
     if (problems.length) { alert('Fix first:\n\n- ' + problems.join('\n- ')); return; }
     if (warnings.length && !confirm('Careful:\n\n- ' + warnings.join('\n- ') + '\n\nContinue anyway?')) return;
 
@@ -885,6 +1015,7 @@ async function saveFatturaForm() {
         recipient_comune: d.recipient_comune, recipient_provincia: d.recipient_provincia,
         importo: d.importo, descrizione: d.descrizione
     };
+    if (d.mode === 'create' && d.extra_transaction_ids && d.extra_transaction_ids.length) row.extra_transaction_ids = d.extra_transaction_ids;
     fatturaSaveInProgress = true;
     const btn = document.getElementById('fmSaveBtn');
     if (btn) btn.disabled = true;
@@ -1018,7 +1149,16 @@ function openFatturaView(id) {
         ${row('Codice fiscale', f.recipient_cf)}
         ${row('Address', [f.recipient_via, f.recipient_civico].filter(Boolean).join(' ') + (f.recipient_comune ? ` - ${f.recipient_cap || ''} ${f.recipient_comune} (${f.recipient_provincia || ''})` : ''))}
         ${row('Description', f.descrizione)}
-        ${row('Student', s ? s.name : '—')}
+        ${row(fatturaExtraIds(f).length ? 'Students' : 'Student', [f.student_id, ...fatturaExtraIds(f).map((id) => (v2CreditTransactions.find((t) => t.id === id) || {}).student_id)]
+            .map((sid) => (students.find((x) => x.id === sid) || {}).name).filter(Boolean).join(', ') || '—')}
+        ${(() => {
+            const t = f.transaction_id && v2CreditTransactions.find((x) => x.id === f.transaction_id);
+            if (!t || !t.payment_group) return '';
+            const all = paymentGroupRows(t);
+            const others = [...new Set(all.map((x) => fatturaForTransaction(x.id)).filter((o) => o && o.id !== f.id))];
+            return row('Paid with', `one ${t.payment_method === 'cash' ? 'cash' : 'bonifico'} payment of €${moneyIt(paymentGroupTotal(t))} (${paymentShareText(all)})`
+                + (others.length ? ` · together with ${others.map((o) => fmtNumeroFattura(o)).join(', ')}` : ''));
+        })()}
         ${f.file_name ? row('XML file', f.file_name) : ''}
         <div class="section-label">Status</div>
         ${f.status === 'created' || f.status === 'uploaded' ? `
@@ -1161,29 +1301,37 @@ function fattureFromDate() {
     return String((fatturaSettings && fatturaSettings.invoice_from) || FATTURE_FROM_DEFAULT).slice(0, 10);
 }
 // Recharges since fattureFromDate() without a fattura, grouped by student.
-// skipped=true returns the «Non serve» ones instead.
 // Done = on AdE (Uploaded / Accepted). An XML only created, or a rejected
 // fattura, still needs work: the payment stays in «To invoice».
 function fatturaIsDone(f) { return !!f && (f.status === 'accepted' || f.status === 'uploaded'); }
-function rechargesToInvoice(skipped, year) {
+function rechargesToInvoice(year) {
     const from = fattureFromDate();
     const rows = (typeof v2CreditTransactions === 'undefined' ? [] : v2CreditTransactions)
         .filter((t) => t.type === 'recharge' && !t.deleted_at && t.id && String(t.created_at).slice(0, 10) >= from)
         .filter((t) => !year || String(t.created_at).slice(0, 4) === String(year))
         .filter((t) => !fatturaIsDone(fatturaForTransaction(t.id)))
-        .filter((t) => fatturaSkipIds.has(t.id) === !!skipped)
         .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
-    const groups = new Map();
+    // shares of one payment going to the same CF become one unit (amount = their total)
+    const units = [], seen = new Set();
     rows.forEach((t) => {
+        if (seen.has(t.id)) return;
+        const f = fatturaForTransaction(t.id);
+        const bundle = f ? rows.filter((x) => fatturaForTransaction(x.id) === f) : fatturaBundleFor(t).filter((x) => rows.includes(x));
+        bundle.forEach((x) => seen.add(x.id));
+        units.push(bundle.length > 1 ? { ...bundle[0], amount: bundle.reduce((sum, x) => sum + Number(x.amount || 0), 0), _bundle: bundle } : t);
+    });
+    const groups = new Map();
+    units.forEach((t) => {
         if (!groups.has(t.student_id)) groups.set(t.student_id, { student: students.find((x) => x.id === t.student_id), txs: [] });
         groups.get(t.student_id).txs.push(t);
     });
-    return [...groups.values()].sort((a, b) => String(a.student?.name || '').localeCompare(String(b.student?.name || '')));
+    // oldest payment first: the most overdue student is on top
+    return [...groups.values()].sort((a, b) => String(a.txs[0].created_at).localeCompare(String(b.txs[0].created_at)));
 }
 // Students with fatture dated since fattureFromDate(), plus how many recharges still miss one.
 function studentsInvoiced(year) {
     const from = fattureFromDate();
-    const missing = new Map(rechargesToInvoice(false).map((g) => [g.student?.id, g.txs.length]));
+    const missing = new Map(rechargesToInvoice().map((g) => [g.student?.id, g.txs.length]));
     const map = new Map();
     fattureList.filter((f) => f.student_id && fatturaIsDone(f) && String(f.data_fattura).slice(0, 10) >= from
         && (!year || String(f.data_fattura).slice(0, 4) === String(year))).forEach((f) => {
@@ -1193,14 +1341,6 @@ function studentsInvoiced(year) {
     });
     return [...map.values()].map((g) => ({ ...g, missing: missing.get(g.student?.id) || 0 }))
         .sort((a, b) => String(a.student?.name || '').localeCompare(String(b.student?.name || '')));
-}
-async function skipFatturaFor(txId, skip) {
-    const { error } = skip
-        ? await supabaseClient.from('fattura_skips').insert({ transaction_id: txId })
-        : await supabaseClient.from('fattura_skips').delete().eq('transaction_id', txId);
-    if (error) { alert('Could not save: ' + error.message); return; }
-    if (skip) fatturaSkipIds.add(txId); else fatturaSkipIds.delete(txId);
-    refreshFattureViews();
 }
 function setFattureTodoView(v) { fattureTodoView = v; renderFattureTab(); }
 // Fatture of a student not linked to any payment (typically «Add fattura already
@@ -1295,25 +1435,29 @@ async function saveAutoLink() {
     alert(`${ok} fattur${ok === 1 ? 'a' : 'e'} linked.` + (ok < chosen.length ? ` ${chosen.length - ok} could not be linked.` : ''));
 }
 function fattureTodoCardHtml(year) {
-    // To invoice / Hidden: every pending payment, any year (a December payment
+    // To invoice: every pending payment, any year (a December payment
     // still shows in January). Invoiced: only the chosen year (restarts yearly).
-    const todo = rechargesToInvoice(false);
-    const skipped = fatturaTodoReady ? rechargesToInvoice(true) : [];
+    const todo = rechargesToInvoice();
     const done = studentsInvoiced(year);
     // fatture · students · € for each tab
     const sumTx = (groups) => ({ n: groups.reduce((n, g) => n + g.txs.length, 0), stu: groups.length, eur: groups.reduce((e, g) => e + g.txs.reduce((x, t) => x + Number(t.amount || 0), 0), 0) });
-    const todoS = sumTx(todo), skipS = sumTx(skipped);
+    const todoS = sumTx(todo);
     const doneS = { n: done.reduce((n, g) => n + g.count, 0), stu: done.length, eur: done.reduce((e, g) => e + g.total, 0) };
-    const nTodo = todoS.n, nSkipped = skipS.n;
-    const view = fattureTodoView === 'skipped' && !nSkipped ? 'todo' : fattureTodoView;
+    const view = fattureTodoView === 'done' ? 'done' : 'todo';
+    const today = formatLocalDate(new Date());
+    // 12 days to issue the fattura after the payment
+    const dueBadge = (t) => {
+        const age = daysBetween(String(t.created_at).slice(0, 10), today);
+        const left = FATTURA_DEADLINE_DAYS - age;
+        return left < 0 ? ` <span class="badge badge-danger">${-left} day${left === -1 ? '' : 's'} late</span>`
+            : ` <span class="badge badge-neutral">${left === 0 ? 'last day' : `${left} day${left === 1 ? '' : 's'} left`}</span>`;
+    };
     const eur0 = (v) => '€' + (Math.round(v * 100) / 100).toLocaleString('it-IT', { maximumFractionDigits: 2 });
     const tab = (key, label, st, tip) => `<button class="btn btn-sm ${view === key ? 'btn-primary' : 'btn-outline'}" title="${tip}: ${st.n} fatture · ${st.stu} students · ${eur0(st.eur)}" onclick="setFattureTodoView('${key}')">${label}</button>`;
-    const txRow = (t, skippedRow) => {
+    const txRow = (t) => {
         const f = fatturaForTransaction(t.id);
         let state = '', buttons;
-        if (skippedRow) {
-            buttons = `<button class="btn btn-outline btn-sm" onclick="skipFatturaFor(${t.id}, false)">Restore</button>`;
-        } else if (f && f.status === 'rejected') {
+        if (f && f.status === 'rejected') {
             state = ` <span class="badge badge-danger">${fmtNumeroFattura(f)} rejected</span>`;
             buttons = `<button class="btn btn-primary btn-sm" onclick="openFatturaView(${f.id})">Open</button>`;
         } else if (f) { // XML created, not uploaded to AdE yet
@@ -1324,21 +1468,27 @@ function fattureTodoCardHtml(year) {
             const unlinked = unlinkedFattureOf(t.student_id);
             const same = unlinked.find((x) => Number(x.importo) === Number(t.amount));
             if (same) state = ` <span class="badge badge-neutral">${fmtNumeroFattura(same)} · €${moneyIt(same.importo)} added by hand, not linked</span>`;
+            const st = students.find((x) => x.id === t.student_id);
+            const risk = st && planFatturaForPayment(t, st).risk;
+            if (t.payment_group) {
+                const all = paymentGroupRows(t);
+                state += ` <span class="badge badge-neutral" title="One payment of €${moneyIt(paymentGroupTotal(t))}: ${escapeHtml(paymentShareText(all))}">${t._bundle ? `shared payment: ${escapeHtml(paymentShareText(t._bundle))}` : `shared payment €${moneyIt(paymentGroupTotal(t))}`}</span>`;
+            }
+            if (risk) state += ` <span class="badge badge-neutral" title="${escapeHtml(risk.msg)}">next one tomorrow</span>`;
             buttons = `${unlinked.length ? `<button class="btn btn-outline btn-sm" onclick="openLinkFattura(${t.id})">Link existing fattura</button>` : ''}
-                <button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})">Make fattura</button>
-                ${fatturaTodoReady ? `<button class="btn btn-outline btn-sm" title="This payment won't get a fattura from the app" onclick="skipFatturaFor(${t.id}, true)">Not needed</button>` : ''}`;
+                <button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})" ${risk ? `disabled title="${escapeHtml(risk.msg)}"` : ''}>Make fattura</button>`;
         }
         return `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0 5px 12px; font-size:0.85em;">
-            <span>${dateIt(String(t.created_at).slice(0, 10))} · <b>€${moneyIt(t.amount)}</b>${state}</span>
+            <span>${dateIt(String(t.created_at).slice(0, 10))} · <b>€${moneyIt(t.amount)}</b>${dueBadge(t)}${state}</span>
             <span style="display:flex; gap:6px; flex-wrap:wrap;">${buttons}</span>
         </div>`;
     };
-    const groupHtml = (g, skippedRows) => `
+    const groupHtml = (g) => `
         <div style="padding:8px 0; border-top:1px solid var(--border-soft);">
             <div style="font-weight:700; font-size:0.9em; cursor:pointer;" onclick="${g.student ? `openStudentViewModal(${g.student.id})` : ''}">${escapeHtml(g.student ? g.student.name : 'Deleted student')}
                 <span style="font-weight:400; color:var(--ink-faint);">· ${g.txs.length} payment${g.txs.length === 1 ? '' : 's'}</span></div>
-            ${g.txs.map((t) => txRow(t, skippedRows)).join('')}
+            ${g.txs.map((t) => txRow(t)).join('')}
         </div>`;
     let body;
     if (view === 'done') {
@@ -1347,8 +1497,6 @@ function fattureTodoCardHtml(year) {
                 <span><b>${escapeHtml(g.student ? g.student.name : 'Deleted student')}</b> · ${g.count} fattur${g.count === 1 ? 'a' : 'e'} · €${moneyIt(g.total)}</span>
                 ${g.missing ? `<span class="badge badge-warning">${g.missing} missing</span>` : '<span class="badge badge-success">all invoiced ✓</span>'}
             </div>`).join('') : '<div style="font-size:0.85em; color:var(--ink-faint); padding:6px 0;">No fatture yet.</div>';
-    } else if (view === 'skipped') {
-        body = `<div style="font-size:0.8em; color:var(--ink-faint); margin-bottom:4px;">Payments marked «Not needed». «Restore» puts them back in «To invoice».</div>` + skipped.map((g) => groupHtml(g, true)).join('');
     } else {
         body = todo.length ? todo.map((g) => groupHtml(g, false)).join('')
             : '<div style="font-size:0.88em; color:var(--success); font-weight:600; padding:6px 0;">Every payment has its fattura ✓</div>';
@@ -1358,15 +1506,13 @@ function fattureTodoCardHtml(year) {
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
                 ${tab('todo', 'To invoice', todoS, 'To invoice')}
                 ${tab('done', 'Invoiced', doneS, 'Invoiced')}
-                ${nSkipped ? tab('skipped', 'Hidden', skipS, 'Hidden') : ''}
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.74em; color:var(--ink-faint); margin-bottom:8px;">
-                <span style="font-size:1.25em; font-weight:700; color:var(--ink-soft);">${(() => { const st = view === 'done' ? doneS : view === 'skipped' ? skipS : todoS; return `${st.n} fattur${st.n === 1 ? "a" : "e"} · ${st.stu} student${st.stu === 1 ? "" : "s"} · ${eur0(st.eur)}`; })()}</span><span>Invoiced: year ${year || ''}</span>
+                <span style="font-size:1.25em; font-weight:700; color:var(--ink-soft);">${(() => { const st = view === 'done' ? doneS : todoS; return `${st.n} fattur${st.n === 1 ? "a" : "e"} · ${st.stu} student${st.stu === 1 ? "" : "s"} · ${eur0(st.eur)}`; })()}</span><span>Invoiced: year ${year || ''}</span>
             </div>
             ${(() => { const n = autoLinkPairs().length; return n ? `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:8px 10px; margin-bottom:8px; background:var(--accent-soft); border-radius:var(--radius-sm); font-size:0.84em;">
                 <span>${n} fattur${n === 1 ? 'a' : 'e'} added by hand can be linked to ${n === 1 ? 'its payment' : 'their payments'} automatically.</span>
                 <button class="btn btn-primary btn-sm" onclick="openAutoLink()">Link automatically</button></div>` : ''; })()}
-            ${fatturaTodoReady ? '' : '<div style="font-size:0.8em; color:var(--warning); margin-bottom:6px;">Run fatture_todo.sql in Supabase for the «Not needed» button and to change the date.</div>'}
             <div style="max-height:420px; overflow-y:auto;">${body}</div>
         </div>`;
 }
@@ -1532,6 +1678,7 @@ function fatturaLedgerButton(t) {
     // what's missing, instead of the button silently not being there.
     if (t.type !== 'recharge' || !t.id) return '';
     const f = fatturaForTransaction(t.id);
-    const label = f ? `${fmtNumeroFattura(f)} · ${(FATTURA_STATUS[f.status] || {}).label || ''}` : 'Fattura';
-    return `<button type="button" class="btn ${f ? 'btn-outline' : 'btn-primary'} btn-sm" style="height:24px; padding:0 8px; font-size:0.74em;" onclick="event.stopPropagation(); openFatturaFromTransaction(${t.id})">${escapeHtml(label)}</button>`;
+    const lock = paymentLock(t);
+    const label = f ? `${lock ? '🔒 ' : ''}${fmtNumeroFattura(f)} · ${(FATTURA_STATUS[f.status] || {}).label || ''}` : 'Fattura';
+    return `<button type="button" class="btn ${f ? 'btn-outline' : 'btn-primary'} btn-sm" style="height:24px; padding:0 8px; font-size:0.74em;"${lock ? ` title="${escapeHtml(lock.msg)}"` : ''} onclick="event.stopPropagation(); openFatturaFromTransaction(${t.id})">${escapeHtml(label)}</button>`;
 }

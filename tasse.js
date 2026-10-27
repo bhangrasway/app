@@ -312,11 +312,16 @@ function renderTaxTab() {
         ${taxGuidesHtml()}`;
 }
 
-// "When to do it" window: F24s from 60 days before the deadline, the Modello Redditi from 1 May.
+// "When to do it" window: the Modello Redditi and the June F24 (saldo + 1° acconto)
+// from 20 May to 30 June (the precompilata can be sent from about 20 May);
+// the other F24s from 60 days before the deadline.
 function taxDeadlineWindow(d) {
     const fmt = (iso) => iso.split('-').reverse().join('/');
-    const from = d.lines === null ? `${d.date.slice(0, 4)}-05-01` : formatLocalDate(new Date(new Date(d.date + 'T12:00:00').getTime() - 60 * 86400000));
-    return { from, text: `${fmt(from)} – ${fmt(d.date)}` };
+    const y = d.date.slice(0, 4);
+    const may20 = d.lines === null || d.key.endsWith('-06');
+    const from = may20 ? `${y}-05-20` : formatLocalDate(new Date(new Date(d.date + 'T12:00:00').getTime() - 60 * 86400000));
+    const to = may20 ? `${y}-06-30` : d.date;
+    return { from, to, text: `${fmt(from)} – ${fmt(to)}` };
 }
 function taxDeadlineCardHtml(d, expanded) {
     const today = formatLocalDate(new Date());
@@ -350,6 +355,7 @@ function taxDeadlineCardHtml(d, expanded) {
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
             <b style="font-size:0.92em;">${d.title}</b> ${badge}
         </div>
+        ${!done && d.key.endsWith('-06') ? `<div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">Late option: by <b>30/07/${d.date.slice(0, 4)}</b> with <b>+0,40%</b> («maggiorazione»).</div>` : ''}
         ${!done && !expanded ? '<div style="font-size:0.82em; color:var(--ink-faint); margin-top:4px;">Estimate from your fatture so far — it changes as you add fatture. Nothing to do now.</div>' : ''}
         <details ${done || !expanded ? '' : 'open'} style="margin-top:8px;">
             <summary style="cursor:pointer; font-size:0.85em; color:var(--ink-soft);">F24 lines — what to type (click an amount to copy it)</summary>
@@ -697,13 +703,19 @@ function renderTaxReminder() {
     const today = formatLocalDate(new Date());
     const limit = addDaysToDate(today, 30);
     const nowY = new Date().getFullYear();
-    const next = [...taxDeadlinesFor(nowY), ...taxDeadlinesFor(nowY + 1)]
-        .filter((d) => d.lines && d.lines.length && !taxF24ForDeadline(d.key) && d.date <= limit && d.date >= addDaysToDate(today, -60))
+    const all = [...taxDeadlinesFor(nowY), ...taxDeadlinesFor(nowY + 1)];
+    const next = all
+        .filter((d) => d.lines && d.lines.length && !taxF24ForDeadline(d.key) && d.date >= addDaysToDate(today, -60)
+            && (d.key.endsWith('-06') ? today >= taxDeadlineWindow(d).from : d.date <= limit))
         .sort((a, b) => a.date.localeCompare(b.date))[0];
+    // Modello Redditi: from 20 May until it's sent (protocollo saved)
+    const redditi = all.find((d) => d.lines === null && today >= taxDeadlineWindow(d).from && d.date >= today
+        && !taxYears[Number(d.key.slice(0, 4)) - 1]?.dichiarazione_protocollo);
     const bollo = bolloQuarters().filter((x) => !x.paid && today >= x.from)[0];
-    card.classList.toggle('hidden', !next && !bollo);
-    if (!next && !bollo) return;
+    card.classList.toggle('hidden', !next && !bollo && !redditi);
+    if (!next && !bollo && !redditi) return;
     const lines = [];
+    if (redditi) lines.push(`<b>Modello Redditi ${Number(redditi.key.slice(0, 4)) - 1}:</b> do it between <b>${taxDeadlineWindow(redditi).text}</b>, together with the F24 saldo + 1° acconto (legal deadline ${redditi.date.split('-').reverse().join('/')})`);
     if (next) {
         const draft = taxApplyCredits(next.lines);
         lines.push(`<b>Tax deadline:</b> ${next.title} · F24 total <b>${eur(draft.totale)}</b>${draft.totale === 0 ? ' («F24 a saldo zero» — still to send)' : ''}`);

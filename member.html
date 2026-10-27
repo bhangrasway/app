@@ -21,8 +21,8 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=23"></script>
-<script src="anagrafica.js?v=2"></script>
+<script src="i18n.js?v=24"></script>
+<script src="anagrafica.js?v=3"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -576,12 +576,22 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 
         <div class="report-block">
             <div class="section-label" style="margin-top:0;">Indirizzo <span id="mdAddrStatus" style="text-transform:none; letter-spacing:normal; font-weight:600;"></span></div>
-            <div class="field"><label>Via / Piazza</label><input id="mdVia" placeholder="Via Trento" oninput="updateMyDetailsChecks()"></div>
-            <div class="field"><label>N. civico</label><input id="mdCivico" placeholder="5"></div>
-            <div class="field"><label>Comune</label><input id="mdComune" placeholder="Scrivi e scegli dall'elenco…"><div style="font-size:0.74em; color:var(--ink-faint); margin-top:4px;">Abiti in una frazione? Scegli il comune e scrivi la frazione nella via.</div></div>
+            <div class="field"><label>Via / Piazza</label><input id="mdVia" placeholder="Via Trento" oninput="updateMyDetailsChecks()">
+                <div id="mdViaHint" class="hidden" style="font-size:0.78em; color:var(--warning); margin-top:5px;">
+                    Manca il tipo di via: scrivi anche «Via», «Piazza», «Strada»… (es. «Via Trento», non «Trento»). Serve per le fatture.
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addViaType('Via')">+ Via</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addViaType('Piazza')">+ Piazza</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addViaType('Strada')">+ Strada</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addViaType('Viale')">+ Viale</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addViaType('Corso')">+ Corso</button>
+                    </div>
+                </div></div>
+            <div class="field"><label>N. civico</label><input id="mdCivico" placeholder="5" oninput="updateMyDetailsChecks()"></div>
+            <div class="field"><label>Comune</label><input id="mdComune" placeholder="Scrivi e scegli dall'elenco…"><div id="mdComuneHint" class="hidden" style="font-size:0.78em; color:var(--warning); font-weight:600; margin-top:5px;">⚠ Tocca il tuo comune nell'elenco: Provincia e CAP si compilano da soli.</div><div style="font-size:0.74em; color:var(--ink-faint); margin-top:4px;">Abiti in una frazione? Scegli il comune e scrivi la frazione nella via.</div></div>
             <div style="display:flex; gap:10px;">
-                <div class="field" style="flex:1;"><label>Provincia</label><input id="mdProvincia" maxlength="2"></div>
-                <div class="field" style="flex:1;"><label>CAP</label><input id="mdCap" placeholder="26100"></div>
+                <div class="field" style="flex:1;"><label>Provincia</label><input id="mdProvincia" maxlength="2" oninput="updateMyDetailsChecks()"></div>
+                <div class="field" style="flex:1;"><label>CAP</label><input id="mdCap" placeholder="26100" oninput="updateMyDetailsChecks()"></div>
             </div>
         </div>
 
@@ -600,7 +610,12 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             </div>
         </div>
 
-        <button class="btn btn-primary btn-block" id="detailsSendBtnLabel" onclick="sendDetailsCorrection()"></button>
+        <div id="mdMissingSummary" class="hidden" style="font-size:0.84em; font-weight:600; color:var(--warning); background:var(--warning-soft); border-radius:10px; padding:10px 12px; margin:0 0 10px;"></div>
+        <p class="empty-note" style="margin:0 0 8px; text-align:center;" data-i18n="mv2_details_review_note">Changes aren't saved right away: your coach checks them first.</p>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-outline" style="flex:1;" onclick="closeDetailsScreen()" data-i18n="pw_cancel_btn">Cancel</button>
+            <button class="btn btn-primary" style="flex:2;" id="detailsSendBtnLabel" onclick="sendDetailsCorrection()"></button>
+        </div>
     </div>
 </div>
 
@@ -1554,17 +1569,59 @@ function updateMyDetailsChecks() {
     };
     paint('mdCfStatus', A.normalizeCf(val('mdCf')), val('mdNome'), val('mdCognome'));
     paint('mdParentCfStatus', A.normalizeCf(val('mdParentCf')), val('mdParentNome'), val('mdParentCognome'));
-    const minor = A.isMinorOnDate(val('mdCf'), null);
+    const age = (typeof lastReport !== 'undefined' && lastReport && lastReport.student && lastReport.student.age) || null;
+    const minor = A.isMinorOnDate(val('mdCf'), age);
+    markMissingDetails(minor);
     const hint = document.getElementById('mdParentHint');
     hint.style.color = minor ? 'var(--warning)' : 'var(--ink-faint)';
     hint.textContent = minor ? '— obbligatorio per i minorenni' : '— facoltativo';
     const addr = { via: val('mdVia'), civico: val('mdCivico'), cap: val('mdCap'), comune: val('mdComune'), provincia: val('mdProvincia') };
+    document.getElementById('mdViaHint').classList.toggle('hidden', !addr.via || A.hasToponimo(addr.via));
+    // Comune only from the official list: typed but not picked → say so.
+    document.getElementById('mdComuneHint').classList.toggle('hidden', !addr.comune || document.getElementById('mdComune').dataset.valid === '1');
     const st = document.getElementById('mdAddrStatus');
     if (!Object.values(addr).some(Boolean)) { st.textContent = ''; return; }
     const v = A.validateAddress(addr);
     const all = v.problems.concat(v.warnings);
     st.style.color = all.length ? 'var(--warning)' : 'var(--success)';
     st.textContent = all.length ? '⚠ ' + all.join(', ') : '✓';
+}
+// ⚠ next to every field still empty that the fattura needs.
+function markMissingDetails(minor) {
+    const need = [
+        ['mdNome', 'Nome'], ['mdCognome', 'Cognome'],
+        ['mdCf', minor ? "Codice fiscale dell'allievo (se lo avete)" : 'Codice fiscale'],
+        ...(minor ? [['mdParentNome', 'Nome genitore'], ['mdParentCognome', 'Cognome genitore'], ['mdParentCf', 'Codice fiscale genitore']] : []),
+        ['mdVia', 'Via / Piazza'], ['mdCivico', 'N. civico'], ['mdComune', 'Comune'], ['mdProvincia', 'Provincia'], ['mdCap', 'CAP']
+    ];
+    const optionalIds = minor ? [] : ['mdParentNome', 'mdParentCognome', 'mdParentCf'];
+    const missing = [];
+    need.concat(optionalIds.map((id) => [id, null])).forEach(([id, label]) => {
+        const input = document.getElementById(id);
+        const lab = input && input.closest('.field') && input.closest('.field').querySelector('label');
+        if (!lab) return;
+        let mark = lab.querySelector('.md-miss');
+        const empty = label !== null && !input.value.trim();
+        if (empty && !mark) {
+            mark = document.createElement('span');
+            mark.className = 'md-miss';
+            mark.textContent = ' ⚠';
+            mark.style.color = 'var(--warning)';
+            lab.appendChild(mark);
+        } else if (!empty && mark) mark.remove();
+        input.style.borderColor = empty ? 'var(--warning)' : '';
+        if (empty) missing.push(label);
+    });
+    const box = document.getElementById('mdMissingSummary');
+    box.classList.toggle('hidden', !missing.length);
+    box.textContent = missing.length ? `⚠ Mancano: ${missing.join(', ')}. Servono per la fattura.` : '';
+}
+// «Trento» → «Via Trento»: one tap adds the street type in front.
+function addViaType(type) {
+    const el = document.getElementById('mdVia');
+    el.value = `${type} ${el.value.trim()}`.trim();
+    updateMyDetailsChecks();
+    el.focus();
 }
 async function sendDetailsCorrection() {
     const A = window.Anagrafica;
@@ -1818,6 +1875,7 @@ async function initAttendance() {
     if (settingsError || !settings) {
         attnClosedMsg = 'Check-in is not set up yet. Please ask your instructor.';
         document.getElementById('attnClosedMessage').textContent = attnClosedMsg;
+        document.getElementById('attnNotifyFromClosedBtnLabel').classList.remove('hidden');
         showAttn('attnClosed');
         return;
     }
@@ -1832,8 +1890,16 @@ async function initAttendance() {
     if (!isOpen) {
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const dayList = activeDays.map((d) => dayNames[d]).join(' & ');
-        attnClosedMsg = `Check-in is open ${dayList}, ${String(settings.start_time).slice(0, 5)}–${String(settings.end_time).slice(0, 5)}. Come back then.`;
+        const from = String(settings.start_time).slice(0, 5), to = String(settings.end_time).slice(0, 5);
+        // A request («I was there but couldn't check in») only makes sense on a
+        // class day, once the class has started — never on a day off.
+        const classDay = activeDays.includes(day);
+        const started = settings.start_time <= settings.end_time ? hhmmss >= settings.start_time : true;
+        attnClosedMsg = !classDay ? t('attn_no_class_today', { days: dayList, from, to })
+            : !started ? t('attn_not_started', { from })
+            : `Check-in is open ${dayList}, ${from}–${to}. Come back then.`;
         document.getElementById('attnClosedMessage').textContent = attnClosedMsg;
+        document.getElementById('attnNotifyFromClosedBtnLabel').classList.toggle('hidden', !(classDay && started));
         showAttn('attnClosed');
         return;
     }
