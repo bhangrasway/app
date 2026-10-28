@@ -126,6 +126,17 @@ function paymentShareText(rows) {
     return rows.map((x) => `${(students.find((st) => st.id === x.student_id) || {}).name || '?'} €${moneyIt(x.amount)}`).join(' + ');
 }
 
+// «16.10 €5,00 + 17.10 €40,00»: the payments one fattura covers.
+function joinedPaymentsText(rows) {
+    return rows.map((x) => `${dateIt(String(x.created_at).slice(0, 10)).slice(0, 5)} €${moneyIt(x.amount)}`).join(' + ');
+}
+// Every payment a fattura covers (its own + extra_transaction_ids), oldest first.
+function fatturaPayments(f) {
+    const ids = [f.transaction_id, ...fatturaExtraIds(f)];
+    return v2CreditTransactions.filter((t) => ids.includes(t.id))
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+}
+
 // 🔒 A payment with a fattura (any status except rejected — a draft XML too)
 // can't be edited or deleted. The database enforces the same (payment_lock.sql).
 function paymentLock(t) {
@@ -144,17 +155,16 @@ function daysBetween(a, b) {
     return Math.round((Date.parse(String(b).slice(0, 10) + 'T12:00:00Z') - Date.parse(String(a).slice(0, 10) + 'T12:00:00Z')) / 86400000);
 }
 // Fattura date for a payment: the payment date while the payment is at most
-// 10 days old, otherwise today. Never before the year's last fattura
-// (numbers and dates must go in order).
-const FATTURA_PAYMENT_DATE_DAYS = 10;
+// 12 days old and not before the year's last fattura, otherwise today
+// (numbers and dates must go in order; the last fattura is never after today).
+const FATTURA_PAYMENT_DATE_DAYS = 12;
 const FATTURA_DEADLINE_DAYS = 12;
 function fatturaDateForPayment(tx, today) {
     today = today || formatLocalDate(new Date());
     const paid = String(tx.created_at).slice(0, 10);
-    let date = daysBetween(paid, today) <= FATTURA_PAYMENT_DATE_DAYS ? paid : today;
-    const last = lastFatturaDate(Number(date.slice(0, 4)));
-    if (last && date < last) date = last;
-    return date;
+    if (daysBetween(paid, today) > FATTURA_PAYMENT_DATE_DAYS) return today;
+    const last = lastFatturaDate(Number(paid.slice(0, 4)));
+    return last && paid < last ? today : paid;
 }
 
 // Two fatture to the same person on the same day that together pass €77.47
@@ -210,6 +220,13 @@ function fatturaProgressivo(f) {
     return n.toString(36).toUpperCase().padStart(5, '0');
 }
 function fatturaFileName(st, f) { return `IT${st.partita_iva || st.codice_fiscale}_${fatturaProgressivo(f)}.xml`; }
+// AdE wants the same name format for a ZIP (IT<code>_<5 chars>.zip) and a
+// progressivo no XML ever used. Fatture use 0…49,999,999 (year 99 at most);
+// a ZIP takes 50,000,000 + minutes since 2026 → a new one each minute, to ~2045.
+function fatturaZipFileName(st) {
+    const minutes = Math.floor((Date.now() - Date.UTC(2026, 0, 1)) / 60000);
+    return `IT${st.partita_iva || st.codice_fiscale}_${(50000000 + minutes).toString(36).toUpperCase().padStart(5, '0')}.zip`;
+}
 
 function validatePartitaIva(piva) {
     const p = String(piva || '').replace(/\s/g, '');
@@ -742,6 +759,8 @@ function openFatturaFromTransaction(txId) {
     const total = bundle.reduce((sum, x) => sum + Number(x.amount || 0), 0);
     const plan = planFatturaForPayment({ ...first, amount: total }, s0);
     if (plan.risk) { alert(plan.risk.msg); return; }
+    const blocker = fatturaOrderBlocker(first.id);
+    if (blocker && !confirm(blocker.msg + '\n\nMake this one anyway?')) return;
     const date = plan.d.data_fattura;
     const anno = Number(date.slice(0, 4));
     fatturaDraft = {
@@ -765,6 +784,152 @@ function openFatturaFromTransaction(txId) {
         ? `Shared payment of ${dateIt(String(first.created_at).slice(0, 10))}: ${paymentShareText(bundle)} = €${moneyIt(total)}`
         : `${s.name} · payment €${tx.amount} of ${dateIt(String(tx.created_at).slice(0, 10))}`);
     renderFatturaForm();
+}
+
+// The draft of one fattura for one or more payments (oldest first) of one
+// student: the total, dated from the latest payment; the others in extra_transaction_ids.
+function fatturaDraftForPayments(s, rows) {
+    const latest = rows[rows.length - 1];
+    const total = rows.reduce((sum, x) => sum + Number(x.amount || 0), 0);
+    const plan = planFatturaForPayment({ ...latest, amount: total }, s);
+    const anno = Number(plan.d.data_fattura.slice(0, 4));
+    const draft = {
+        mode: 'create', student_id: s.id, transaction_id: latest.id, source: 'app',
+        anno, numero: nextFatturaNumber(anno), revision: 0, ...plan.d,
+        extra_transaction_ids: rows.slice(0, -1).map((x) => x.id),
+        paymentDate: String(latest.created_at).slice(0, 10), joined: rows.length > 1 ? rows : null
+    };
+    return { plan, draft };
+}
+
+// ---- Many fatture at once: tick students, one fattura each ----
+// A student's waiting payments all go on one fattura (joined). Shared
+// payments (siblings) and a payment to another CF are made by hand.
+const fattureBulkSel = new Set();
+function bulkPaymentsFor(g) {
+    if (!g || !g.student) return [];
+    const rows = g.txs.filter((t) => !t._bundle && !t.payment_group && !fatturaForTransaction(t.id))
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    if (!rows.length) return [];
+    const cf = recipientCfForPayment(rows[rows.length - 1]);
+    return rows.filter((t) => recipientCfForPayment(t) === cf);
+}
+function toggleFattureBulk(studentId, on) {
+    if (on) fattureBulkSel.add(studentId); else fattureBulkSel.delete(studentId);
+    updateFattureBulkBar();
+}
+function selectAllFattureBulk(on) {
+    document.querySelectorAll('.fattureBulkBox:not(:disabled)').forEach((x) => {
+        x.checked = on;
+        if (on) fattureBulkSel.add(Number(x.dataset.sid)); else fattureBulkSel.delete(Number(x.dataset.sid));
+    });
+    updateFattureBulkBar();
+}
+function updateFattureBulkBar() {
+    const btn = document.getElementById('fattureBulkBtn');
+    if (btn) { btn.disabled = !fattureBulkSel.size; btn.textContent = `Make XML for selected (${fattureBulkSel.size})`; }
+}
+// Every selected student → { s, rows, draft, problems, warnings, on }, in
+// date order, numbered as they will be saved (only the ticked ones count).
+let fattureBulkItems = [];
+function buildFattureBulkItems() {
+    const groups = rechargesToInvoice();
+    const items = [];
+    groups.forEach((g) => {
+        if (!g.student || !fattureBulkSel.has(g.student.id)) return;
+        const rows = bulkPaymentsFor(g);
+        if (!rows.length) return;
+        const { plan, draft } = fatturaDraftForPayments(g.student, rows);
+        const { problems, warnings } = fatturaDataChecks(draft);
+        if (plan.risk) problems.push(plan.risk.msg);
+        const skipped = g.txs.length - rows.length;
+        if (skipped) warnings.push(`${skipped} other payment${skipped === 1 ? '' : 's'} (shared or to another person): make by hand.`);
+        items.push({ s: g.student, rows, draft, problems, warnings, on: !problems.length && !warnings.length });
+    });
+    return items.sort((a, b) => a.draft.data_fattura.localeCompare(b.draft.data_fattura)
+        || String(a.rows[a.rows.length - 1].created_at).localeCompare(String(b.rows[b.rows.length - 1].created_at)));
+}
+function openFattureBulk() {
+    if (!fatturaFeatureReady()) return;
+    const settingsProblems = fatturaSettingsProblems(fatturaSettings);
+    if (settingsProblems.length) {
+        alert('First complete the fattura Settings:\n- ' + settingsProblems.join('\n- '));
+        openFatturaSettings();
+        return;
+    }
+    fattureBulkItems = buildFattureBulkItems();
+    if (!fattureBulkItems.length) { alert('Nothing to make for the selected students.'); return; }
+    renderFattureBulk();
+}
+function renderFattureBulk() {
+    const items = fattureBulkItems;
+    const on = items.filter((x) => x.on);
+    // numbers in order over the ticked ones only
+    const next = {};
+    on.forEach((x) => {
+        const anno = x.draft.anno;
+        next[anno] = next[anno] || nextFatturaNumber(anno);
+        x.draft.numero = next[anno]++;
+    });
+    const selIds = new Set(on.flatMap((x) => x.rows.map((t) => t.id)));
+    const maxDate = on.reduce((m, x) => (x.draft.data_fattura > m ? x.draft.data_fattura : m), '');
+    // not selected payments that would lose their own date
+    const left = maxDate ? waitingFatturaPlans().filter((p) => !(p.t._bundle || [p.t]).some((t) => selIds.has(t.id)) && p.date < maxDate) : [];
+    const cell = 'padding:6px 6px; border-top:1px solid var(--border-soft); vertical-align:top;';
+    taxModal(`Make ${on.length} fattur${on.length === 1 ? 'a' : 'e'}`,
+        `<p style="font-size:0.84em; margin-top:0;">One fattura per student (all their waiting payments together), numbered in date order. Untick any you want to check by hand.</p>
+        ${left.length ? `<div style="font-size:0.82em; padding:8px 10px; margin-bottom:8px; background:var(--warning-soft); border-radius:var(--radius-sm);"><b>Not selected, would lose their payment date</b> (they'd get today's): ${escapeHtml(left.map((p) => `${p.student.name} ${dateIt(String(p.t.created_at).slice(0, 10))}`).join(', '))}. Tick them too, or make them first.</div>` : ''}
+        <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.8em;">
+            <tr style="text-align:left; color:var(--ink-faint);"><th></th><th style="padding:4px 6px;">No.</th><th style="padding:4px 6px;">Date</th><th style="padding:4px 6px;">Issued to</th><th style="padding:4px 6px;">Payments</th><th style="padding:4px 6px; text-align:right;">€</th><th style="padding:4px 6px;"></th></tr>
+            ${items.map((x, i) => `<tr style="${x.on ? '' : 'opacity:0.6;'}">
+                <td style="${cell}"><input type="checkbox" ${x.on ? 'checked' : ''} ${x.problems.length ? 'disabled' : ''} onchange="fattureBulkItems[${i}].on = this.checked; renderFattureBulk()" style="width:17px; height:17px; margin:0;"></td>
+                <td style="${cell} font-weight:700;">${x.on ? fmtNumeroFattura(x.draft) : '—'}</td>
+                <td style="${cell} white-space:nowrap;">${dateIt(x.draft.data_fattura)}</td>
+                <td style="${cell}">${escapeHtml(`${x.draft.recipient_cognome || ''}, ${x.draft.recipient_nome || ''}`)}${x.draft.recipient_type === 'parent' ? ` <span style="color:var(--ink-faint);">(parent of ${escapeHtml(x.s.name)})</span>` : ''}</td>
+                <td style="${cell}">${escapeHtml(joinedPaymentsText(x.rows))}</td>
+                <td style="${cell} text-align:right; white-space:nowrap; font-weight:700;">${moneyIt(x.draft.importo)}</td>
+                <td style="${cell}">${x.problems.length ? `<span style="color:var(--danger); font-weight:600;">✗ ${escapeHtml(x.problems.join(' '))}</span>`
+                    : x.warnings.length ? `<span style="color:var(--warning); font-weight:600;">⚠ ${escapeHtml(x.warnings.join(' '))}</span>`
+                    : '<span style="color:var(--success); font-weight:700;">✓</span>'}${fatturaNeedsBollo(x.draft) ? ' <span class="badge badge-neutral">bollo €2</span>' : ''}</td>
+            </tr>`).join('')}
+        </table></div>`,
+        `<div style="display:flex; gap:8px; margin-left:auto;"><button class="btn btn-outline" onclick="closeTaxModal2()">Cancel</button>
+            <button class="btn btn-primary" id="fattureBulkSaveBtn" ${on.length ? '' : 'disabled'} onclick="saveFattureBulk()">Make ${on.length} XML</button></div>`);
+}
+async function saveFattureBulk() {
+    const todo = fattureBulkItems.filter((x) => x.on);
+    if (!todo.length) return;
+    const btn = document.getElementById('fattureBulkSaveBtn');
+    if (btn) btn.disabled = true;
+    let made = 0, stop = '';
+    for (const x of todo) {
+        // fresh: date and number from the register as it is now
+        if (x.rows.some((t) => fatturaForTransaction(t.id))) { stop = `${x.s.name}: a payment already has a fattura.`; break; }
+        const { plan, draft } = fatturaDraftForPayments(x.s, x.rows);
+        const last = lastFatturaDate(draft.anno);
+        if (plan.risk || (last && draft.data_fattura < last)) { stop = `${x.s.name}: ${plan.risk ? plan.risk.msg : 'date out of order'}`; break; }
+        const row = {
+            anno: draft.anno, numero: draft.numero, data_fattura: draft.data_fattura,
+            student_id: draft.student_id, transaction_id: draft.transaction_id, source: draft.source,
+            recipient_type: draft.recipient_type, recipient_nome: draft.recipient_nome, recipient_cognome: draft.recipient_cognome, recipient_cf: draft.recipient_cf,
+            recipient_via: draft.recipient_via, recipient_civico: draft.recipient_civico, recipient_cap: draft.recipient_cap,
+            recipient_comune: draft.recipient_comune, recipient_provincia: draft.recipient_provincia,
+            importo: draft.importo, descrizione: draft.descrizione, revision: 0,
+            status: 'created', status_updated_at: new Date().toISOString()
+        };
+        if (draft.extra_transaction_ids.length) row.extra_transaction_ids = draft.extra_transaction_ids;
+        row.xml = buildFatturaXml(fatturaSettings, row);
+        row.file_name = fatturaFileName(fatturaSettings, row);
+        const { data: inserted, error } = await supabaseClient.from('fatture').insert(row).select().single();
+        if (error) { stop = `${x.s.name}: ${/duplicate|unique/i.test(error.message) ? 'number or payment already used — refresh the page' : error.message}`; break; }
+        fattureList.unshift(inserted);
+        fattureBulkSel.delete(x.s.id);
+        made++;
+    }
+    closeTaxModal2();
+    refreshFattureViews();
+    if (stop) alert(`${made} of ${todo.length} made. Stopped at ${stop}`);
+    if (made) downloadAllXmlZip();
 }
 
 function openManualFattura() {
@@ -833,9 +998,9 @@ function renderFatturaForm() {
             </div>
             <div class="field" style="flex:1;"><label>Date</label><input id="fmData" type="date" value="${v(d.data_fattura)}" ${locked || d.mode === 'create' ? 'readonly' : ''} onblur="onFatturaDateChange()" onkeydown="if (event.key === 'Enter') this.blur();"></div>
         </div>
-        ${d.mode === 'create' && d.paymentDate ? `<div style="font-size:0.78em; color:var(--ink-faint); margin:-6px 0 10px;">Payment of ${dateIt(d.paymentDate)}. ${d.paymentDate === d.data_fattura ? 'Fattura date = payment date.'
-            : daysBetween(d.paymentDate, formatLocalDate(new Date())) > FATTURA_PAYMENT_DATE_DAYS ? 'Paid more than 10 days ago: the fattura gets today\'s date.'
-            : 'Dated after the year\'s last fattura, so the numbers stay in order.'}${d.paymentDate.slice(0, 4) !== String(d.data_fattura).slice(0, 4) ? ` <b style="color:var(--warning);">Payment of ${d.paymentDate.slice(0, 4)}, fattura dated ${String(d.data_fattura).slice(0, 4)}.</b>` : ''}</div>` : ''}
+        ${d.mode === 'create' && d.paymentDate ? `<div style="font-size:0.78em; color:var(--ink-faint); margin:-6px 0 10px;">Payment of${dateIt(d.paymentDate)}. ${d.paymentDate === d.data_fattura ? 'Fattura date = payment date.'
+            : daysBetween(d.paymentDate, formatLocalDate(new Date())) > FATTURA_PAYMENT_DATE_DAYS ? `Paid more than ${FATTURA_PAYMENT_DATE_DAYS} days ago: the fattura gets today's date.`
+            : `A fattura of ${dateIt(lastFatturaDate(Number(d.paymentDate.slice(0, 4))) || d.data_fattura)} already exists, so this one gets today's date (dates must stay in order).`}${d.paymentDate.slice(0, 4) !== String(d.data_fattura).slice(0, 4) ? ` <b style="color:var(--warning);">Payment of ${d.paymentDate.slice(0, 4)}, fattura dated ${String(d.data_fattura).slice(0, 4)}.</b>` : ''}</div>` : ''}
         ${s ? `<div class="field"><label>Issued to</label>
             <select id="fmTipo" onchange="onFatturaTipoChange()" ${locked ? 'disabled' : ''}>
                 <option value="student" ${d.recipient_type === 'student' ? 'selected' : ''}>Student</option>
@@ -1325,8 +1490,42 @@ function rechargesToInvoice(year) {
         if (!groups.has(t.student_id)) groups.set(t.student_id, { student: students.find((x) => x.id === t.student_id), txs: [] });
         groups.get(t.student_id).txs.push(t);
     });
-    // oldest payment first: the most overdue student is on top
-    return [...groups.values()].sort((a, b) => String(a.txs[0].created_at).localeCompare(String(b.txs[0].created_at)));
+    // Payments that still get their own date (≤12 days) first, oldest first;
+    // late ones (dated today) last — making a late one first would push every
+    // earlier in-time payment to today's date.
+    const today = formatLocalDate(new Date());
+    const late = (t) => daysBetween(String(t.created_at).slice(0, 10), today) > FATTURA_PAYMENT_DATE_DAYS;
+    const order = (a, b) => (late(a) - late(b)) || String(a.created_at).localeCompare(String(b.created_at));
+    const list = [...groups.values()];
+    list.forEach((g) => g.txs.sort(order));
+    return list.sort((a, b) => order(a.txs[0], b.txs[0]));
+}
+// Fatture must go in date order: making one while another waiting payment
+// would get an earlier date pushes that one to a later date. Only a warning —
+// a payment can be held (e.g. to merge) or made later; it's legal either way.
+function waitingFatturaPlans(groups) {
+    const out = [];
+    (groups || rechargesToInvoice()).forEach((g) => g.txs.forEach((t) => {
+        if (!g.student || fatturaForTransaction(t.id)) return;
+        const plan = planFatturaForPayment(t, g.student);
+        if (plan.risk) return; // can't be made today anyway («next one tomorrow»)
+        out.push({ t, student: g.student, date: plan.d.data_fattura });
+    }));
+    return out;
+}
+function fatturaOrderBlocker(txId, plans) {
+    plans = plans || waitingFatturaPlans();
+    const ids = (p) => (p.t._bundle || [p.t]).map((x) => x.id);
+    const mine = plans.find((p) => ids(p).includes(txId));
+    if (!mine) return null;
+    const first = plans.filter((p) => p !== mine && p.date < mine.date)
+        .sort((a, b) => a.date.localeCompare(b.date) || String(a.t.created_at).localeCompare(String(b.t.created_at)))[0];
+    if (!first) return null;
+    const paid = dateIt(String(first.t.created_at).slice(0, 10));
+    return {
+        badge: `make ${paid} (${first.student.name}) first`,
+        msg: `${first.student.name}'s payment of ${paid} is still waiting. If you make this one first, theirs will get a later date (fine if made within 12 days of the payment).`
+    };
 }
 // Students with fatture dated since fattureFromDate(), plus how many recharges still miss one.
 function studentsInvoiced(year) {
@@ -1444,6 +1643,7 @@ function fattureTodoCardHtml(year) {
     const todoS = sumTx(todo);
     const doneS = { n: done.reduce((n, g) => n + g.count, 0), stu: done.length, eur: done.reduce((e, g) => e + g.total, 0) };
     const view = fattureTodoView === 'done' ? 'done' : 'todo';
+    const orderPlans = view === 'todo' ? waitingFatturaPlans(todo) : [];
     const today = formatLocalDate(new Date());
     // 12 days to issue the fattura after the payment
     const dueBadge = (t) => {
@@ -1462,6 +1662,7 @@ function fattureTodoCardHtml(year) {
             buttons = `<button class="btn btn-primary btn-sm" onclick="openFatturaView(${f.id})">Open</button>`;
         } else if (f) { // XML created, not uploaded to AdE yet
             state = ` <span class="badge badge-warning">${fmtNumeroFattura(f)} · XML made, not uploaded yet</span>`;
+            if (t._bundle && !t.payment_group) state += ` <span class="badge badge-neutral">joined: ${escapeHtml(joinedPaymentsText(t._bundle))}</span>`;
             buttons = `<button class="btn btn-outline btn-sm" onclick="downloadFatturaXml(${f.id})">${iconLabel('download', 'XML', 13)}</button>
                 <button class="btn btn-success btn-sm" onclick="setFatturaStatus(${f.id}, 'accepted', true)">${iconLabel('check-circle', 'Uploaded to AdE', 13)}</button>`;
         } else {
@@ -1475,8 +1676,11 @@ function fattureTodoCardHtml(year) {
                 state += ` <span class="badge badge-neutral" title="One payment of €${moneyIt(paymentGroupTotal(t))}: ${escapeHtml(paymentShareText(all))}">${t._bundle ? `shared payment: ${escapeHtml(paymentShareText(t._bundle))}` : `shared payment €${moneyIt(paymentGroupTotal(t))}`}</span>`;
             }
             if (risk) state += ` <span class="badge badge-neutral" title="${escapeHtml(risk.msg)}">next one tomorrow</span>`;
+            const blocker = !risk && fatturaOrderBlocker(t.id, orderPlans);
+            if (blocker) state += ` <span class="badge badge-neutral" title="${escapeHtml(blocker.msg)}">${escapeHtml(blocker.badge)}</span>`;
+            const why = risk ? risk.msg : ''; // the order hint only warns (confirm on click)
             buttons = `${unlinked.length ? `<button class="btn btn-outline btn-sm" onclick="openLinkFattura(${t.id})">Link existing fattura</button>` : ''}
-                <button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})" ${risk ? `disabled title="${escapeHtml(risk.msg)}"` : ''}>Make fattura</button>`;
+                <button class="btn btn-primary btn-sm" onclick="openFatturaFromTransaction(${t.id})" ${why ? `disabled title="${escapeHtml(why)}"` : ''}>Make fattura</button>`;
         }
         return `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0 5px 12px; font-size:0.85em;">
@@ -1484,12 +1688,26 @@ function fattureTodoCardHtml(year) {
             <span style="display:flex; gap:6px; flex-wrap:wrap;">${buttons}</span>
         </div>`;
     };
-    const groupHtml = (g) => `
+    const groupHtml = (g) => {
+        const bulk = bulkPaymentsFor(g);
+        // the student's data checked as the fattura would be made: ✗ = can't be made
+        const checks = bulk.length ? fatturaDataChecks(fatturaDraftForPayments(g.student, bulk).draft) : { problems: [], warnings: [] };
+        const bad = checks.problems.length;
+        const box = bulk.length ? `<input type="checkbox" class="fattureBulkBox" data-sid="${g.student.id}" ${fattureBulkSel.has(g.student.id) && !bad ? 'checked' : ''} ${bad ? 'disabled' : ''} onchange="toggleFattureBulk(${g.student.id}, this.checked)" title="${bad ? 'Fix the student data first' : bulk.length > 1 ? `One fattura for these ${bulk.length} payments (€${moneyIt(bulk.reduce((sum, x) => sum + Number(x.amount || 0), 0))})` : 'Make this fattura with the others selected'}" style="width:18px; height:18px; margin:0; cursor:${bad ? 'not-allowed' : 'pointer'};">` : '';
+        const sign = bad ? ` <span class="badge badge-danger" title="${escapeHtml(checks.problems.join(' '))}">✗ data missing</span>`
+            : checks.warnings.length ? ` <span class="badge badge-warning" title="${escapeHtml(checks.warnings.join(' '))}">⚠ check data</span>` : '';
+        const why = bad ? checks.problems : checks.warnings;
+        return `
         <div style="padding:8px 0; border-top:1px solid var(--border-soft);">
-            <div style="font-weight:700; font-size:0.9em; cursor:pointer;" onclick="${g.student ? `openStudentViewModal(${g.student.id})` : ''}">${escapeHtml(g.student ? g.student.name : 'Deleted student')}
-                <span style="font-weight:400; color:var(--ink-faint);">· ${g.txs.length} payment${g.txs.length === 1 ? '' : 's'}</span></div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                ${box}
+                <div style="font-weight:700; font-size:0.9em; cursor:pointer;" onclick="${g.student ? `openStudentViewModal(${g.student.id})` : ''}">${escapeHtml(g.student ? g.student.name : 'Deleted student')}
+                    <span style="font-weight:400; color:var(--ink-faint);">· ${g.txs.length} payment${g.txs.length === 1 ? '' : 's'}${bulk.length > 1 ? ` → 1 fattura €${moneyIt(bulk.reduce((sum, x) => sum + Number(x.amount || 0), 0))}` : ''}</span>${sign}</div>
+            </div>
+            ${why.length ? `<div style="font-size:0.78em; color:${bad ? 'var(--danger)' : 'var(--warning)'}; padding:2px 0 0 28px;">${escapeHtml(why.join(' '))}</div>` : ''}
             ${g.txs.map((t) => txRow(t)).join('')}
         </div>`;
+    };
     let body;
     if (view === 'done') {
         body = done.length ? done.map((g) => `
@@ -1513,6 +1731,11 @@ function fattureTodoCardHtml(year) {
             ${(() => { const n = autoLinkPairs().length; return n ? `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:8px 10px; margin-bottom:8px; background:var(--accent-soft); border-radius:var(--radius-sm); font-size:0.84em;">
                 <span>${n} fattur${n === 1 ? 'a' : 'e'} added by hand can be linked to ${n === 1 ? 'its payment' : 'their payments'} automatically.</span>
                 <button class="btn btn-primary btn-sm" onclick="openAutoLink()">Link automatically</button></div>` : ''; })()}
+            ${view === 'todo' && todo.some((g) => bulkPaymentsFor(g).length) ? `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                <button class="btn btn-outline btn-sm" onclick="selectAllFattureBulk(true)">Select all</button>
+                <button class="btn btn-outline btn-sm" onclick="selectAllFattureBulk(false)">Clear</button>
+                <button class="btn btn-primary btn-sm" id="fattureBulkBtn" style="margin-left:auto;" ${fattureBulkSel.size ? '' : 'disabled'} onclick="openFattureBulk()">Make XML for selected (${fattureBulkSel.size})</button>
+            </div>` : ''}
             <div style="max-height:420px; overflow-y:auto;">${body}</div>
         </div>`;
 }
@@ -1524,7 +1747,13 @@ function xmlNotUploadedCardHtml() {
     if (!list.length) return '';
     return `
         <div class="card" style="padding:14px 16px; margin-bottom:14px; border-color:#fbdca0; background:var(--warning-soft);">
-            <div style="font-weight:700; font-size:0.92em; margin-bottom:6px;">XML made, not uploaded to AdE yet (${list.length})</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+                <div style="font-weight:700; font-size:0.92em;">XML made, not uploaded to AdE yet (${list.length})</div>
+                ${list.length > 1 ? `<span style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <button class="btn btn-primary btn-sm" onclick="downloadAllXmlZip()">${iconLabel('download', `All ${list.length} XML (ZIP)`, 13)}</button>
+                    <button class="btn btn-success btn-sm" onclick="markAllXmlUploaded()">${iconLabel('check-circle', 'All uploaded to AdE', 13)}</button>
+                </span>` : ''}
+            </div>
             ${list.map((f) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid #fbdca0; font-size:0.85em;">
                     <span><b>${fmtNumeroFattura(f)}</b> · ${escapeHtml(`${f.recipient_cognome}, ${f.recipient_nome}`)} · €${moneyIt(f.importo)} <span style="color:var(--ink-faint);">· ${escapeHtml(f.file_name || '')}</span></span>
@@ -1534,6 +1763,83 @@ function xmlNotUploadedCardHtml() {
                     </span>
                 </div>`).join('')}
         </div>`;
+}
+
+// AdE (Fatture e Corrispettivi → Trasmissione) takes one .zip with many XML
+// files: each one is still its own fattura with its own receipt.
+// Before the ZIP: every file checked against its fattura (file name, number,
+// date, progressivo, amount inside the XML) and against the year's register
+// (no missing or double number, dates in number order). Any problem → no ZIP.
+function xmlZipProblems(f) {
+    const out = [];
+    const date = String(f.data_fattura).slice(0, 10);
+    const yy = String(f.anno).slice(-2);
+    const expected = fatturaFileName(fatturaSettings, f);
+    if (f.file_name !== expected) out.push(`file name should be ${expected}`);
+    const doc = new DOMParser().parseFromString(f.xml, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) return out.concat('the XML file is broken');
+    const tag = (n) => ((doc.getElementsByTagName(n)[0] || {}).textContent || '').trim();
+    if (tag('Numero') !== fmtNumeroFattura(f)) out.push(`number inside the XML is ${tag('Numero') || 'missing'}`);
+    if (tag('Data') !== date) out.push(`date inside the XML is ${tag('Data') || 'missing'}`);
+    if (tag('ProgressivoInvio') !== fatturaProgressivo(f)) out.push(`ProgressivoInvio inside the XML is ${tag('ProgressivoInvio') || 'missing'}`);
+    if (money2(tag('ImportoTotaleDocumento')) !== money2(f.importo)) out.push(`amount inside the XML is ${tag('ImportoTotaleDocumento') || 'missing'}`);
+    const year = fattureList.filter((x) => x.anno === f.anno && x.id !== f.id);
+    if (year.some((x) => x.numero === f.numero)) out.push(`number ${f.numero}/${yy} is used twice`);
+    const start = fatturaSettings && Number(fatturaSettings.start_year) === f.anno ? Number(fatturaSettings.start_number) || 1 : 1;
+    const prev = year.find((x) => x.numero === f.numero - 1);
+    const next = year.find((x) => x.numero === f.numero + 1);
+    if (!prev && f.numero > start) out.push(`number ${f.numero - 1}/${yy} is missing`);
+    if (prev && String(prev.data_fattura).slice(0, 10) > date) out.push(`dated before ${fmtNumeroFattura(prev)} (${dateIt(prev.data_fattura)})`);
+    if (next && String(next.data_fattura).slice(0, 10) < date) out.push(`dated after ${fmtNumeroFattura(next)} (${dateIt(next.data_fattura)})`);
+    return out;
+}
+function downloadAllXmlZip() {
+    const list = fattureList.filter((f) => f.status === 'created' && f.xml).sort((a, b) => a.anno - b.anno || a.numero - b.numero);
+    if (!list.length) return;
+    const checks = list.map((f) => ({ f, problems: xmlZipProblems(f) }));
+    const names = new Map();
+    list.forEach((f) => names.set(f.file_name, (names.get(f.file_name) || 0) + 1));
+    checks.forEach((c) => { if (names.get(c.f.file_name) > 1) c.problems.push('same file name as another fattura'); });
+    const bad = checks.filter((c) => c.problems.length).length;
+    const cell = 'padding:6px 6px; border-top:1px solid var(--border-soft); vertical-align:top;';
+    taxModal(`ZIP: ${list.length} fatture`,
+        `<p style="font-size:0.84em; margin-top:0;">${bad ? `<b style="color:var(--danger);">${bad} fattur${bad === 1 ? 'a has' : 'e have'} a problem: fix ${bad === 1 ? 'it' : 'them'} first, the ZIP can't be made.</b>`
+            : `<b style="color:var(--success);">All ${list.length} checked ✓</b> Numbers in order, no number missing, dates in order, each XML matches its fattura and file name.`}</p>
+        <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.8em;">
+            <tr style="text-align:left; color:var(--ink-faint);"><th style="padding:4px 6px;">No.</th><th style="padding:4px 6px;">Date</th><th style="padding:4px 6px;">Issued to</th><th style="padding:4px 6px; text-align:right;">€</th><th style="padding:4px 6px;">XML file</th><th style="padding:4px 6px;"></th></tr>
+            ${checks.map(({ f, problems }) => `<tr>
+                <td style="${cell} font-weight:700;">${fmtNumeroFattura(f)}</td>
+                <td style="${cell} white-space:nowrap;">${dateIt(f.data_fattura)}</td>
+                <td style="${cell}">${escapeHtml(`${f.recipient_cognome || ''}, ${f.recipient_nome || ''}`)}</td>
+                <td style="${cell} text-align:right; white-space:nowrap;">${moneyIt(f.importo)}</td>
+                <td style="${cell} font-family:monospace; word-break:break-all;">${escapeHtml(f.file_name || '—')}</td>
+                <td style="${cell}">${problems.length ? `<span style="color:var(--danger); font-weight:600;">✗ ${escapeHtml(problems.join('; '))}</span>` : '<span style="color:var(--success); font-weight:700;">✓</span>'}</td>
+            </tr>`).join('')}
+        </table></div>`,
+        `<div style="display:flex; gap:8px; margin-left:auto;"><button class="btn btn-outline" onclick="closeTaxModal2()">Cancel</button>
+            <button class="btn btn-primary" ${bad ? 'disabled' : ''} onclick="closeTaxModal2(); saveAllXmlZip()">${iconLabel('download', 'Download ZIP', 14)}</button></div>`);
+}
+async function saveAllXmlZip() {
+    const list = fattureList.filter((f) => f.status === 'created' && f.xml).sort((a, b) => a.anno - b.anno || a.numero - b.numero);
+    if (!list.length || list.some((f) => xmlZipProblems(f).length)) return;
+    if (typeof JSZip === 'undefined') { alert('ZIP not available: reload the page and try again.'); return; }
+    const zip = new JSZip();
+    list.forEach((f) => zip.file(f.file_name, f.xml));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const name = fatturaZipFileName(fatturaSettings);
+    list.forEach((f) => xmlPendingAdd(f.id));
+    const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (phone && typeof openFileSmart === 'function') { openFileSmart({ name, getBlob: async () => blob }); return; }
+    downloadBlob(blob, name);
+}
+async function markAllXmlUploaded() {
+    const list = fattureList.filter((f) => f.status === 'created').sort((a, b) => a.anno - b.anno || a.numero - b.numero);
+    if (!list.length) return;
+    if (!confirm(`Mark all ${list.length} fatture (${list.map(fmtNumeroFattura).join(', ')}) as uploaded to AdE?\n\nOnly if the ZIP was uploaded and AdE took it. If one comes back «Scartata», switch that one to Scartata from the fattura.`)) return;
+    for (const f of list) {
+        xmlPendingRemove(f.id);
+        await setFatturaStatus(f.id, 'accepted', true);
+    }
 }
 
 function renderFattureTab() {
@@ -1662,8 +1968,12 @@ function renderStudentFatture(s) {
     list.innerHTML = legacyRows + (mine.length
         ? mine.map((f) => {
             const st = FATTURA_STATUS[f.status] || FATTURA_STATUS.created;
+            // Only when it adds something: several payments, or paid on another day.
+            const covered = fatturaPayments(f);
+            const paid = covered.length === 1 && String(covered[0].created_at).slice(0, 10) === String(f.data_fattura).slice(0, 10) ? [] : covered;
             return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em; cursor:pointer;" onclick="openFatturaView(${f.id})">
-                <span><strong>${fmtNumeroFattura(f)}</strong> · ${dateIt(f.data_fattura)} · €${moneyIt(f.importo)}</span>
+                <span><strong>${fmtNumeroFattura(f)}</strong> · ${dateIt(f.data_fattura)} · €${moneyIt(f.importo)}${paid.length
+                    ? `<div style="font-size:0.85em; color:var(--ink-faint);">paid on ${escapeHtml(paid.map((x) => `${formatShortDate(x.created_at)} · €${String(moneyIt(x.amount)).replace(/,00$/, '')}`).join(' + '))}</div>` : ''}</span>
                 <span style="display:flex; gap:6px; align-items:center;">
                     <span class="badge ${st.badge}">${st.label}</span>
                     <button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">PDF</button>
@@ -1680,5 +1990,7 @@ function fatturaLedgerButton(t) {
     const f = fatturaForTransaction(t.id);
     const lock = paymentLock(t);
     const label = f ? `${lock ? '🔒 ' : ''}${fmtNumeroFattura(f)} · ${(FATTURA_STATUS[f.status] || {}).label || ''}` : 'Fattura';
-    return `<button type="button" class="btn ${f ? 'btn-outline' : 'btn-primary'} btn-sm" style="height:24px; padding:0 8px; font-size:0.74em;"${lock ? ` title="${escapeHtml(lock.msg)}"` : ''} onclick="event.stopPropagation(); openFatturaFromTransaction(${t.id})">${escapeHtml(label)}</button>`;
+    const btn = `<button type="button" class="btn ${f ? 'btn-outline' : 'btn-primary'} btn-sm" style="height:24px; padding:0 8px; font-size:0.74em;"${lock ? ` title="${escapeHtml(lock.msg)}"` : ''} onclick="event.stopPropagation(); openFatturaFromTransaction(${t.id})">${escapeHtml(label)}</button>`;
+    // Same PDF on every payment the fattura covers.
+    return f ? `${btn}<button type="button" class="btn btn-outline btn-sm" style="height:24px; padding:0 8px; font-size:0.74em;" title="Fattura ${escapeHtml(fmtNumeroFattura(f))}" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">PDF</button>` : btn;
 }
