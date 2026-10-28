@@ -802,9 +802,9 @@ function fatturaDraftForPayments(s, rows) {
     return { plan, draft };
 }
 
-// ---- Many fatture at once: tick students, one fattura each ----
-// A student's waiting payments all go on one fattura (joined). Shared
-// payments (siblings) and a payment to another CF are made by hand.
+// ---- Many fatture at once: tick students ----
+// One fattura per payment, never joined (the old backlog that was joined is
+// done). Shared payments (siblings) and a payment to another CF are made by hand.
 const fattureBulkSel = new Set();
 function bulkPaymentsFor(g) {
     if (!g || !g.student) return [];
@@ -837,17 +837,39 @@ function buildFattureBulkItems() {
     const items = [];
     groups.forEach((g) => {
         if (!g.student || !fattureBulkSel.has(g.student.id)) return;
-        const rows = bulkPaymentsFor(g);
-        if (!rows.length) return;
-        const { plan, draft } = fatturaDraftForPayments(g.student, rows);
-        const { problems, warnings } = fatturaDataChecks(draft);
-        if (plan.risk) problems.push(plan.risk.msg);
-        const skipped = g.txs.length - rows.length;
-        if (skipped) warnings.push(`${skipped} other payment${skipped === 1 ? '' : 's'} (shared or to another person): make by hand.`);
-        items.push({ s: g.student, rows, draft, problems, warnings, on: !problems.length && !warnings.length });
+        const all = bulkPaymentsFor(g);
+        if (!all.length) return;
+        const units = all.map((t) => [t]);
+        const skipped = g.txs.length - all.length;
+        units.forEach((rows) => {
+            const { plan, draft } = fatturaDraftForPayments(g.student, rows);
+            const { problems, warnings } = fatturaDataChecks(draft);
+            if (plan.risk) problems.push(plan.risk.msg);
+            if (skipped) warnings.push(`${skipped} other payment${skipped === 1 ? '' : 's'} (shared or to another person): make by hand.`);
+            items.push({ s: g.student, rows, draft, problems, warnings, on: !problems.length && !warnings.length });
+        });
     });
-    return items.sort((a, b) => a.draft.data_fattura.localeCompare(b.draft.data_fattura)
+    items.sort((a, b) => a.draft.data_fattura.localeCompare(b.draft.data_fattura)
         || String(a.rows[a.rows.length - 1].created_at).localeCompare(String(b.rows[b.rows.length - 1].created_at)));
+    // Same person, same day, together above €77.47 inside this batch too (not
+    // only against fatture already saved): the later one waits for tomorrow.
+    const dayTotal = new Map();
+    items.forEach((x) => {
+        if (x.problems.length) return;
+        const cf = String(x.draft.recipient_cf || '').trim().toUpperCase();
+        const key = `${cf}|${x.draft.data_fattura}`;
+        const before = dayTotal.has(key) ? dayTotal.get(key) : fattureList
+            .filter((f) => f.status !== 'rejected' && String(f.data_fattura).slice(0, 10) === x.draft.data_fattura && String(f.recipient_cf || '').trim().toUpperCase() === cf)
+            .reduce((sum, f) => sum + Number(f.importo || 0), 0);
+        const total = before + Number(x.draft.importo || 0);
+        if (dayTotal.has(key) && total > BOLLO_SOGLIA) {
+            x.problems.push(`Another fattura to the same person on ${dateIt(x.draft.data_fattura)} in this batch: together €${moneyIt(total)}, above €77,47 (bollo). Make this one tomorrow.`);
+            x.on = false;
+            return;
+        }
+        dayTotal.set(key, total);
+    });
+    return items;
 }
 function openFattureBulk() {
     if (!fatturaFeatureReady()) return;
@@ -877,7 +899,7 @@ function renderFattureBulk() {
     const left = maxDate ? waitingFatturaPlans().filter((p) => !(p.t._bundle || [p.t]).some((t) => selIds.has(t.id)) && p.date < maxDate) : [];
     const cell = 'padding:6px 6px; border-top:1px solid var(--border-soft); vertical-align:top;';
     taxModal(`Make ${on.length} fattur${on.length === 1 ? 'a' : 'e'}`,
-        `<p style="font-size:0.84em; margin-top:0;">One fattura per student (all their waiting payments together), numbered in date order. Untick any you want to check by hand.</p>
+        `<p style="font-size:0.84em; margin-top:0;">One fattura per payment, numbered in date order. Untick any you want to check by hand.</p>
         ${left.length ? `<div style="font-size:0.82em; padding:8px 10px; margin-bottom:8px; background:var(--warning-soft); border-radius:var(--radius-sm);"><b>Not selected, would lose their payment date</b> (they'd get today's): ${escapeHtml(left.map((p) => `${p.student.name} ${dateIt(String(p.t.created_at).slice(0, 10))}`).join(', '))}. Tick them too, or make them first.</div>` : ''}
         <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.8em;">
             <tr style="text-align:left; color:var(--ink-faint);"><th></th><th style="padding:4px 6px;">No.</th><th style="padding:4px 6px;">Date</th><th style="padding:4px 6px;">Issued to</th><th style="padding:4px 6px;">Payments</th><th style="padding:4px 6px; text-align:right;">€</th><th style="padding:4px 6px;"></th></tr>
