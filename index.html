@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Bhangra Sway Cremona | Punjabi Bhangra Classes in Cremona, Italy</title>
-    <meta name="description" content="Learn authentic Punjabi Bhangra in Cremona, Italy. Weekly classes for all levels, event performances, and a free trial class for new dancers.">
+    <meta name="description" content="Learn authentic Punjabi Bhangra in Cremona, Castelvetro Piacentino and Cesole (Mantova). Weekly classes for all levels, event performances, and a free trial class for new dancers.">
     <link rel="canonical" href="https://bhangrasway.com/">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -17,7 +17,7 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Bhangra Sway Cremona">
     <meta property="og:title" content="Bhangra Sway Cremona | Punjabi Bhangra Classes in Cremona, Italy">
-    <meta property="og:description" content="Learn authentic Punjabi Bhangra in Cremona, Italy. Weekly classes for all levels, event performances, and a free trial class for new dancers.">
+    <meta property="og:description" content="Learn authentic Punjabi Bhangra in Cremona, Castelvetro Piacentino and Cesole (Mantova). Weekly classes for all levels, event performances, and a free trial class for new dancers.">
     <meta property="og:url" content="https://bhangrasway.com/">
     <meta property="og:image" content="https://bhangrasway.com/hero.jpg">
     <meta property="og:locale" content="en_US">
@@ -239,6 +239,12 @@
             font-size: 0.92em;
         }
         .classes-note .icon { color: #b3922f; width: 16px; height: 16px; }
+        /* The three places: one switch, one panel each */
+        .loc-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: -12px auto 18px; }
+        .loc-tab { padding: 9px 16px; min-height: 42px; border-radius: 999px; border: 1px solid #d9dcf5; background: #fff; color: #2c3e50; font: inherit; font-weight: 700; font-size: 0.9em; cursor: pointer; }
+        .loc-tab.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-color: transparent; }
+        .loc-place { display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; color: #555; font-size: 0.95em; margin: 0 0 18px; }
+        .loc-place .icon { width: 16px; height: 16px; color: #667eea; flex: none; }
         .map-wrap {
             max-width: 700px;
             margin: 0 auto;
@@ -996,6 +1002,13 @@
     <section class="classes" id="classes">
         <div class="section-inner">
             <h2 class="section-heading" data-i18n="classes_heading">Our Classes</h2>
+            <div class="loc-tabs" role="tablist">
+                <button type="button" class="loc-tab active" data-loc="cremona" onclick="showClassPlace('cremona')">Cremona</button>
+                <button type="button" class="loc-tab" data-loc="castelvetro" onclick="showClassPlace('castelvetro')">Castelvetro Piacentino</button>
+                <button type="button" class="loc-tab" data-loc="cesole" onclick="showClassPlace('cesole')">Cesole (Mantova)</button>
+            </div>
+            <div class="loc-panel" id="loc-cremona">
+            <p class="loc-place"><svg class="icon"><use href="#icon-pin"/></svg><span>Corso XX Settembre 39, Cremona</span></p>
             <div class="classes-grid">
                 <div class="class-card">
                     <span class="badge" data-i18n="class_advance_name">Advance</span>
@@ -1022,6 +1035,37 @@
                 <iframe src="https://www.google.com/maps?q=Bhangra%20Sway%20Cremona&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Bhangra Sway Cremona location"></iframe>
                 <br>
                 <a class="directions-btn" href="https://share.google/fJihaQ5iSSVHgROO9" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="directions_btn">Get Directions</span></a>
+            </div>
+            </div>
+            <div class="loc-panel" id="loc-castelvetro" hidden>
+                <p class="loc-place"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="loc_castelvetro_place">Palestra Don Bosco, Castelvetro Piacentino (PC)</span></p>
+                <div class="classes-grid" style="grid-template-columns: minmax(220px, 420px); justify-content: center;">
+                    <div class="class-card">
+                        <span class="badge" data-i18n="class_mixed_name">Beginner + Intermediate</span>
+                        <p class="time" data-i18n="class_castelvetro_time">Sunday, 4:00 PM – 6:00 PM</p>
+                        <p class="desc" data-i18n="class_mixed_desc">One class for new dancers and for those who already know the basics. No experience needed.</p>
+                    </div>
+                </div>
+                <div class="map-wrap">
+                    <iframe data-src="https://www.google.com/maps?q=Palestra%20Don%20Bosco%2C%20Castelvetro%20Piacentino%20PC&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Bhangra Sway Castelvetro Piacentino"></iframe>
+                    <br>
+                    <a class="directions-btn" href="https://www.google.com/maps/dir/?api=1&destination=Palestra%20Don%20Bosco%2C%20Castelvetro%20Piacentino%20PC" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="directions_btn">Get Directions</span></a>
+                </div>
+            </div>
+            <div class="loc-panel" id="loc-cesole" hidden>
+                <p class="loc-place"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="loc_cesole_place">Via Torre d'Oglio 4, Cesole – Marcaria (MN)</span></p>
+                <div class="classes-grid" style="grid-template-columns: minmax(220px, 420px); justify-content: center;">
+                    <div class="class-card">
+                        <span class="badge" data-i18n="class_mixed_name">Beginner + Intermediate</span>
+                        <p class="time" data-i18n="class_cesole_time">Sunday, 1:00 PM – 3:00 PM</p>
+                        <p class="desc" data-i18n="class_mixed_desc">One class for new dancers and for those who already know the basics. No experience needed.</p>
+                    </div>
+                </div>
+                <div class="map-wrap">
+                    <iframe data-src="https://www.google.com/maps?q=Via%20Torre%20d'Oglio%204%2C%2046010%20Cesole%2C%20Marcaria%20MN&output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Bhangra Sway Cesole (Mantova)"></iframe>
+                    <br>
+                    <a class="directions-btn" href="https://www.google.com/maps/dir/?api=1&destination=Via%20Torre%20d'Oglio%204%2C%2046010%20Cesole%2C%20Marcaria%20MN" target="_blank" rel="noopener"><svg class="icon"><use href="#icon-pin"/></svg><span data-i18n="directions_btn">Get Directions</span></a>
+                </div>
             </div>
         </div>
     </section>
@@ -1181,6 +1225,13 @@
         // api.whatsapp.com/send), so emoji survive on every client. The
         // static wa.me href stays as a plain-text fallback if JS is off.
         const WA_PHONE = '393445667033';
+        // Classes: one place at a time; a place's map loads the first time it's opened
+        function showClassPlace(key) {
+            document.querySelectorAll('.loc-tab').forEach((b) => b.classList.toggle('active', b.dataset.loc === key));
+            document.querySelectorAll('.loc-panel').forEach((p) => { p.hidden = p.id !== 'loc-' + key; });
+            const frame = document.querySelector('#loc-' + key + ' iframe[data-src]');
+            if (frame && !frame.src) frame.src = frame.dataset.src;
+        }
         document.querySelectorAll('a[data-wa-text]').forEach(a => {
             a.href = `https://api.whatsapp.com/send?phone=${WA_PHONE}&text=${encodeURIComponent(a.dataset.waText)}`;
         });

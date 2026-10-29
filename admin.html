@@ -7828,6 +7828,61 @@ function noViaWhatsAppMessage(s) {
         + `Puoi correggerlo tu dall'app: apri https://bhangrasway.com/member.html e nella sezione «I Miei Dati» premi «Correggi i miei dati». 🙏\n\n`
         + `Grazie! 💃🕺`;
 }
+// What only the student (or parent) can give us, as fill-in lines for the
+// WhatsApp reply. Name «to split / to confirm» is the admin's job.
+// lang 'it' (adult student) or 'pa' (parent of a minor, Roman Punjabi).
+function missingDataItalian(problems, childName, lang = 'it') {
+    const L = lang === 'pa' ? {
+        nome: 'Naam (Nome):', cognome: 'Surname (Cognome):', cf: 'Codice Fiscale:', cfChild: (n) => `${n} da Codice Fiscale:`,
+        via: 'Via / Piazza:', civico: 'Ghar number (Numero civico):', cap: 'CAP:', comune: 'Comune (shehar):', prov: 'Provincia:',
+        noVia: 'Via / Piazza (naal «Via», «Piazza», «Corso»… likho):',
+        pCf: 'Mummy/Papa da Codice Fiscale:', pNome: 'Mummy/Papa da Naam (Nome):', pCognome: 'Mummy/Papa da Surname (Cognome):'
+    } : {
+        nome: 'Nome:', cognome: 'Cognome:', cf: 'Codice fiscale:', cfChild: (n) => `Codice fiscale di ${n}:`,
+        via: 'Via / Piazza:', civico: 'Numero civico:', cap: 'CAP:', comune: 'Comune:', prov: 'Provincia:',
+        noVia: 'Via / Piazza (con «Via», «Piazza», «Corso»…):',
+        pCf: 'Codice fiscale del genitore:', pNome: 'Nome del genitore:', pCognome: 'Cognome del genitore:'
+    };
+    const out = [];
+    const add = (...lines) => lines.forEach((x) => { if (!out.includes(x)) out.push(x); });
+    problems.forEach((p) => {
+        if (p === 'First/last name missing') add(L.nome, L.cognome);
+        else if (p === DATA_CHECK_NO_CF || p === 'Codice fiscale missing (under 18)' || p === 'CF not valid' || p === "CF doesn't match the name") add(childName ? L.cfChild(childName) : L.cf);
+        else if (p === 'Address missing' || p.startsWith('Address:') || p === 'Address in the old format') add(L.via, L.civico, L.cap, L.comune, L.prov);
+        else if (p === DATA_CHECK_NO_VIA) add(L.noVia);
+        else if (p === DATA_CHECK_NO_PARENT_CF || p === 'Parent CF not valid') add(L.pCf);
+        else if (p === 'Parent first/last name missing' || p === "Parent CF doesn't match the name") add(L.pNome, L.pCognome);
+    });
+    return out;
+}
+// Adult student: Italian. Parent of a minor: Roman Punjabi (the user's choice).
+function missingDataWhatsAppMessage(s, problems) {
+    const an = getStudentAnagrafica(s);
+    const first = (an.nome || String(s.name).split(' ')[0] || '').trim();
+    const minor = window.Anagrafica.isMinorOnDate(an.cf, s.age);
+    const wrongCf = problems.some((p) => p === 'CF not valid' || p === "CF doesn't match the name" || p === 'Parent CF not valid');
+    const link = 'https://bhangrasway.com/member.html';
+    if (minor) {
+        return `Sat Sri Akal ji! 🙏\n\n`
+            + `${first} di fattura banaun layi saanu kujh jankari chahidi aa. 🧾`
+            + (wrongCf ? ' (Jo Codice Fiscale saade kol aa, oh sahi nahi lagda.)' : '') + '\n\n'
+            + `1️⃣ App vich aap bhar sakde ho: ${link} → «Meri Jankari» («I Miei Dati») → «Apni jankari theek karo».\n\n`
+            + `2️⃣ Ya ethe hi jawab deo: eh copy karke, bhar ke bhej deo. ✍️\n`
+            + missingDataItalian(problems, first, 'pa').join('\n') + '\n\n'
+            + `Dhanvaad ji! 💃🕺`;
+    }
+    return `Ciao ${first}! 👋\n\n`
+        + `Per fare la tua fattura ci mancano alcuni dati. 🧾`
+        + (wrongCf ? ' (Il codice fiscale che abbiamo non risulta giusto.)' : '') + '\n\n'
+        + `1️⃣ Puoi inserirli tu dall'app: ${link} → «I Miei Dati» → «Correggi i miei dati».\n\n`
+        + `2️⃣ Oppure rispondi qui, copiando e completando: ✍️\n`
+        + missingDataItalian(problems, '').join('\n') + '\n\n'
+        + `Grazie! 💃🕺`;
+}
+function sendMissingDataWhatsApp(studentId) {
+    const s = students.find((x) => x.id === studentId);
+    if (s) openWhatsApp(s.phone, missingDataWhatsAppMessage(s, getStudentDataProblems(s)));
+}
 function dataCheckAddressLine(s) {
     const a = getStudentAnagrafica(s).addr;
     return [[a.via, a.civico].filter(Boolean).join(' '), [a.cap, a.comune].filter(Boolean).join(' ')].filter(Boolean).join(', ');
@@ -7856,7 +7911,8 @@ function renderDataCheck() {
                     <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:5px;">${problems.map((p) => `<span class="badge ${DATA_CHECK_RED.has(p) ? 'badge-danger' : 'badge-warning'}">${escapeHtml(p)}</span>`).join('')}</div>
                 </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                    ${filter === 'novia' && s.phone ? `<button class="btn btn-success btn-sm" title="WhatsApp message asking them to fix the address in the app" onclick="sendNoViaWhatsApp(${s.id})">${iconLabel('message', 'Ask on WhatsApp', 13)}</button>` : ''}
+                    ${filter === 'novia' && s.phone ? `<button class="btn btn-success btn-sm" title="WhatsApp message asking them to fix the address in the app" onclick="sendNoViaWhatsApp(${s.id})">${iconLabel('message', 'Ask on WhatsApp', 13)}</button>`
+                        : s.phone && missingDataItalian(problems).length ? `<button class="btn btn-success btn-sm" title="WhatsApp message asking for exactly what is missing (in Italian)" onclick="sendMissingDataWhatsApp(${s.id})">${iconLabel('message', 'Ask on WhatsApp', 13)}</button>` : ''}
                     <button class="btn btn-primary btn-sm" onclick="closeDataCheckModal(); editStudent(${s.id});">Fix</button>
                 </div>
             </div>`).join('')
