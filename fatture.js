@@ -78,6 +78,11 @@ const FATTURE_FROM_DEFAULT = '2025-09-29'; // P.IVA start; editable in Impostazi
 const BOLLO_SOGLIA = 77.47;
 function fatturaNeedsBollo(f) { return Number(f && f.importo) > BOLLO_SOGLIA; }
 function fmtNumeroFattura(f) { return `${f.numero}/${String(f.anno).slice(-2)}`; }
+// A nota di credito (TD04) is a row of fatture too, with a positive importo:
+// it counts as minus in every total.
+function fatturaIsNc(f) { return !!f && f.tipo_documento === 'TD04'; }
+function fatturaSign(f) { return fatturaIsNc(f) ? -1 : 1; }
+function fatturaCancelledBy(f) { return f && f.annullata_da ? fattureList.find((x) => x.id === f.annullata_da) || null : null; }
 function money2(n) { return (Math.round(Number(n || 0) * 100) / 100).toFixed(2); }
 function moneyIt(n) { return money2(n).replace('.', ','); }
 function plainIt(n) { // 30 -> "30", 30.5 -> "30,5" (AdE PDF shows the unit price like this)
@@ -87,7 +92,7 @@ function plainIt(n) { // 30 -> "30", 30.5 -> "30,5" (AdE PDF shows the unit pric
 function dateIt(d) { const [y, m, dd] = String(d).slice(0, 10).split('-'); return `${dd}.${m}.${y}`; }
 function fatturaExtraIds(f) { return Array.isArray(f && f.extra_transaction_ids) ? f.extra_transaction_ids.map(Number) : []; }
 function fatturaForTransaction(txId) {
-    return fattureList.find((f) => f.transaction_id === txId || fatturaExtraIds(f).includes(txId)) || null;
+    return fattureList.find((f) => !fatturaIsNc(f) && (f.transaction_id === txId || fatturaExtraIds(f).includes(txId))) || null;
 }
 // A student's fatture: their own, plus a shared one (siblings) covering one of their payments.
 function fattureOfStudent(studentId) {
@@ -203,20 +208,23 @@ function planFatturaForPayment(tx, s) {
     return plan;
 }
 
-function nextFatturaNumber(anno) {
-    const nums = fattureList.filter((f) => f.anno === anno).map((f) => f.numero);
-    const fromSettings = fatturaSettings && Number(fatturaSettings.start_year) === anno ? Number(fatturaSettings.start_number) || 1 : 1;
+// Fatture and note di credito are numbered apart (as on the AdE site).
+function fatturaTipo(f) { return (f && f.tipo_documento) || 'TD01'; }
+function nextFatturaNumber(anno, tipo = 'TD01') {
+    const nums = fattureList.filter((f) => f.anno === anno && fatturaTipo(f) === tipo).map((f) => f.numero);
+    const fromSettings = tipo === 'TD01' && fatturaSettings && Number(fatturaSettings.start_year) === anno ? Number(fatturaSettings.start_number) || 1 : 1;
     return Math.max(fromSettings, nums.length ? Math.max(...nums) + 1 : 1);
 }
 function lastFatturaDate(anno, exceptId) {
-    const ds = fattureList.filter((f) => f.anno === anno && f.id !== exceptId).map((f) => String(f.data_fattura).slice(0, 10));
+    const ds = fattureList.filter((f) => f.anno === anno && f.id !== exceptId && fatturaTipo(f) === 'TD01').map((f) => String(f.data_fattura).slice(0, 10));
     return ds.length ? ds.sort().pop() : null;
 }
 // 5-char progressivo for the file name / ProgressivoInvio. Encodes year,
 // number and revision, so a corrected resend of a rejected fattura gets a
 // new file name (AdE refuses a file name it has already received).
 function fatturaProgressivo(f) {
-    const n = (f.anno % 100) * 500000 + f.numero * 10 + ((f.revision || 0) % 10);
+    // a nota di credito takes numbers from 25,000 on: its 1/26 ≠ the fattura's 1/26
+    const n = (f.anno % 100) * 500000 + ((fatturaIsNc(f) ? 25000 : 0) + f.numero) * 10 + ((f.revision || 0) % 10);
     return n.toString(36).toUpperCase().padStart(5, '0');
 }
 function fatturaFileName(st, f) { return `IT${st.partita_iva || st.codice_fiscale}_${fatturaProgressivo(f)}.xml`; }
@@ -298,6 +306,7 @@ function buildFatturaXml(st, f) {
         `<Sede><Indirizzo>${xmlText(via)}</Indirizzo>${civico ? `<NumeroCivico>${xmlText(civico)}</NumeroCivico>` : ''}<CAP>${xmlText(cap)}</CAP><Comune>${xmlText(comune)}</Comune>${prov ? `<Provincia>${xmlText(prov)}</Provincia>` : ''}<Nazione>IT</Nazione></Sede>`;
     const importo = money2(f.importo);
     const causale = st.include_causale && st.causale ? `<Causale>${xmlText(String(st.causale).slice(0, 200))}</Causale>` : '';
+    const orig = fatturaIsNc(f) ? fattureList.find((x) => x.id === f.collegata_id) : null;
     const rifNorm = st.riferimento_normativo ? `<RiferimentoNormativo>${xmlText(String(st.riferimento_normativo).slice(0, 100))}</RiferimentoNormativo>` : '';
     return '<?xml version="1.0" encoding="UTF-8"?>'
         + '<ns2:FatturaElettronica xmlns:ns2="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" versione="FPR12">'
@@ -325,13 +334,15 @@ function buildFatturaXml(st, f) {
         + '</FatturaElettronicaHeader>'
         + '<FatturaElettronicaBody>'
         + '<DatiGenerali><DatiGeneraliDocumento>'
-        + '<TipoDocumento>TD01</TipoDocumento><Divisa>EUR</Divisa>'
+        + `<TipoDocumento>${fatturaIsNc(f) ? 'TD04' : 'TD01'}</TipoDocumento><Divisa>EUR</Divisa>`
         + `<Data>${String(f.data_fattura).slice(0, 10)}</Data>`
         + `<Numero>${fmtNumeroFattura(f)}</Numero>`
         + (fatturaNeedsBollo(f) ? '<DatiBollo><BolloVirtuale>SI</BolloVirtuale><ImportoBollo>2.00</ImportoBollo></DatiBollo>' : '')
         + `<ImportoTotaleDocumento>${importo}</ImportoTotaleDocumento>`
         + causale
-        + '</DatiGeneraliDocumento></DatiGenerali>'
+        + '</DatiGeneraliDocumento>'
+        + (orig ? `<DatiFattureCollegate><IdDocumento>${fmtNumeroFattura(orig)}</IdDocumento><Data>${String(orig.data_fattura).slice(0, 10)}</Data></DatiFattureCollegate>` : '')
+        + '</DatiGenerali>'
         + '<DatiBeniServizi>'
         + '<DettaglioLinee><NumeroLinea>1</NumeroLinea>'
         + `<Descrizione>${xmlText(String(f.descrizione).slice(0, 1000))}</Descrizione>`
@@ -371,8 +382,9 @@ function buildFatturaPdf(st, f) {
 
     // Fattura / numero / data (left) + cessionario (right)
     const top = y;
+    font('bolditalic', fatturaIsNc(f) ? 12 : 14);
+    doc.text(fatturaIsNc(f) ? 'Nota di credito' : 'Fattura', 40, top + 10, { align: 'center' });
     font('bolditalic', 14);
-    doc.text('Fattura', 40, top + 10, { align: 'center' });
     doc.text(`Numero: ${fmtNumeroFattura(f)}`, 40, top + 16, { align: 'center' });
     doc.text(dateIt(f.data_fattura), 40, top + 22, { align: 'center' });
     font('bolditalic', 9); doc.text('Cessionario/committente', 88, top + 7);
@@ -612,7 +624,7 @@ async function setFatturaStatus(id, status, quick) {
     const update = { status, status_updated_at: new Date().toISOString() };
     try {
         if (status === 'accepted') {
-            update.pdf_token = await publishFatturaPdf(f);
+            if (!fatturaIsNc(f) && !f.annullata_da) update.pdf_token = await publishFatturaPdf(f);
         } else if (f.status === 'accepted' && f.pdf_token) {
             await unpublishFatturaPdf(f);
             update.pdf_token = null;
@@ -969,6 +981,98 @@ function openManualFattura() {
     renderFatturaForm();
 }
 
+// ---------- «Add fattura already issued»: fill it from AdE's XML ----------
+// The XML of a fattura or nota di credito made on the AdE site: plain .xml,
+// or the signed .xml.p7m (the XML sits inside it as text). Not the
+// «ricevute» (…_RC_…, …_MC_…, …_NS_…): those carry no fattura data.
+function parseAdeFatturaXml(text) {
+    const m = String(text).match(/<(?:\w+:)?FatturaElettronica[\s>][\s\S]*?<\/(?:\w+:)?FatturaElettronica>/);
+    if (!m) return null;
+    const doc = new DOMParser().parseFromString(m[0], 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) return null;
+    const first = (parent, n) => { const el = parent && parent.getElementsByTagName(n)[0]; return el ? el.textContent.trim() : ''; };
+    const gen = doc.getElementsByTagName('DatiGeneraliDocumento')[0];
+    const cess = doc.getElementsByTagName('CessionarioCommittente')[0];
+    if (!gen || !cess) return null;
+    const sede = cess.getElementsByTagName('Sede')[0];
+    const coll = doc.getElementsByTagName('DatiFattureCollegate')[0];
+    const data = first(gen, 'Data');
+    const lines = [...doc.getElementsByTagName('PrezzoTotale')].reduce((s, el) => s + Number(el.textContent || 0), 0);
+    const denominazione = first(cess, 'Denominazione');
+    return {
+        tipo_documento: first(gen, 'TipoDocumento') === 'TD04' ? 'TD04' : 'TD01',
+        numero: Number((first(gen, 'Numero').match(/\d+/) || [])[0]) || null,
+        numeroTxt: first(gen, 'Numero'),
+        data_fattura: data, anno: Number(data.slice(0, 4)) || null,
+        recipient_cf: (first(cess, 'CodiceFiscale') || first(cess, 'IdCodice')).toUpperCase(),
+        recipient_nome: denominazione ? '' : first(cess, 'Nome'),
+        recipient_cognome: denominazione || first(cess, 'Cognome'),
+        recipient_via: first(sede, 'Indirizzo'), recipient_civico: first(sede, 'NumeroCivico'),
+        recipient_cap: first(sede, 'CAP'), recipient_comune: first(sede, 'Comune'), recipient_provincia: first(sede, 'Provincia'),
+        descrizione: first(doc.getElementsByTagName('DettaglioLinee')[0], 'Descrizione'),
+        importo: Number(first(gen, 'ImportoTotaleDocumento')) || Math.round(lines * 100) / 100,
+        collegata: coll ? { numero: Number((first(coll, 'IdDocumento').match(/\d+/) || [])[0]) || null, data: first(coll, 'Data') } : null
+    };
+}
+// The XML text out of the file. A signed .p7m keeps it inside, sometimes in
+// pieces with a few binary bytes between them (0x04 + length), sometimes the
+// whole .p7m is saved as base64 text.
+function adeXmlText(buf) {
+    let raw = Array.from(new Uint8Array(buf), (b) => String.fromCharCode(b)).join('');
+    if (!/FatturaElettronica/.test(raw)) {
+        const b64 = raw.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+        if (/^[A-Za-z0-9+/=]{100,}$/.test(b64)) { try { raw = atob(b64); } catch (e) { /* not base64 */ } }
+    }
+    const start = raw.search(/<(?:\w+:)?FatturaElettronica[\s>]/);
+    const end = raw.match(/<\/(?:\w+:)?FatturaElettronica>/);
+    if (start < 0 || !end) return raw;
+    const xml = raw.slice(start, raw.lastIndexOf(end[0]) + end[0].length)
+        .replace(/\x04(?:\x82[\s\S]{2}|\x81[\s\S]|[\x00-\x7f])/g, '');
+    return new TextDecoder('utf-8').decode(Uint8Array.from(xml, (c) => c.charCodeAt(0)));
+}
+async function fillFatturaFromXml(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const text = adeXmlText(await file.arrayBuffer());
+    const x = parseAdeFatturaXml(text);
+    if (!x || !x.numero || !x.data_fattura) {
+        const kind = /Ricevuta|Notifica/.test(text) ? 'a «ricevuta» from AdE (it has no fattura data)'
+            : /FileMetadati/.test(text) ? 'the «metadati» file (…_MT_…), not the fattura'
+            : /FatturaElettronica/.test(text) ? 'a fattura the app could not read (send it to the developer)'
+            : 'not a fattura XML';
+        alert(`«${file.name}» is ${kind}.\n\nChoose the fattura's own file: «Fatture e Corrispettivi» → «Consultazione» → «Fatture emesse» → open the fattura → download the file (IT…_xxxxx.xml or .xml.p7m, without _MC_ / _RC_ / _MT_).`);
+        input.value = '';
+        return;
+    }
+    const A = window.Anagrafica;
+    const d = fatturaDraft;
+    readFatturaForm();
+    Object.assign(d, {
+        tipo_documento: x.tipo_documento, numero: x.numero, anno: x.anno, data_fattura: x.data_fattura, importo: x.importo,
+        descrizione: x.descrizione || d.descrizione,
+        recipient_cf: x.recipient_cf, recipient_nome: A.titleCase(x.recipient_nome), recipient_cognome: A.titleCase(x.recipient_cognome),
+        recipient_via: x.recipient_via, recipient_civico: x.recipient_civico, recipient_cap: x.recipient_cap,
+        recipient_comune: x.recipient_comune, recipient_provincia: x.recipient_provincia,
+        transaction_id: null, xmlImported: file.name
+    });
+    // A nota di credito: linked to the fattura it cancels, when it's in the register
+    d.collegata_id = null;
+    if (x.tipo_documento === 'TD04' && x.collegata && x.collegata.numero) {
+        const y = Number(String(x.collegata.data).slice(0, 4)) || x.anno;
+        const o = fattureList.find((f) => !fatturaIsNc(f) && f.anno === y && f.numero === x.collegata.numero);
+        d.collegata_id = o ? o.id : null;
+    }
+    // The student, from the codice fiscale (own or parent's)
+    if (!d.student_id && typeof suggestStudentForFattura === 'function') {
+        const s = suggestStudentForFattura({ recipient_cf: x.recipient_cf });
+        if (s) {
+            d.student_id = s.id;
+            d.recipient_type = String(s.codiceFiscale || '').toUpperCase() === x.recipient_cf ? 'student' : 'parent';
+        }
+    }
+    renderFatturaForm();
+}
+
 // Edit a fattura added by hand / imported (source 'manual'): it's only a
 // register entry (nothing was sent to AdE from here), so every field —
 // date, importo, number, intestatario — can be fixed at any time.
@@ -1009,7 +1113,19 @@ function renderFatturaForm() {
             </select></div>` : ''}`
         : '';
     const minorNote = d.minor ? `<div style="font-size:0.8em; color:var(--warning); font-weight:600; margin:-4px 0 10px;">Student under 18: the fattura goes to the parent.</div>` : '';
+    const docType = manualLike && fatturaNcReady() ? `<div class="field"><label>Document type</label>
+            <select id="fmDocType">
+                <option value="TD01" ${d.tipo_documento !== 'TD04' ? 'selected' : ''}>Fattura (TD01)</option>
+                <option value="TD04" ${d.tipo_documento === 'TD04' ? 'selected' : ''}>Nota di credito (TD04)</option>
+            </select></div>` : '';
+    const fromXml = d.mode === 'manual' && !d.legacy ? `<div class="field"><label>Fill from AdE XML (optional)</label>
+            <input type="file" accept=".xml,.p7m,application/xml,text/xml" onchange="fillFatturaFromXml(this)">
+            <div style="font-size:0.78em; margin-top:4px; ${d.xmlImported ? 'color:var(--success); font-weight:600;' : 'color:var(--ink-faint);'}">${d.xmlImported
+                ? `✓ Filled from ${escapeHtml(d.xmlImported)}${d.tipo_documento === 'TD04' ? ' (nota di credito)' : ''}: check and save.`
+                : 'The XML of a fattura made on the AdE site: everything below is filled in for you.'}</div></div>` : '';
     body.innerHTML = `
+        ${fromXml}
+        ${docType}
         ${studentOptions}
         <div style="display:flex; gap:10px;">
             <div class="field" style="flex:1;"><label>Number</label>
@@ -1086,6 +1202,9 @@ function readFatturaForm() {
     d.importo = Number(val('fmImporto'));
     const txEl = document.getElementById('fmTx');
     if (txEl) d.transaction_id = Number(txEl.value) || null;
+    const typeEl = document.getElementById('fmDocType');
+    if (typeEl) d.tipo_documento = typeEl.value;
+    if (d.tipo_documento === 'TD04') d.transaction_id = null; // a nota di credito is not a payment's fattura
     return d;
 }
 function updateBolloNote() {
@@ -1183,7 +1302,7 @@ async function saveFatturaForm() {
     const manual = d.mode === 'manual' || d.mode === 'editManual';
     const { problems, warnings } = fatturaDataChecks(d, { manual });
     if (d.mode !== 'correct') {
-        if (fattureList.some((f) => f.id !== d.id && f.anno === d.anno && f.numero === d.numero)) problems.push(`Number ${d.numero}/${String(d.anno).slice(-2)} is already used.`);
+        if (fattureList.some((f) => f.id !== d.id && f.anno === d.anno && f.numero === d.numero && fatturaTipo(f) === fatturaTipo(d))) problems.push(`Number ${d.numero}/${String(d.anno).slice(-2)} is already used.`);
         const last = lastFatturaDate(d.anno);
         if (!manual && last && d.data_fattura < last) problems.push(`The date can't be before the year's last fattura (${dateIt(last)}): numbers and dates must go in order.`);
     }
@@ -1203,6 +1322,8 @@ async function saveFatturaForm() {
         importo: d.importo, descrizione: d.descrizione
     };
     if (d.mode === 'create' && d.extra_transaction_ids && d.extra_transaction_ids.length) row.extra_transaction_ids = d.extra_transaction_ids;
+    if (manual && d.tipo_documento) row.tipo_documento = d.tipo_documento;
+    if (d.mode === 'manual' && d.collegata_id) row.collegata_id = d.collegata_id;
     fatturaSaveInProgress = true;
     const btn = document.getElementById('fmSaveBtn');
     if (btn) btn.disabled = true;
@@ -1210,6 +1331,11 @@ async function saveFatturaForm() {
         if (d.mode === 'editManual') {
             const f = fattureList.find((x) => x.id === d.id);
             const update = { ...row, source: 'manual' };
+            // now a nota di credito: the student must not see it as a fattura
+            if (update.tipo_documento === 'TD04' && f.pdf_token) {
+                try { await unpublishFatturaPdf(f); } catch (e) { console.error('Could not remove published PDF:', e); }
+                update.pdf_token = null;
+            }
             const { error } = await supabaseClient.from('fatture').update(update).eq('id', d.id);
             if (error) throw error;
             Object.assign(f, update);
@@ -1251,7 +1377,7 @@ async function saveFatturaForm() {
                 const token = `${d.legacy.publicToken}.pdf`;
                 await supabaseClient.from('fatture').update({ pdf_token: token }).eq('id', inserted.id);
                 inserted.pdf_token = token;
-            } else if (inserted.student_id) {
+            } else if (inserted.student_id && !fatturaIsNc(inserted)) {
                 try {
                     const token = await publishFatturaPdf(inserted);
                     if (token) {
@@ -1326,13 +1452,17 @@ function openFatturaView(id) {
     if (!f) return;
     fatturaDraft = null;
     const s = f.student_id ? students.find((x) => x.id === f.student_id) : null;
-    openFatturaModalShell(`Fattura ${fmtNumeroFattura(f)}`, `${dateIt(f.data_fattura)} · €${moneyIt(f.importo)}${f.source === 'manual' ? ' · added by hand' : ''}`);
+    const ncOrig = fatturaIsNc(f) ? fattureList.find((x) => x.id === f.collegata_id) : null;
+    const ncBy = fatturaCancelledBy(f);
+    openFatturaModalShell(`${fatturaIsNc(f) ? 'Nota di credito' : 'Fattura'} ${fmtNumeroFattura(f)}`, `${dateIt(f.data_fattura)} · ${fatturaIsNc(f) ? '−' : ''}€${moneyIt(f.importo)}${f.source === 'manual' ? ' · added by hand' : ''}`);
     const row = (label, value) => `<div class="details-row" style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--border-soft); font-size:0.87em;"><span style="color:var(--ink-faint);">${label}</span><span style="font-weight:600; text-align:right;">${escapeHtml(value || '—')}</span></div>`;
     const statusButtons = Object.keys(FATTURA_STATUS).map((k) => `
         <button class="btn btn-sm ${f.status === k ? 'btn-primary' : 'btn-outline'}" title="${escapeHtml(FATTURA_STATUS[k].hint)}" onclick="setFatturaStatus(${f.id}, '${k}')">${FATTURA_STATUS[k].label}</button>`).join('');
-    const isLatest = nextFatturaNumber(f.anno) === f.numero + 1;
+    const isLatest = nextFatturaNumber(f.anno, fatturaTipo(f)) === f.numero + 1;
     document.getElementById('fatturaModalBody').innerHTML = `
         ${row('Issued to', `${f.recipient_cognome}, ${f.recipient_nome}${f.recipient_type === 'parent' ? ' (parent)' : ''}`)}
+        ${ncOrig ? row('Cancels', `fattura ${fmtNumeroFattura(ncOrig)} of ${dateIt(ncOrig.data_fattura)}`) : ''}
+        ${ncBy ? row('Cancelled by', `nota di credito ${fmtNumeroFattura(ncBy)} of ${dateIt(ncBy.data_fattura)}`) : ''}
         ${row('Codice fiscale', f.recipient_cf)}
         ${row('Address', [f.recipient_via, f.recipient_civico].filter(Boolean).join(' ') + (f.recipient_comune ? ` - ${f.recipient_cap || ''} ${f.recipient_comune} (${f.recipient_provincia || ''})` : ''))}
         ${row('Description', f.descrizione)}
@@ -1361,8 +1491,10 @@ function openFatturaView(id) {
         </div>`;
     document.getElementById('fatturaModalFooter').innerHTML = `
         ${f.status === 'created' || f.source === 'manual' ? `<button class="btn btn-danger" onclick="deleteFattura(${f.id})" title="Delete from the register">${icon('trash', 15)}</button>` : ''}
+        ${fatturaCanCancel(f) ? `<button class="btn btn-danger" title="Wrong name or amount: cancel it with a nota di credito, then make a new fattura" onclick="createNotaDiCredito(${f.id})">Cancel with nota di credito</button>` : ''}
         <div style="display:flex; gap:8px; margin-left:auto; flex-wrap:wrap;">
             ${f.status === 'rejected' ? `<button class="btn btn-outline" onclick="startFatturaCorrection(${f.id})">Correct</button>` : ''}
+            ${f.annullata_da && f.orig_transaction_id && !fatturaForTransaction(f.orig_transaction_id) ? `<button class="btn btn-outline" onclick="closeFatturaModal(); openFatturaFromTransaction(${f.orig_transaction_id});">Make the new fattura</button>` : ''}
             ${f.source === 'manual' ? `<button class="btn btn-outline" onclick="startManualFatturaEdit(${f.id})">${iconLabel('edit', 'Edit', 14)}</button>` : ''}
             ${f.xml ? `<button class="btn btn-outline" onclick="downloadFatturaXml(${f.id})">${iconLabel('download', 'XML', 14)}</button>` : ''}
             <button class="btn btn-primary" onclick="openFatturaPdf(${f.id})">${iconLabel('file-text', 'PDF', 14)}</button>
@@ -1372,13 +1504,17 @@ function openFatturaView(id) {
 async function deleteFattura(id) {
     const f = fattureList.find((x) => x.id === id);
     if (!f || (f.status !== 'created' && f.source !== 'manual')) return;
-    const isLatest = nextFatturaNumber(f.anno) === f.numero + 1;
-    const msg = f.source === 'manual'
+    const isLatest = nextFatturaNumber(f.anno, fatturaTipo(f)) === f.numero + 1;
+    const msg = fatturaIsNc(f)
+        ? `Delete nota di credito ${fmtNumeroFattura(f)}?\n\nOnly if you have NOT uploaded it to AdE. The fattura it cancels becomes valid again.`
+            + (isLatest ? '' : `\n\nCareful: it is not the year's last number, so number ${f.numero} will stay empty in the numbering.`)
+        : f.source === 'manual'
         ? `Remove fattura ${fmtNumeroFattura(f)} from the register?\n\nNothing changes on AdE.`
             + (f.legacy_payment_id ? '\nIt goes back to the «to import» list, so you can import it again with the right data.' : '')
         : `Delete fattura ${fmtNumeroFattura(f)}?\n\nOnly if you have NOT uploaded it to AdE.`
             + (isLatest ? '' : `\n\nCareful: it is not the year's last fattura, so number ${f.numero} will stay empty in the numbering.`);
     if (!confirm(msg)) return;
+    if (fatturaIsNc(f) && !(await restoreCancelledFattura(f))) return;
     // Its own published PDF goes too — but not an imported one's, which is
     // still the old entry's file (shown again once re-imported).
     if (f.pdf_token && !f.legacy_payment_id) {
@@ -1389,6 +1525,111 @@ async function deleteFattura(id) {
     fattureList = fattureList.filter((x) => x.id !== id);
     closeFatturaModal();
     refreshFattureViews();
+}
+
+// ---------- nota di credito (TD04, nota_credito.sql) ----------
+// An accepted fattura can't change at AdE: a wrong name or amount is fixed
+// with a nota di credito for the full amount, then a new fattura for the same
+// payment. Only for a fattura made here for a payment; one added by hand was
+// made outside the app, so its nota di credito is made on the AdE site.
+function fatturaNcReady() { return fattureList.some((f) => 'tipo_documento' in f); }
+function fatturaCanCancel(f) {
+    return !!f && fatturaNcReady() && !fatturaIsNc(f) && !f.annullata_da && f.status === 'accepted' && f.source !== 'manual' && !!f.transaction_id;
+}
+let ncSaveInProgress = false;
+async function createNotaDiCredito(id) {
+    const f = fattureList.find((x) => x.id === id);
+    if (!fatturaCanCancel(f) || ncSaveInProgress) return;
+    const settingsProblems = fatturaSettingsProblems(fatturaSettings);
+    if (settingsProblems.length) { alert('First complete the fattura Settings:\n- ' + settingsProblems.join('\n- ')); return; }
+    const today = formatLocalDate(new Date());
+    const anno = Number(today.slice(0, 4));
+    const numero = nextFatturaNumber(anno, 'TD04');
+    const nr = `${numero}/${String(anno).slice(-2)}`;
+    if (!confirm(`Cancel fattura ${fmtNumeroFattura(f)} (€${moneyIt(f.importo)}, ${f.recipient_cognome} ${f.recipient_nome}) with a nota di credito?\n\n`
+        + `The app makes nota di credito ${nr}, dated today, for the full amount, and downloads its XML: upload it to AdE like a fattura.\n`
+        + 'Then you make the new correct fattura for the same payment.')) return;
+    const row = {
+        anno, numero, data_fattura: today, student_id: f.student_id, transaction_id: null, source: 'app',
+        recipient_type: f.recipient_type, recipient_nome: f.recipient_nome, recipient_cognome: f.recipient_cognome, recipient_cf: f.recipient_cf,
+        recipient_via: f.recipient_via, recipient_civico: f.recipient_civico, recipient_cap: f.recipient_cap,
+        recipient_comune: f.recipient_comune, recipient_provincia: f.recipient_provincia,
+        importo: f.importo,
+        descrizione: `Storno totale della fattura n. ${fmtNumeroFattura(f)} del ${String(f.data_fattura).slice(0, 10).split('-').reverse().join('/')}`,
+        tipo_documento: 'TD04', collegata_id: f.id, revision: 0, status: 'created', status_updated_at: new Date().toISOString()
+    };
+    row.xml = buildFatturaXml(fatturaSettings, row);
+    row.file_name = fatturaFileName(fatturaSettings, row);
+    ncSaveInProgress = true;
+    try {
+        const { data: nc, error } = await supabaseClient.from('fatture').insert(row).select().single();
+        if (error) throw error;
+        // Release the payment(s) so the new fattura can take them; the student
+        // stops seeing the cancelled fattura (its published PDF goes).
+        const oldToken = f.pdf_token;
+        const release = {
+            annullata_da: nc.id, orig_transaction_id: f.transaction_id, orig_extra_transaction_ids: fatturaExtraIds(f),
+            transaction_id: null, extra_transaction_ids: [], pdf_token: null
+        };
+        const { error: e2 } = await supabaseClient.from('fatture').update(release).eq('id', f.id);
+        if (e2) {
+            await supabaseClient.from('fatture').update({ deleted_at: new Date().toISOString() }).eq('id', nc.id);
+            throw e2;
+        }
+        if (oldToken) { try { await unpublishFatturaPdf({ pdf_token: oldToken }); } catch (e) { console.error('Could not remove published PDF:', e); } }
+        fattureList.unshift(nc);
+        Object.assign(f, release);
+        downloadFatturaXml(nc.id);   // like every fattura: its XML downloads at once
+        refreshFattureViews();
+        openNcNextStep(f, nc);
+    } catch (e) {
+        const msg = String(e?.message || e);
+        alert(/duplicate|unique/i.test(msg) ? 'This number is already used. Refresh the page and try again.' : 'Could not make the nota di credito: ' + msg);
+    } finally {
+        ncSaveInProgress = false;
+    }
+}
+function openNcNextStep(f, nc) {
+    const txId = f.orig_transaction_id;
+    openFatturaModalShell(`Nota di credito ${fmtNumeroFattura(nc)} made`, `Fattura ${fmtNumeroFattura(f)} is cancelled`);
+    document.getElementById('fatturaModalBody').innerHTML = `
+        <div style="font-size:0.88em; line-height:1.6;">
+            <p style="margin-top:0;">✅ Its XML was downloaded: <b>upload it to AdE</b> like any fattura, then mark it <b>Uploaded to AdE</b>. (Or wait and upload it together with the new fattura: «All XML (ZIP)» in the yellow box of the Fatture tab.)</p>
+            <p>The student no longer sees fattura ${fmtNumeroFattura(f)}. They will see the new one once it is accepted.</p>
+            <div style="padding:10px 12px; border-radius:var(--radius-sm); background:var(--warning-soft); border-left:4px solid var(--warning, #d97706);">
+                <b>Now the new correct fattura, for the same payment:</b>
+                <ol style="margin:6px 0 0 18px; padding:0;">
+                    <li><b>Wrong name or codice fiscale?</b> First correct it in the student's details (or the parent's).</li>
+                    <li><b>Wrong amount?</b> First correct the amount of the payment in the student's payments (the payment is no longer locked).</li>
+                    <li>Then press <b>Make the new fattura</b> (here, or later on the payment / in «To do»).</li>
+                </ol>
+            </div>
+        </div>`;
+    document.getElementById('fatturaModalFooter').innerHTML = `
+        <div style="display:flex; gap:8px; margin-left:auto; flex-wrap:wrap;">
+            <button class="btn btn-outline" onclick="closeFatturaModal()">Later</button>
+            ${txId ? `<button class="btn btn-primary" onclick="closeFatturaModal(); openFatturaFromTransaction(${txId});">Make the new fattura</button>` : ''}
+        </div>`;
+}
+// Deleting a nota di credito that was never uploaded: the fattura it
+// cancelled becomes valid again, with its payment(s) and published PDF.
+async function restoreCancelledFattura(nc) {
+    const f = fattureList.find((x) => x.id === nc.collegata_id);
+    if (!f) return true;
+    const txId = f.orig_transaction_id;
+    const taken = txId && fatturaForTransaction(txId);
+    if (taken) { alert(`The payment already has the new fattura ${fmtNumeroFattura(taken)}. Delete that one first (only if not uploaded).`); return false; }
+    const back = {
+        annullata_da: null, transaction_id: txId || null, extra_transaction_ids: f.orig_extra_transaction_ids || [],
+        orig_transaction_id: null, orig_extra_transaction_ids: []
+    };
+    if (f.status === 'accepted') {
+        try { back.pdf_token = await publishFatturaPdf({ ...f, ...back }); } catch (e) { console.error('Could not publish the PDF again:', e); }
+    }
+    const { error } = await supabaseClient.from('fatture').update(back).eq('id', f.id);
+    if (error) { alert('Could not restore fattura ' + fmtNumeroFattura(f) + ': ' + error.message); return false; }
+    Object.assign(f, back);
+    return true;
 }
 
 // ---------- settings ----------
@@ -1409,7 +1650,10 @@ function openFatturaSettings() {
             <div class="field" style="flex:1;"><label>Partita IVA</label><input id="fsPartitaIva" maxlength="11" value="${v(st.partita_iva)}"></div>
             <div class="field" style="flex:1;"><label>Codice fiscale</label><input id="fsCodiceFiscale" maxlength="16" style="text-transform:uppercase;" value="${v(st.codice_fiscale)}"></div>
         </div>
-        <div class="field"><label>Tax regime («Regime fiscale»)</label><select id="fsRegime">${opt(REGIME_LABELS, st.regime_fiscale || 'RF19')}</select></div>
+        <div style="display:flex; gap:10px;">
+            <div class="field" style="flex:2;"><label>Tax regime («Regime fiscale»)</label><select id="fsRegime">${opt(REGIME_LABELS, st.regime_fiscale || 'RF19')}</select></div>
+            <div class="field" style="flex:1;"><label>ATECO code</label><input id="fsAteco" placeholder="85.52.01" value="${v(st.codice_ateco)}" ${'codice_ateco' in st ? '' : 'disabled title="Run fattura_settings_ateco.sql in Supabase first"'}></div>
+        </div>
         <div style="display:flex; gap:10px;">
             <div class="field" style="flex:3;"><label>Street («Via»)</label><input id="fsIndirizzo" value="${v(st.indirizzo)}"></div>
             <div class="field" style="flex:1;"><label>House no.</label><input id="fsCivico" value="${v(st.numero_civico)}"></div>
@@ -1466,6 +1710,8 @@ async function saveFatturaSettings() {
         updated_at: new Date().toISOString()
     };
     if (fatturaTodoReady) st.invoice_from = val('fsInvoiceFrom') || FATTURE_FROM_DEFAULT;
+    // only once fattura_settings_ateco.sql has added the column (else the save would fail)
+    if (fatturaSettings && 'codice_ateco' in fatturaSettings) st.codice_ateco = val('fsAteco') || null;
     const problems = fatturaSettingsProblems(st);
     if (problems.length && !confirm('Missing or not valid:\n- ' + problems.join('\n- ') + "\n\nSave anyway? (You can't create fatture until they are correct.)")) return;
     const { error } = await supabaseClient.from('fattura_settings').upsert(st, { onConflict: 'id' });
@@ -1478,6 +1724,7 @@ async function saveFatturaSettings() {
 // ---------- register (Fatture tab) ----------
 function refreshFattureViews() {
     renderFattureTab();
+    if (typeof renderPaymentHistory === 'function') renderPaymentHistory(); // Collections badges + totals
     if (typeof currentViewingStudentId !== 'undefined' && currentViewingStudentId) {
         const s = students.find((x) => x.id === currentViewingStudentId);
         if (s) renderStudentViewModal(s);
@@ -1805,9 +2052,9 @@ function xmlZipProblems(f) {
     if (tag('Data') !== date) out.push(`date inside the XML is ${tag('Data') || 'missing'}`);
     if (tag('ProgressivoInvio') !== fatturaProgressivo(f)) out.push(`ProgressivoInvio inside the XML is ${tag('ProgressivoInvio') || 'missing'}`);
     if (money2(tag('ImportoTotaleDocumento')) !== money2(f.importo)) out.push(`amount inside the XML is ${tag('ImportoTotaleDocumento') || 'missing'}`);
-    const year = fattureList.filter((x) => x.anno === f.anno && x.id !== f.id);
+    const year = fattureList.filter((x) => x.anno === f.anno && x.id !== f.id && fatturaTipo(x) === fatturaTipo(f));
     if (year.some((x) => x.numero === f.numero)) out.push(`number ${f.numero}/${yy} is used twice`);
-    const start = fatturaSettings && Number(fatturaSettings.start_year) === f.anno ? Number(fatturaSettings.start_number) || 1 : 1;
+    const start = fatturaTipo(f) === 'TD01' && fatturaSettings && Number(fatturaSettings.start_year) === f.anno ? Number(fatturaSettings.start_number) || 1 : 1;
     const prev = year.find((x) => x.numero === f.numero - 1);
     const next = year.find((x) => x.numero === f.numero + 1);
     if (!prev && f.numero > start) out.push(`number ${f.numero - 1}/${yy} is missing`);
@@ -1885,8 +2132,8 @@ function renderFattureTab() {
             const s = f.student_id ? students.find((x) => x.id === f.student_id) : null;
             return [f.recipient_nome, f.recipient_cognome, f.recipient_cf, s?.name, fmtNumeroFattura(f)].join(' ').toLowerCase().includes(term);
         })
-        .sort((a, b) => b.numero - a.numero);
-    const total = ofYear.reduce((sum, f) => sum + Number(f.importo || 0), 0);
+        .sort((a, b) => String(b.data_fattura).localeCompare(String(a.data_fattura)) || b.numero - a.numero);
+    const total = ofYear.filter((f) => f.status !== 'rejected').reduce((sum, f) => sum + fatturaSign(f) * Number(f.importo || 0), 0);
     const count = (k) => ofYear.filter((f) => f.status === k).length;
     const settingsWarn = fatturaSettingsProblems(fatturaSettings).length
         ? `<div class="card" style="padding:12px 16px; margin-bottom:14px; border-color:#fbdca0; font-size:0.86em;">${icon('warning', 14)} Complete the <a href="#" onclick="openFatturaSettings(); return false;">fattura Settings</a> before creating the first fattura.</div>`
@@ -1934,17 +2181,18 @@ function renderFattureTab() {
             const st = FATTURA_STATUS[f.status] || FATTURA_STATUS.created;
             return `
             <div class="student-row" style="cursor:pointer;" onclick="openFatturaView(${f.id})">
-                <div style="min-width:64px; font-weight:800;">${fmtNumeroFattura(f)}</div>
+                <div style="min-width:64px; font-weight:800;">${fmtNumeroFattura(f)}${fatturaIsNc(f) ? '<div style="font-size:0.7em; font-weight:700; color:var(--danger);">NOTA DI CREDITO</div>' : ''}</div>
                 <div class="student-info" style="flex:1 1 220px;">
                     <div>
                         <div style="font-weight:700;">${escapeHtml(`${f.recipient_cognome}, ${f.recipient_nome}`)}${f.recipient_type === 'parent' ? ' <span style="font-weight:400; color:var(--ink-faint); font-size:0.85em;">(parent)</span>' : ''}</div>
-                        <div class="student-meta">${dateIt(f.data_fattura)} · ${escapeHtml(f.recipient_cf)}${s && f.recipient_type === 'parent' ? ' · student: ' + escapeHtml(s.name) : ''}${f.source === 'manual' ? ' · added by hand' : ''}</div>
+                        <div class="student-meta">${dateIt(f.data_fattura)} · ${escapeHtml(f.recipient_cf)}${s && f.recipient_type === 'parent' ? ' · student: ' + escapeHtml(s.name) : ''}${f.source === 'manual' ? ' · added by hand' : ''}${fatturaIsNc(f) && fattureList.some((x) => x.id === f.collegata_id) ? ` · cancels ${escapeHtml(fmtNumeroFattura(fattureList.find((x) => x.id === f.collegata_id)))}` : ''}</div>
                     </div>
                 </div>
-                <div style="font-weight:800;">€${moneyIt(f.importo)}</div>
+                <div style="font-weight:800;${fatturaIsNc(f) ? ' color:var(--danger);' : ''}">${fatturaIsNc(f) ? '−' : ''}€${moneyIt(f.importo)}</div>
                 <button type="button" class="btn btn-primary btn-sm" title="Open the PDF" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">${iconLabel('file-text', 'PDF', 13)}</button>
                 ${f.status === 'created' || f.status === 'uploaded'
                     ? `<button type="button" class="btn btn-success btn-sm" title="XML uploaded to AdE: mark Accepted" onclick="event.stopPropagation(); setFatturaStatus(${f.id}, 'accepted', true)">${iconLabel('check-circle', 'Uploaded to AdE', 13)}</button>`
+                    : f.annullata_da ? `<span class="badge badge-neutral" title="Cancelled by a nota di credito">Cancelled · NC ${escapeHtml(fmtNumeroFattura(fatturaCancelledBy(f) || { numero: '?', anno: f.anno }))}</span>`
                     : `<span class="badge ${st.badge}" title="${escapeHtml(st.hint)}">${st.label}</span>`}
             </div>`;
         }).join('') : `<div class="placeholder-card">${icon('file-text', 24)}<h3>No fatture</h3></div>`}`;
@@ -1958,10 +2206,10 @@ function exportFattureCsv() {
     const lines = rows.map((f) => {
         const s = f.student_id ? students.find((x) => x.id === f.student_id) : null;
         return [fmtNumeroFattura(f), dateIt(f.data_fattura), f.recipient_cognome, f.recipient_nome, f.recipient_cf,
-            f.recipient_type === 'parent' ? 'Parent' : 'Student', s ? s.name : '', f.descrizione, moneyIt(f.importo),
-            (FATTURA_STATUS[f.status] || {}).label || f.status, f.source === 'manual' ? 'Added by hand' : 'App'].map(q).join(';');
+            f.recipient_type === 'parent' ? 'Parent' : 'Student', s ? s.name : '', f.descrizione, moneyIt((fatturaIsNc(f) ? -1 : 1) * f.importo),
+            ((FATTURA_STATUS[f.status] || {}).label || f.status) + (f.annullata_da ? ' (cancelled)' : ''), fatturaIsNc(f) ? 'Nota di credito' : f.source === 'manual' ? 'Added by hand' : 'App'].map(q).join(';');
     });
-    const total = rows.reduce((sum, f) => sum + Number(f.importo || 0), 0);
+    const total = rows.filter((f) => f.status !== 'rejected').reduce((sum, f) => sum + fatturaSign(f) * Number(f.importo || 0), 0);
     lines.push(['', '', '', '', '', '', '', 'TOTAL', moneyIt(total), '', ''].map(q).join(';'));
     downloadBlob(new Blob(['﻿' + [header.map(q).join(';'), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' }), `fatture_${chosenYear}.csv`);
 }
@@ -1994,10 +2242,10 @@ function renderStudentFatture(s) {
             const covered = fatturaPayments(f);
             const paid = covered.length === 1 && String(covered[0].created_at).slice(0, 10) === String(f.data_fattura).slice(0, 10) ? [] : covered;
             return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em; cursor:pointer;" onclick="openFatturaView(${f.id})">
-                <span><strong>${fmtNumeroFattura(f)}</strong> · ${dateIt(f.data_fattura)} · €${moneyIt(f.importo)}${paid.length
+                <span><strong>${fmtNumeroFattura(f)}</strong>${fatturaIsNc(f) ? ' <span style="color:var(--danger);">nota di credito</span>' : ''} · ${dateIt(f.data_fattura)} · ${fatturaIsNc(f) ? '−' : ''}€${moneyIt(f.importo)}${paid.length
                     ? `<div style="font-size:0.85em; color:var(--ink-faint);">paid on ${escapeHtml(paid.map((x) => `${formatShortDate(x.created_at)} · €${String(moneyIt(x.amount)).replace(/,00$/, '')}`).join(' + '))}</div>` : ''}</span>
                 <span style="display:flex; gap:6px; align-items:center;">
-                    <span class="badge ${st.badge}">${st.label}</span>
+                    ${f.annullata_da ? '<span class="badge badge-neutral">Cancelled</span>' : `<span class="badge ${st.badge}">${st.label}</span>`}
                     <button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">PDF</button>
                 </span>
             </div>`;

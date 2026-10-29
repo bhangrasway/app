@@ -42,6 +42,7 @@ async function loadTaxData() {
         taxCredits = c.data || [];
         taxF24 = f.data || [];
         taxMissing = false;
+        if (typeof loadJobData === 'function') await loadJobData();
     } catch (e) {
         console.error('Tasse not available (has tax_tab.sql been run?):', e);
         taxMissing = true;
@@ -63,7 +64,8 @@ function taxAliquotaFor(anno) {
 // not-rejected fattura dated in that year.
 function taxRicaviFromFatture(anno) {
     if (typeof fattureList === 'undefined') return 0;
-    return r2(fattureList.filter((f) => f.anno === anno && f.status !== 'rejected').reduce((s, f) => s + Number(f.importo || 0), 0));
+    // a nota di credito counts as minus (fatturaSign)
+    return r2(fattureList.filter((f) => f.anno === anno && f.status !== 'rejected').reduce((s, f) => s + fatturaSign(f) * Number(f.importo || 0), 0));
 }
 // All F24 lines (from the record) with their F24's date.
 function taxAllLines() {
@@ -209,17 +211,21 @@ function renderTaxTab() {
         el.innerHTML = `<div class="placeholder-card">${icon('warning', 26)}<h3>Taxes not set up yet</h3><div style="color:var(--ink-soft); font-size:0.88em;">Run tax_tab.sql in Supabase, then refresh the page.</div></div>`;
         return;
     }
+    // «Job income (CU)» / «Redditi checklist» live in jobincome.js
+    const view = typeof taxCurrentView === 'function' ? taxCurrentView() : 'studio';
+    if (view === 'job') { renderJobIncome(el); return; }
+    if (view === 'check') { renderRedditiChecklist(el); return; }
     const nowY = new Date().getFullYear();
     const sel = Number(document.getElementById('taxYearSelect')?.value) || nowY; // default: the running year
     const fy = taxYearFigures(sel);
     const credits = taxCredits.map((c) => ({ ...c, used: taxCreditUsed(c.id) }));
     const creditLeft = r2(credits.reduce((s, c) => s + Number(c.importo) - c.used, 0));
     const years = [...new Set([nowY - 1, nowY, ...Object.keys(taxYears).map(Number)])].sort((a, b) => b - a);
-    const deadlines = [...taxDeadlinesFor(nowY), ...taxDeadlinesFor(nowY + 1)];
+    const deadlines = [...taxDeadlinesFor(nowY), ...taxDeadlinesFor(nowY + 1), ...bolloDeadlines()];
     // Show only what needs attention now: anything past and not done + the next upcoming one.
     // Later deadlines are estimates that change with every fattura: folded away.
     const todayS = formatLocalDate(new Date());
-    const isDone = (d) => d.lines === null ? !!taxYears[Number(d.key.slice(0, 4)) - 1]?.dichiarazione_protocollo : (!d.lines.length ? d.date < todayS : !!taxF24ForDeadline(d.key));
+    const isDone = (d) => d.bollo ? !!d.bollo.paid : d.lines === null ? !!taxYears[Number(d.key.slice(0, 4)) - 1]?.dichiarazione_protocollo : (!d.lines.length ? d.date < todayS : !!taxF24ForDeadline(d.key));
     const pastOrDone = deadlines.filter((d) => d.date < todayS || isDone(d));
     const upcoming = deadlines.filter((d) => !(d.date < todayS || isDone(d))).sort((a, b) => a.date.localeCompare(b.date));
     const nowList = [...pastOrDone.filter((d) => !isDone(d)), ...upcoming.slice(0, 1)];
@@ -242,15 +248,14 @@ function renderTaxTab() {
     const summary = `<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px;">
         ${overdueCount
             ? tile('Needs attention', `${overdueCount} deadline${overdueCount > 1 ? 's' : ''}`, 'past and not marked as done — see below', 'var(--danger)')
-            : tile('Next deadline', nextD ? nextD.title.split(' — ')[0] : '—', nextD ? (nextDraft ? `to pay: <b>${eur(nextDraft.totale)}</b>${nextD.date > formatLocalDate(new Date(Date.now() + 60 * 86400000)) ? ' · estimate, nothing to do now' : ''}` : 'send the Modello Redditi') : 'nothing planned')}
+            : tile('Next deadline', nextD ? nextD.title.split(' — ')[0] : '—', nextD ? (nextD.bollo ? `imposta di bollo: <b>${eur(nextD.bollo.amount)}</b>` : nextDraft ? `to pay: <b>${eur(nextDraft.totale)}</b>${nextD.date > formatLocalDate(new Date(Date.now() + 60 * 86400000)) ? ' · estimate, nothing to do now' : ''}` : 'send the Modello Redditi') : 'nothing planned')}
         ${tile('Credit left', eur(creditLeft), 'used automatically in your F24s', 'var(--success)')}
         ${tile('Your tax rate', `${rateNow}%`, rateNow < Number(st.aliquota_ordinaria || 15) ? `start-up rate until ${lastAgev}, then ${st.aliquota_ordinaria || 15}%` : 'imposta sostitutiva')}
     </div>`;
 
-    el.innerHTML = `
+    el.innerHTML = `${typeof taxViewPills === 'function' ? taxViewPills() + taxAlertsHtml() : ''}
         ${summary}
 
-        ${bolloCardHtml()}
 
         <div class="section-label">Next deadline (prossima scadenza)</div>
         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">${nowList.map((d) => taxDeadlineCardHtml(d, d.date <= soonS)).join('') || '<div class="card" style="padding:12px 16px; font-size:0.88em;">Nothing to do now.</div>'}</div>
@@ -323,7 +328,23 @@ function taxDeadlineWindow(d) {
     const to = may20 ? `${y}-06-30` : d.date;
     return { from, to, text: `${fmt(from)} – ${fmt(to)}` };
 }
+// Card colour once its time has come: green = the window is open, red = the
+// last 7 days, past the deadline, or (Modello Redditi) past the recommended
+// 20/05–30/06 window. Not started yet or done: no colour.
+const TAX_TONE = {
+    green: 'background:var(--success-soft); border-left:5px solid var(--success);',
+    red: 'background:var(--danger-soft); border-left:5px solid var(--danger);'
+};
+// «30/06/2027 — F24: …» → the date as a big headline, the rest under it
+function taxDeadlineHeadHtml(d, badge) {
+    const [date, ...rest] = d.title.split(' — ');
+    return `<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+            <div><div style="font-size:1.35em; font-weight:800; line-height:1.2;">${date}</div><div style="font-weight:700; font-size:0.95em; margin-top:2px;">${rest.join(' — ')}</div></div>
+            ${badge}
+        </div>`;
+}
 function taxDeadlineCardHtml(d, expanded) {
+    if (d.bollo) return bolloDeadlineCardHtml(d.bollo);
     const today = formatLocalDate(new Date());
     const win = taxDeadlineWindow(d);
     const notYet = today < win.from;
@@ -333,16 +354,28 @@ function taxDeadlineCardHtml(d, expanded) {
     const done = taxF24ForDeadline(d.key);
     const overdue = !done && d.date < today;
     if (d.lines === null) {
-        // Modello Redditi deadline (no F24)
+        // Modello Redditi deadline (no F24): recommended 20/05–30/06, legal deadline 31/10
         const sent = taxYears[Number(d.key.slice(0, 4)) - 1]?.dichiarazione_protocollo;
-        return `<div class="card" style="padding:12px 16px; font-size:0.88em; ${sent ? 'opacity:0.75;' : ''}">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;"><b>${d.title}</b> ${sent ?`<span class="badge badge-success">Sent (protocollo ${escapeHtml(sent)})</span>` : (d.date < today ? '<span class="badge badge-danger">Overdue?</span>' : whenBadge)}</div>
-            <div style="color:var(--ink-soft); margin-top:4px;">Sent with <b>«Redditi Web»</b> / <b>«Dichiarazione precompilata»</b> in the AdE «Area riservata». Use the numbers in «Calculation for tax year ${Number(d.key.slice(0, 4)) - 1}» below.</div>
+        const late = !sent && today > win.to;
+        const tone = sent || notYet ? '' : late ? TAX_TONE.red : TAX_TONE.green;
+        const badge = sent ? `<span class="badge badge-success">Sent (protocollo ${escapeHtml(sent)})</span>`
+            : d.date < today ? '<span class="badge badge-danger">Overdue?</span>'
+            : late ? `<span class="badge badge-danger">Late on your plan — legal deadline ${d.title.split(' — ')[0]}</span>`
+            : whenBadge;
+        return `<div class="card" style="padding:12px 16px; font-size:0.88em; ${sent ? 'opacity:0.75;' : ''}${tone}">
+            ${taxDeadlineHeadHtml(d, badge)}
+            ${sent ? '' : `<div style="margin-top:8px; padding:8px 12px; border-radius:var(--radius-sm); background:var(--surface); border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span><b>How:</b> go to the 3rd tab <b>«Redditi checklist»</b> and follow the instructions there, step by step.${notYet ? ` Recommended: between <b>${win.text}</b>, together with the June F24.` : ''}</span>
+                <button class="btn btn-primary btn-sm" onclick="setTaxView('check'); window.scrollTo({ top: 0, behavior: 'smooth' });">Open Redditi checklist</button>
+            </div>`}
         </div>`;
     }
     if (!d.lines.length) {
-        return `<div class="card" style="padding:12px 16px; font-size:0.88em; opacity:0.75;"><b>${d.title}</b> <span class="badge badge-neutral">Nothing to pay</span></div>`;
+        return `<div class="card" style="padding:12px 16px; font-size:0.88em; opacity:0.75;">${taxDeadlineHeadHtml(d, '<span class="badge badge-neutral">Nothing to pay</span>')}</div>`;
     }
+    const lastWeek = !done && today >= formatLocalDate(new Date(new Date(d.date + 'T12:00:00').getTime() - 7 * 86400000));
+    const tone = done || notYet ? '' : overdue || lastWeek ? TAX_TONE.red : TAX_TONE.green;
+    const hasCredit = (done ? done.righe || [] : taxApplyCredits(d.lines).all).some((l) => Number(l.credito || 0) > 0);
     const draft = done ? { all: done.righe || [], totale: Number(done.totale), debit: r2((done.righe || []).reduce((s, l) => s + Number(l.debito || 0), 0)) } : taxApplyCredits(d.lines);
     const badge = done ? `<span class="badge badge-success">Done on ${formatShortDate(done.data)}</span>`
         : overdue ? '<span class="badge badge-danger">Overdue — check «Versamenti F24» in the Cassetto fiscale</span>'
@@ -351,24 +384,24 @@ function taxDeadlineCardHtml(d, expanded) {
     const rateSel = !done && d.key.endsWith('-06') && draft.totale > 0
         ? `<div style="margin-top:8px; font-size:0.85em;">Pay in instalments (rateizzazione): <select onchange="this.nextElementSibling.innerHTML = taxInstalmentsHtml(${draft.totale}, Number(this.value), ${P})">${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}">${n}</option>`).join('')}</select><div></div></div>`
         : '';
-    return `<div class="card" style="padding:12px 16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-            <b style="font-size:0.92em;">${d.title}</b> ${badge}
-        </div>
+    return `<div class="card" style="padding:12px 16px;${tone}">
+        ${taxDeadlineHeadHtml(d, badge)}
         ${!done && d.key.endsWith('-06') ? `<div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">Late option: by <b>30/07/${d.date.slice(0, 4)}</b> with <b>+0,40%</b> («maggiorazione»).</div>` : ''}
         ${!done && !expanded ? '<div style="font-size:0.82em; color:var(--ink-faint); margin-top:4px;">Estimate from your fatture so far — it changes as you add fatture. Nothing to do now.</div>' : ''}
         <details ${done || !expanded ? '' : 'open'} style="margin-top:8px;">
             <summary style="cursor:pointer; font-size:0.85em; color:var(--ink-soft);">F24 lines — what to type (click an amount to copy it)</summary>
             <div style="margin-top:6px;">${taxRenderF24Lines(draft.all)}</div>
         </details>
-        ${done ? '' : `<div style="margin-top:8px; font-size:0.84em; color:var(--ink-soft);"><b>Where to send it:</b> nothing is sent automatically. ${expanded ? 'Now' : `By ${d.title.split(' — ')[0]}`} you open <a href="https://telematici.agenziaentrate.gov.it/Main/F24web.jsp" target="_blank" rel="noopener">«F24 web»</a> (log in with SPID/CIE) and type these lines there${draft.totale > 0 ? ', or give them to your bank («F24 ordinario» in home banking)' : ''}. Step by step: <a href="#" onclick="document.getElementById('taxHelpF24').open = true; document.getElementById('taxHelpF24').scrollIntoView({behavior:'smooth'}); return false;">How to send an F24</a> (in Help, at the bottom).</div>`}
+        ${done ? '' : `<div style="margin-top:8px; font-size:0.84em; color:var(--ink-soft);"><b>Where to send it:</b> nothing is sent automatically. ${expanded ? 'Now' : `By ${d.title.split(' — ')[0]}`} you open <a href="https://telematici.agenziaentrate.gov.it/Main/F24web.jsp" target="_blank" rel="noopener">«F24 web»</a> (log in with SPID/CIE) and type these lines there${draft.totale > 0 && !hasCredit ? ', or give them to your bank («F24 ordinario» in home banking)' : ''}. Step by step: <a href="#" onclick="document.getElementById('taxHelpF24').open = true; document.getElementById('taxHelpF24').scrollIntoView({behavior:'smooth'}); return false;">How to send an F24</a> (in Help, at the bottom).</div>`}
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:0.9em;">
             <span>Debit ${eur(draft.debit)} − credits = <b>F24 total («saldo finale») ${eur(draft.totale)}</b></span>
             ${done ? `<button class="btn btn-outline btn-sm" onclick="deleteTaxF24(${done.id})">Undo «done»</button>`
                 : expanded ? `<button class="btn btn-success btn-sm" onclick="openMarkTaxDone('${d.key}')">Mark as sent / paid</button>` : ''}
         </div>
         ${draft.totale === 0 && !done && expanded ? `<div style="margin-top:8px; padding:8px 10px; background:var(--warning-soft); border-radius:var(--radius-sm); font-size:0.84em;"><b>«F24 a saldo zero»: it must still be sent</b>, with <b>«F24 web»</b> in the AdE «Area riservata» — not through your bank. Otherwise the credit offset (compensazione) doesn't count.</div>` : ''}
-        ${!done && draft.totale > 0 ? '<div style="margin-top:6px; font-size:0.82em; color:var(--ink-faint);">Pay with your home banking («F24 ordinario») or with «F24 web».</div>' : ''}
+        ${!done && draft.totale > 0 ? (hasCredit
+            ? '<div style="margin-top:6px; font-size:0.82em; color:var(--ink-faint);">It uses a credit, so send it with «F24 web» (not the bank app), even if the total is above 0.</div>'
+            : '<div style="margin-top:6px; font-size:0.82em; color:var(--ink-faint);">Pay with your home banking («F24 ordinario») or with «F24 web».</div>') : ''}
         ${rateSel}
     </div>`;
 }
@@ -401,7 +434,8 @@ function taxGuidesHtml() {
             '<b>«Sezione INPS»</b>: <b>«codice sede»</b>, <b>«causale contributo» PXX</b>, <b>«matricola INPS / codice INPS / filiale azienda»</b> = your codice fiscale, <b>«periodo di riferimento» da mm/aaaa a mm/aaaa</b>, and the amount.',
             'Check that <b>«saldo finale»</b> is the same as this app\'s <b>F24 total</b>. If it is <b>0,00</b>, that\'s fine: it still has to be sent.',
             'If there is something to pay: give the <b>IBAN</b> to be charged and the <b>«data di versamento»</b>.',
-            'Send, then download the <b>«ricevuta» / «quietanza»</b> and attach it here with <b>Mark as sent / paid</b>.'
+            'Any F24 with a <b>credit line</b> («importi a credito compensati») must be sent with <b>F24 web</b>, even if the total is above 0: not from the bank app.',
+            'Send, then download the <b>«ricevuta» / «quietanza»</b> only when its state shows <b>«acquisito»</b>, and attach it here with <b>Mark as sent / paid</b>.'
         ]) + note, false, 'taxHelpF24')}
 
         ${box('How to send the Modello Redditi PF (by 31 October)', ol([
@@ -411,13 +445,17 @@ function taxGuidesHtml() {
             '<b>«Quadro RR» sezione II</b> (Gestione separata): «reddito», «aliquota», «contributo dovuto», «acconto versato».',
             '<b>«Quadro RX»</b>: check credits and debts, and choose to keep credits <b>«da utilizzare in compensazione»</b>.',
             'If you also had a job (employee income), its <b>CU</b> is already in <b>«Quadro RC»</b> — check it matches.',
-            '<b>«Invia»</b>, then save the <b>«ricevuta»</b> and enter the <b>protocollo</b> in <b>Enter dichiarazione figures</b>.'
+            '<b>«Invia»</b>, then save the <b>«ricevuta»</b> once it shows <b>«acquisita»</b>, and enter the <b>protocollo</b> in <b>Enter dichiarazione figures</b> (or in <b>Redditi checklist</b>).'
         ]) + note)}
 
         ${box('Official links to study (F24, codici tributo, rules)', '<div style="font-weight:700; margin-top:8px;">Agenzia delle Entrate</div><ul style="margin:4px 0 0 18px; padding:0;"><li><a href="https://www1.agenziaentrate.gov.it/servizi/codici/ricerca/index.php" target="_blank" rel="noopener">«Ricerca codici tributo» — look up any codice tributo (1790, 1791, 1792, 4001, 1668…)</a></li><li><a href="https://www.agenziaentrate.gov.it/portale/strumenti/codici-attivita-e-tributo/f24-codici-tributo-per-i-versamenti" target="_blank" rel="noopener">«F24 - Codici tributo per i versamenti» — all code tables</a></li><li><a href="https://www.agenziaentrate.gov.it/portale/web/guest/schede/pagamenti/f24/come-effettuare-versamenti-f24" target="_blank" rel="noopener">«F24 - Come effettuare i versamenti» — incl. F24 a saldo zero</a></li><li><a href="https://www.agenziaentrate.gov.it/portale/web/guest/schede/pagamenti/f24/compilazione-invio-f24-via-web" target="_blank" rel="noopener">«F24 - Compilazione e invio via web»</a></li><li><a href="https://telematici.agenziaentrate.gov.it/Main/F24web.jsp" target="_blank" rel="noopener">«F24 web» service (log in with SPID/CIE)</a></li><li><a href="https://www.agenziaentrate.gov.it/portale/regime-forfetario-le-regole-2020-/infogen-regime-forfetario-le-regole-2020-" target="_blank" rel="noopener">«Regime forfetario» — the rules</a></li><li><a href="https://www.agenziaentrate.gov.it/portale/modello-redditi-persone-fisiche-2026/modello-e-istruzioni" target="_blank" rel="noopener">«Modello Redditi Persone fisiche 2026 - Modello e istruzioni» (fascicolo 3 = quadro LM)</a></li><li><a href="https://infoprecompilata.agenziaentrate.gov.it/portale/quadro-lm" target="_blank" rel="noopener">«Quadro LM» — guide on the precompilata site</a></li></ul><div style="font-weight:700; margin-top:8px;">INPS</div><ul style="margin:4px 0 0 18px; padding:0;"><li><a href="https://www.inps.it/it/it/dettaglio-approfondimento.schede-informative.49920.F24-per-professionisti-iscritti-alla-Gestione-Separata.html" target="_blank" rel="noopener">«F24 per professionisti iscritti alla Gestione Separata» — causale PXX, deadlines, rate</a></li><li><a href="https://www.inps.it/it/it/inps-comunica/notizie/dettaglio-news-page.news.2026.02.gestione-separata-le-aliquote-contributive-per-il-2026.html" target="_blank" rel="noopener">«Gestione Separata: le aliquote contributive per il 2026» (26,07%)</a></li><li><a href="https://www.inps.it/content/dam/inps-site/it/scorporati/circolari-e-messaggi/2026/02/Circolare_15153/Allegati/16573_Circolare-numero-8-del-03-02-2026.pdf" target="_blank" rel="noopener">«Circolare n. 8 del 03/02/2026» (PDF)</a></li></ul><div style="color:var(--ink-faint); margin-top:6px;">Official sites change now and then: if a link stops working, search its Italian title on the AdE or INPS site. Always check the «Ultimo aggiornamento» date.</div>')}
 
         ${box('What to do every year (scadenze)', ol([
             '<b>All year</b>: make your fatture in this app — they are your ricavi. Forfettario limit: €85.000 a year.',
+            '<b>By 16 March</b>: the <b>CU</b> of every job arrives (also in the precompilata). Enter it in <b>Job income (CU)</b> and check it shows ✅.',
+            '<b>From about 20 May</b>: the precompilata can be sent. Prepare the <b>Modello Redditi</b> (<b>Redditi checklist</b>) and the June <b>F24</b> together.',
+            '<b>Every May</b>: check on the AdE site whether the deadlines were extended («proroga»).',
+            '<b>Bollo on fatture</b> (€2 above €77,47): <b>31/05</b> (Jan–Mar, code 2521), <b>30/09</b> (Apr–Jun, 2522), <b>30/11</b> (Jul–Sep, 2523), <b>28/02</b> of the next year (Oct–Dec, 2524).',
             '<b>By 30 June</b> (or 30 July with +0,40% «maggiorazione»): F24 with the <b>saldo</b> of last year (imposta <b>1792</b> + INPS <b>PXX</b>) and the <b>1° acconto</b> (<b>1790</b> + INPS). If credits make it zero, send it with «F24 web».',
             '<b>By 31 October</b>: send the <b>Modello Redditi PF</b> (see «How to send the Modello Redditi PF»).',
             '<b>By 30 November</b>: F24 with the <b>2° acconto</b> (<b>1791</b> + INPS).',
@@ -643,46 +681,55 @@ function bolloQuarters() {
     })
         .sort((a, b) => a.due.localeCompare(b.due));
 }
-function bolloCardHtml() {
-    const all = bolloQuarters();
-    if (!all.length) return '';
+// Bollo quarters as deadline cards, in the same lists as the F24s (Next
+// deadline / Later / Done). Headline = the planned pay-by date (two weeks
+// after AdE's list is ready); the legal deadline is shown too.
+function bolloDeadlines() {
+    return bolloQuarters().map((x) => {
+        const fmt = (iso) => iso.split('-').reverse().join('/');
+        return { key: x.key, date: x.target, title: `${fmt(x.target)} — Imposta di bollo Q${x.q} ${x.y} (${x.months})`, bollo: x };
+    });
+}
+function bolloDeadlineCardHtml(x) {
     const today = formatLocalDate(new Date());
     const fmt = (iso) => iso.split('-').reverse().join('/');
-    const open = all.filter((x) => !x.paid), done = all.filter((x) => x.paid);
-    const row = (x) => {
-        const late = !x.paid && x.due < today;
-        const chips = x.fatture.map((f) => {
-            const st = (typeof students !== 'undefined' && students.find((s) => s.id === f.student_id)) || null;
-            const inXml = String(f.xml || '').includes('<DatiBollo>');
-            return `<span class="badge ${inXml ? 'badge-neutral' : 'badge-warning'}" title="${inXml ? 'Bollo in the XML: AdE lists it in Elenco A' : 'Made without bollo: AdE lists it in Elenco B, confirm it there'}">${f.numero}/${String(f.anno).slice(-2)} · ${escapeHtml(st ? st.name : (f.recipient_cognome || ''))} · €${Number(f.importo).toFixed(2).replace('.', ',')}${inXml ? '' : ' · Elenco B'}</span>`;
-        }).join(' ');
-        return `<div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:8px; font-size:0.86em;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span><b>Q${x.q} ${x.y}</b> (${x.months}) · ${x.fatture.length} fattur${x.fatture.length === 1 ? 'a' : 'e'} · <b>${eur(x.amount)}</b> · code <b>${x.code}</b> · pay <b>${fmt(x.from)} – ${fmt(x.target)}</b>${x.paid ? '' : ` · suggested date <b>${fmt(bolloSuggestedDate(x))}</b>`} <span style="color:var(--ink-faint);">(deadline ${fmt(x.due)})</span></span>
-                ${x.paid ? `<span class="badge badge-success">Paid ${formatShortDate(x.paid.data)}</span> <button class="btn btn-outline btn-sm" onclick="deleteTaxF24(${x.paid.id})">Undo</button>`
-                    : `<span style="display:flex; gap:6px; align-items:center;">${late ? '<span class="badge badge-danger">Overdue</span>' : ''}<button class="btn btn-success btn-sm" onclick="markBolloPaid('${x.key}')">Mark paid</button></span>`}
+    const notYet = !x.paid && today < x.from;
+    const overdue = !x.paid && x.due < today;
+    const late = !x.paid && !overdue && today > x.target;
+    const tone = x.paid || notYet ? '' : overdue || late ? TAX_TONE.red : TAX_TONE.green;
+    const badge = x.paid ? `<span class="badge badge-success">Paid ${formatShortDate(x.paid.data)}</span>`
+        : overdue ? `<span class="badge badge-danger">Overdue — legal deadline was ${fmt(x.due)}</span>`
+        : late ? `<span class="badge badge-danger">Late on your plan — legal deadline ${fmt(x.due)}</span>`
+        : notYet ? `<span class="badge badge-neutral">Pay between ${fmt(x.from)} – ${fmt(x.target)}</span>`
+        : `<span class="badge badge-warning">To do — by ${fmt(x.target)}</span>`;
+    const chips = x.fatture.map((f) => {
+        const st = (typeof students !== 'undefined' && students.find((s) => s.id === f.student_id)) || null;
+        const inXml = String(f.xml || '').includes('<DatiBollo>');
+        return `<span class="badge ${inXml ? 'badge-neutral' : 'badge-warning'}" title="${inXml ? 'Bollo in the XML: AdE lists it in Elenco A' : 'Made without bollo: AdE lists it in Elenco B, confirm it there'}">${f.numero}/${String(f.anno).slice(-2)} · ${escapeHtml(st ? st.name : (f.recipient_cognome || ''))} · €${Number(f.importo).toFixed(2).replace('.', ',')}${inXml ? '' : ' · Elenco B'}</span>`;
+    }).join(' ');
+    const d = { title: `${fmt(x.target)} — Imposta di bollo Q${x.q} ${x.y} (${x.months})` };
+    return `<div class="card" style="padding:12px 16px; font-size:0.88em;${x.paid ? ' opacity:0.75;' : ''}${tone}">
+        ${taxDeadlineHeadHtml(d, badge)}
+        <div style="margin-top:6px;">${x.fatture.length} fattur${x.fatture.length === 1 ? 'a' : 'e'} over €77,47 · <b>${eur(x.amount)}</b> · code <b>${x.code}</b> <span style="color:var(--ink-faint);">· legal deadline ${fmt(x.due)}</span></div>
+        <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">${chips}</div>
+        ${x.paid ? `<div style="margin-top:8px;"><button class="btn btn-outline btn-sm" onclick="deleteTaxF24(${x.paid.id})">Undo «paid»</button></div>`
+            : notYet ? `<div style="margin-top:8px; font-size:0.85em; color:var(--ink-faint);">AdE prepares the list by <b>${fmt(x.from)}</b>: it can't be paid before. Nothing to do now.</div>`
+            : `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                <span>Suggested date («data versamento», a weekday): <b>${fmt(bolloSuggestedDate(x))}</b></span>
+                <button class="btn btn-success btn-sm" onclick="markBolloPaid('${x.key}')">Mark paid</button>
             </div>
-            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">${chips}</div>
-        </div>`;
-    };
-    return `
-        <div class="section-label">Imposta di bollo (€2 on fatture above €77,47)</div>
-        <div class="card" style="padding:14px 16px; margin-bottom:22px;">
-            ${open.length ? open.map(row).join('') : '<div style="font-size:0.86em; color:var(--success); font-weight:600; margin-bottom:6px;">All bollo quarters paid ✓</div>'}
-            <details style="font-size:0.84em; color:var(--ink-soft); margin-top:4px;">
+            <details open style="font-size:0.9em; color:var(--ink-soft); margin-top:8px;">
                 <summary style="cursor:pointer; font-weight:600;">How to pay (step by step)</summary>
                 <ol style="margin:8px 0 0 18px; padding:0; line-height:1.6;">
                     <li>Open <a href="https://ivaservizi.agenziaentrate.gov.it/portale/" target="_blank" rel="noopener">«Fatture e Corrispettivi»</a> and log in with SPID/CIE.</li>
                     <li><b>«Fatture elettroniche e altri dati IVA»</b> → <b>«Pagamento imposta di bollo»</b>.</li>
-                    <li>Choose the <b>year</b> and the <b>quarter</b> («trimestre»).</li>
-                    <li><b>Elenco A</b>: fatture with the bollo in the XML. <b>Elenco B</b>: fatture that should have it (like the old ones made without bollo, marked «Elenco B» here) → <b>select them and confirm</b>.</li>
-                    <li><b>«Procedi al pagamento»</b> → your <b>IBAN</b> (account in your name) → <b>«Data versamento»</b>: a weekday (the suggested date above) → tick both boxes → <b>«Inoltra pagamento»</b>. (Or an F24: code above, year of the fattura.)</li>
+                    <li>Choose year <b>${x.y}</b> and quarter («trimestre») <b>${x.q}</b>.</li>
+                    <li><b>Elenco A</b>: fatture with the bollo in the XML. <b>Elenco B</b>: fatture that should have it (marked «Elenco B» above) → <b>select them and confirm</b>.</li>
+                    <li><b>«Procedi al pagamento»</b> → your <b>IBAN</b> (account in your name) → <b>«Data versamento»</b>: the suggested date → tick both boxes → <b>«Inoltra pagamento»</b>. (Or an F24: code ${x.code}, year ${x.y}.)</li>
                     <li>Come back here → <b>Mark paid</b>.</li>
                 </ol>
-                <div style="margin-top:6px; color:var(--ink-faint);">AdE prepares the list by the 15th of the month after the quarter: pay within the next 2 weeks. The «Data versamento» can't be a Saturday or Sunday (the suggested date is always a weekday). Legal deadlines: Q1 31/05 · Q2 30/09 · Q3 30/11 · Q4 28/02.</div>
-            </details>
-            ${done.length ? `<details style="font-size:0.84em; margin-top:8px;"><summary style="cursor:pointer; color:var(--ink-soft);">Paid quarters (${done.length})</summary><div style="margin-top:8px;">${done.map(row).join('')}</div></details>` : ''}
-        </div>`;
+            </details>`}
+    </div>`;
 }
 async function markBolloPaid(key) {
     const x = bolloQuarters().find((q) => q.key === key);
@@ -715,7 +762,7 @@ function renderTaxReminder() {
     card.classList.toggle('hidden', !next && !bollo && !redditi);
     if (!next && !bollo && !redditi) return;
     const lines = [];
-    if (redditi) lines.push(`<b>Modello Redditi ${Number(redditi.key.slice(0, 4)) - 1}:</b> do it between <b>${taxDeadlineWindow(redditi).text}</b>, together with the F24 saldo + 1° acconto (legal deadline ${redditi.date.split('-').reverse().join('/')})`);
+    if (redditi) lines.push(`<b>Modello Redditi ${Number(redditi.key.slice(0, 4)) - 1}:</b> do it between <b>${taxDeadlineWindow(redditi).text}</b>, together with the F24 saldo + 1° acconto (legal deadline ${redditi.date.split('-').reverse().join('/')}). Go to Taxes → <a href="#" onclick="switchTab('tasse'); setTaxView('check'); return false;">«Redditi checklist»</a> and follow the instructions.`);
     if (next) {
         const draft = taxApplyCredits(next.lines);
         lines.push(`<b>Tax deadline:</b> ${next.title} · F24 total <b>${eur(draft.totale)}</b>${draft.totale === 0 ? ' («F24 a saldo zero» — still to send)' : ''}`);

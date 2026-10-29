@@ -28,8 +28,10 @@
 <script src="anagrafica.js?v=4"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="pdfview.js?v=2"></script>
-<script src="fatture.js?v=30"></script>
-<script src="tasse.js?v=20"></script>
+<script src="fatture.js?v=42"></script>
+<script src="exports.js?v=10"></script>
+<script src="tasse.js?v=27"></script>
+<script src="jobincome.js?v=9"></script>
 <script src="notifiche.js?v=9"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -193,6 +195,8 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
 .stat-tile.active{ outline:2px solid var(--accent); outline-offset:-2px; }
 .period-pill{ padding:8px 14px; border-radius:999px; border:1px solid var(--border); background:var(--bg); color:var(--ink-soft); font-size:0.86em; font-weight:600; cursor:pointer; }
 .period-pill.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.tax-pill{ padding:8px 14px; border-radius:999px; border:1px solid var(--border); background:var(--bg); color:var(--ink-soft); font-size:0.86em; font-weight:600; cursor:pointer; }
+.tax-pill.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
 
 .section-label{ font-size:0.72em; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint); margin:16px 0 8px; }
 .section-label:first-child{ margin-top:0; }
@@ -348,7 +352,6 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div class="nav-drawer-head" onclick="switchTab('students')" style="cursor:pointer;"><img src="logo.png" alt="" style="height:28px; width:28px; border-radius:6px; object-fit:cover;"> Bhangra Sway</div>
         <button class="tab-btn active" data-tab="students" onclick="switchTab('students')"></button>
         <button class="tab-btn" data-tab="attendance" onclick="switchTab('attendance')"></button>
-        <button class="tab-btn" data-tab="payments" onclick="switchTab('payments')"></button>
         <button class="tab-btn" data-tab="fatture" onclick="switchTab('fatture')"></button>
         <button class="tab-btn" data-tab="tasse" onclick="switchTab('tasse')"></button>
         <button class="tab-btn" data-tab="batches" onclick="switchTab('batches')"></button>
@@ -592,7 +595,15 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <h2>Fatture</h2>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <button class="btn btn-outline btn-sm" onclick="openManualFattura()">Add fattura already issued</button>
-                <button class="btn btn-outline btn-sm" onclick="exportFattureCsv()">Export CSV</button>
+                <div style="position:relative; display:inline-block;">
+                    <button class="btn btn-outline btn-sm" id="fattureExportBtn" onclick="toggleWaMenu('fattureExportMenu', event)">Export ▾</button>
+                    <div class="wa-menu" id="fattureExportMenu" style="display:none; position:absolute; top:100%; margin-top:4px; right:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); z-index:60; min-width:230px; overflow:hidden;">
+                        <button onclick="toggleWaMenu('fattureExportMenu'); exportFatture('pdf');" title="Registro fatture of the chosen year, for CAF / Questura" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em;">Registro (PDF)</button>
+                        <button onclick="toggleWaMenu('fattureExportMenu'); exportFatture('xlsx');" title="Registro fatture of the chosen year, for CAF / Questura" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em; border-top:1px solid var(--border-soft);">Registro (Excel)</button>
+                        <button onclick="toggleWaMenu('fattureExportMenu'); exportFatturePdfZip(document.getElementById('fattureExportBtn'));" title="Every fattura PDF of the chosen year + the Registro (PDF and Excel, with links), in one ZIP downloaded to this device (nothing is saved online)" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em; border-top:1px solid var(--border-soft);">All PDFs (ZIP)</button>
+                        <button onclick="toggleWaMenu('fattureExportMenu'); exportFattureCsv();" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 12px; border:none; background:none; color:var(--ink); cursor:pointer; font-size:0.86em; border-top:1px solid var(--border-soft);">CSV</button>
+                    </div>
+                </div>
                 <button class="btn btn-outline btn-sm" onclick="openCertificatesModal()">Medical certificates</button>
                 <button class="btn btn-outline btn-sm" onclick="openFatturaSettings()">Settings</button>
             </div>
@@ -610,50 +621,6 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         <div id="taxTabContent"></div>
     </div>
 
-    <div class="tab-panel" data-panel="payments">
-        <div class="page-head">
-            <h2>Payments</h2>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div id="paymentsCountLabel" style="color:var(--ink-soft); font-size:0.86em;"></div>
-                <button class="btn btn-outline btn-sm" onclick="togglePaymentsTotalBalance()" id="paymentsTotalBalanceBtn" title="Show each card's total balance"></button>
-                <button class="btn btn-primary btn-sm" onclick="openExtraChargeModal()" id="chargeStudentsBtnLabel"></button>
-            </div>
-        </div>
-
-        <div class="pay-summary-grid">
-            <div class="stat-tile hero clickable" id="payFilterAll" onclick="setPaymentsFilter('all')">
-                <div class="label">Total Students</div>
-                <div class="value" id="payCountAll">0</div>
-                <div class="hidden" id="paySumAll" style="font-size:0.8em; font-weight:700; color:var(--ink-soft); margin-top:4px;"></div>
-            </div>
-            <div class="stat-tile hero clickable" id="payFilterPositive" onclick="setPaymentsFilter('positive')" style="background:var(--success-soft); border-color:#bbf0d1;">
-                <div class="label" style="color:var(--success);">Has Balance</div>
-                <div class="value" style="color:var(--success);" id="payCountPositive">0</div>
-                <div class="hidden" id="paySumPositive" style="font-size:0.8em; font-weight:700; color:var(--success); margin-top:4px;"></div>
-            </div>
-            <div class="stat-tile hero clickable" id="payFilterZero" onclick="setPaymentsFilter('zero')" style="background:var(--warning-soft); border-color:#fbdca0;">
-                <div class="label" style="color:var(--warning);">Zero Balance</div>
-                <div class="value" style="color:var(--warning);" id="payCountZero">0</div>
-                <div class="hidden" id="paySumZero" style="font-size:0.8em; font-weight:700; color:var(--warning); margin-top:4px;"></div>
-            </div>
-            <div class="stat-tile hero clickable" id="payFilterNegative" onclick="setPaymentsFilter('negative')" style="background:var(--danger-soft); border-color:#f7c2c2;">
-                <div class="label" style="color:var(--danger);">Negative Balance</div>
-                <div class="value" style="color:var(--danger);" id="payCountNegative">0</div>
-                <div class="hidden" id="paySumNegative" style="font-size:0.8em; font-weight:700; color:var(--danger); margin-top:4px;"></div>
-            </div>
-        </div>
-
-        <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
-            <input id="paymentsSearch" placeholder="Search by name or parent…" oninput="renderPaymentsList()" style="flex:1; max-width:360px; padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em;">
-            <select id="paymentsActiveFilterSelect" onchange="setPaymentsActiveFilter(this.value)" style="padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em; font-weight:600; color:var(--ink-soft); background:var(--bg);">
-                <option value="active">Active only</option>
-                <option value="inactive">Inactive only</option>
-                <option value="all">All</option>
-            </select>
-            <span style="font-size:0.84em; color:var(--ink-faint);"><span id="inactivePaymentsCount">0</span> inactive</span>
-        </div>
-        <div id="paymentsList"></div>
-    </div>
     <!-- BATCHES TAB (Part D) -->
     <div class="tab-panel" data-panel="batches">
         <div class="page-head">
@@ -706,6 +673,12 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             <button class="period-pill" id="feesPeriodBtn-lastWeek" onclick="setFeesPeriod('lastWeek')">Last Week</button>
             <button class="period-pill" id="feesPeriodBtn-lastMonth" onclick="setFeesPeriod('lastMonth')">Last Month</button>
             <button class="period-pill" id="feesPeriodBtn-custom" onclick="setFeesPeriod('custom')">Select Dates</button>
+            <button class="period-pill" id="feesPeriodBtn-all" onclick="setFeesPeriod('all')">All time</button>
+            <span style="margin-left:auto; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                <label style="display:flex; align-items:center; gap:5px; font-size:0.82em; font-weight:600; color:var(--ink-soft); cursor:pointer;" title="Only payments with a fattura sent to AdE (+ fatture added by hand). Use this version for offices."><input type="checkbox" id="feesExportInvoicedOnly" style="width:15px; height:15px; margin:0;"> Invoiced only</label>
+                <button class="btn btn-outline btn-sm" onclick="exportCollections('pdf')" title="Money in and expenses of this period, for CAF / Questura">Export PDF</button>
+                <button class="btn btn-outline btn-sm" onclick="exportCollections('xlsx')" title="Money in and expenses of this period, for CAF / Questura">Export Excel</button>
+            </span>
             <div id="feesCustomDateRow" class="hidden" style="display:flex; gap:8px; align-items:center;">
                 <input type="date" id="feesCustomFrom" onchange="onFeesCustomDateChange()" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
                 <span style="color:var(--ink-faint);">–</span>
@@ -713,50 +686,85 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
             </div>
         </div>
 
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
-            <select id="incomeActiveFilterSelect" onchange="setIncomeActiveFilter(this.value)" style="padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em; font-weight:600; color:var(--ink-soft); background:var(--bg);">
+        <div class="section-label">1 · This period — click a box to see the list</div>
+        <div class="pay-summary-grid" id="feesStatsGrid" style="margin-bottom:10px;"></div>
+        <div id="feesInPanel" class="card hidden" style="padding:16px 18px; margin-bottom:16px;">
+            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
+                <div style="font-weight:700; font-size:0.95em; margin-right:auto;">Money in, day by day <span id="rechargeHistoryCount" style="font-weight:600; color:var(--ink-faint);"></span></div>
+                <div class="field" style="margin-bottom:0;"><label>Method</label>
+                    <select id="payHistMethod" onchange="renderPaymentHistory()" style="padding:7px 9px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;">
+                        <option value="">All</option><option value="cash">Cash</option><option value="bonifico">Bonifico</option><option value="missing">Method missing</option>
+                    </select>
+                </div>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; font-weight:600; margin-bottom:6px; cursor:pointer;"><input type="checkbox" id="payHistNotInvoiced" onchange="renderPaymentHistory()" style="width:16px; height:16px; margin:0;"> Not invoiced only</label>
+            </div>
+            <div id="paymentHistoryList"></div>
+            <div id="manualFattureCollections"></div>
+        </div>
+        <div id="feesOutPanel" class="hidden" style="margin-bottom:16px;">
+            <div class="card" style="padding:18px 20px; margin-bottom:14px;">
+                <h3 style="font-size:0.95em; margin-bottom:14px;">Add Expense</h3>
+                <form onsubmit="addExpense(event)">
+                    <div class="form-grid-3">
+                        <div class="field"><label>Description</label><input type="text" id="expenseDesc" required placeholder="e.g. Music system, decoration"></div>
+                        <div class="field"><label>Amount (€)</label><input type="number" id="expenseAmount" required step="0.01"></div>
+                        <div class="field"><label>Date</label><input type="date" id="expenseDate" required></div>
+                        <div class="field">
+                            <label>Paid with</label>
+                            <div style="display:flex; gap:8px;">
+                                <label class="pay-seg"><input type="radio" name="expenseMethod" value="cash"><span>Cash</span></label>
+                                <label class="pay-seg"><input type="radio" name="expenseMethod" value="bank"><span>Bank</span></label>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Expense</button>
+                </form>
+            </div>
+            <div class="section-label" id="feesExpensesListLabel">Expenses</div>
+            <div id="expensesList"></div>
+        </div>
+
+        <div class="section-label" style="margin-top:12px;">2 · Money now (all dates) — click a box to see the bank deposits</div>
+        <div id="cashRegisterBox" style="margin-bottom:22px;"></div>
+
+        <div class="section-label">3 · Students' balance — click a box to see the students</div>
+        <div class="pay-summary-grid" id="payTilesGrid">
+            <div class="stat-tile hero clickable" id="payFilterAll" onclick="setPaymentsFilter('all')">
+                <div class="label">Total Students</div>
+                <div class="value" id="payCountAll">0</div>
+            </div>
+            <div class="stat-tile hero clickable" id="payFilterPositive" onclick="setPaymentsFilter('positive')" style="background:var(--success-soft); border-color:#bbf0d1;">
+                <div class="label" style="color:var(--success);">Has Balance</div>
+                <div class="value" style="color:var(--success);" id="payCountPositive">0</div>
+                <div id="paySumPositive" style="font-size:0.8em; font-weight:700; color:var(--success); margin-top:4px;"></div>
+            </div>
+            <div class="stat-tile hero clickable" id="payFilterZero" onclick="setPaymentsFilter('zero')" style="background:var(--warning-soft); border-color:#fbdca0;">
+                <div class="label" style="color:var(--warning);">Zero Balance</div>
+                <div class="value" style="color:var(--warning);" id="payCountZero">0</div>
+            </div>
+            <div class="stat-tile hero clickable" id="payFilterNegative" onclick="setPaymentsFilter('negative')" style="background:var(--danger-soft); border-color:#f7c2c2;">
+                <div class="label" style="color:var(--danger);">Negative Balance</div>
+                <div class="value" style="color:var(--danger);" id="payCountNegative">0</div>
+                <div id="paySumNegative" style="font-size:0.8em; font-weight:700; color:var(--danger); margin-top:4px;"></div>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
+            <input id="paymentsSearch" placeholder="Search by name or parent…" oninput="renderPaymentsList()" style="flex:1; max-width:360px; padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.9em;">
+            <select id="paymentsActiveFilterSelect" onchange="setPaymentsActiveFilter(this.value)" style="padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.88em; font-weight:600; color:var(--ink-soft); background:var(--bg);">
                 <option value="active">Active only</option>
                 <option value="inactive">Inactive only</option>
                 <option value="all">All</option>
             </select>
-            <span style="font-size:0.84em; color:var(--ink-faint);"><span id="inactiveIncomeCount">0</span> inactive</span>
+            <span style="font-size:0.84em; color:var(--ink-faint);"><span id="inactivePaymentsCount">0</span> inactive</span>
+            <span id="paymentsCountLabel" style="color:var(--ink-soft); font-size:0.84em;"></span>
+            <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="openExtraChargeModal()" id="chargeStudentsBtnLabel"></button>
         </div>
-
-        <div class="pay-summary-grid" id="feesStatsGrid"></div>
-
-        <p style="color:var(--ink-soft); font-size:0.88em; margin:0 0 12px; font-weight:700;">Student Balances</p>
-        <div class="pay-summary-grid" id="feesBalanceStatsGrid" style="margin-bottom:20px;"></div>
+        <div id="paymentsList" style="margin-bottom:22px;"></div>
 
         <!-- Activity in the same period (was the Reports tab) -->
-        <div class="section-label">Activity in this period</div>
+        <div class="section-label">4 · Activity in this period</div>
         <div class="pay-summary-grid" id="feesActivityGrid" style="margin-bottom:10px;"></div>
         <div id="feesActivitySummary" style="margin-bottom:20px;"></div>
-
-        <div class="card" style="padding:18px 20px; margin-bottom:20px;">
-            <h3 style="font-size:0.95em; margin-bottom:14px;">Add Expense</h3>
-            <form onsubmit="addExpense(event)">
-                <div class="form-grid-3">
-                    <div class="field"><label>Description</label><input type="text" id="expenseDesc" required placeholder="e.g. Music system, decoration"></div>
-                    <div class="field"><label>Amount (€)</label><input type="number" id="expenseAmount" required step="0.01"></div>
-                    <div class="field"><label>Date</label><input type="date" id="expenseDate" required></div>
-                </div>
-                <button type="submit" class="btn btn-primary">Add Expense</button>
-            </form>
-        </div>
-
-        <div class="section-label" id="feesExpensesListLabel">Expenses</div>
-        <div id="expensesList" style="margin-bottom:26px;"></div>
-
-        <details class="card" style="padding:18px 20px;">
-            <summary style="cursor:pointer; font-size:0.95em; font-weight:700;">Recharge History <span id="rechargeHistoryCount" style="font-weight:600; color:var(--ink-faint);"></span></summary>
-            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin:14px 0;">
-                <div class="field" style="margin-bottom:0;"><label>From</label><input type="date" id="payHistFrom" onchange="renderPaymentHistory()"></div>
-                <div class="field" style="margin-bottom:0;"><label>To</label><input type="date" id="payHistTo" onchange="renderPaymentHistory()"></div>
-                <button class="btn btn-outline btn-sm" onclick="setPaymentHistoryLastMonth();">Last month</button>
-                <button class="btn btn-outline btn-sm" onclick="document.getElementById('payHistFrom').value='';document.getElementById('payHistTo').value='';renderPaymentHistory();">Show All</button>
-            </div>
-            <div id="paymentHistoryList"></div>
-        </details>
     </div>
     <!-- TAX MODAL -->
     <div id="taxModal" class="modal-backdrop" onclick="if(event.target===this) closeTaxModal()">
@@ -1603,13 +1611,12 @@ let practiceAttendance = {}; // { 'YYYY-MM-DD': { [studentId]: isPresent } } —
 let pendingPracticeChanges = {}; // { 'YYYY-MM-DD': { [studentId]: boolean } } — unsaved practice checkbox edits
 let practiceTableMissing = false; // practice_sessions.sql not run yet
 let attendanceMode = 'regular'; // 'regular' | 'practice'
-let paymentsFilter = 'all';
+let paymentsFilter = null; // null = list closed until a box (or a search) opens it
 let studentsTotalBalanceVisible = false; // Students tab "total balance" reveal toggle
-let paymentsTotalBalanceVisible = false; // Payments tab "total balance" reveal toggle
 let studentsActiveFilter = 'active'; // Students tab: 'active' | 'inactive' | 'all'
 let paymentsActiveFilter = 'active'; // Payments tab: 'active' | 'inactive' | 'all'
 let incomeActiveFilter = 'active'; // Income & Expense tab: 'active' | 'inactive' | 'all'
-let feesPeriodMode = 'month'; // 'month' | 'lastWeek' | 'lastMonth' | 'custom'
+let feesPeriodMode = 'month'; // 'month' | 'lastWeek' | 'lastMonth' | 'custom' | 'all'
 let batchList = [];
 let locations = [];
 // Persisted across reloads like other view preferences — 'all' means
@@ -1618,6 +1625,8 @@ let locations = [];
 // tabs accept 'all' for a combined view.
 let currentLocationFilter = localStorage.getItem('bs_admin_location_filter') || 'all';
 let expenses = [];
+let cashDeposits = []; // cash taken to the bank (collections_cash.sql)
+let cashDepositsMissing = false;
 let oldPayments = []; // raw fees_paid rows — read-only reference, never affects the live balance
 
 // ===== Auth =====
@@ -1940,6 +1949,15 @@ async function loadAllData() {
         const expenseRows = await fetchAllRows('expenses');
         expenses = (expenseRows || []).map(normalizeExpense);
 
+        try {
+            cashDeposits = (await fetchAllRows('cash_deposits')).filter((d) => !d.deleted_at);
+            cashDepositsMissing = false;
+        } catch (e) {
+            console.error('Could not load cash_deposits (has collections_cash.sql been run?):', e);
+            cashDeposits = [];
+            cashDepositsMissing = true;
+        }
+
         oldPayments = await fetchAllRows('fees_paid');
 
         renderStudentsList();
@@ -2185,12 +2203,9 @@ function getStudentPlace(s) {
 }
 
 // ===== Payments tab (Part C) =====
+// Clicking a box opens its students; clicking the same box again closes it.
 function setPaymentsFilter(filter) {
-    paymentsFilter = filter;
-    renderPaymentsList();
-}
-function togglePaymentsTotalBalance() {
-    paymentsTotalBalanceVisible = !paymentsTotalBalanceVisible;
+    paymentsFilter = paymentsFilter === filter ? null : filter;
     renderPaymentsList();
 }
 function setPaymentsActiveFilter(value) {
@@ -2228,26 +2243,16 @@ function renderPaymentsList() {
     document.getElementById('payCountZero').textContent = counts.zero;
     document.getElementById('payCountNegative').textContent = counts.negative;
 
-    // Hidden by default — the button reveals each card's own sum (not one
-    // combined figure), so "Has Balance" shows its total credit, "Negative
-    // Balance" shows its total owed, etc. Same base set as the counts
-    // above (respects the inactive toggle, not search/the selected tab).
-    ['All', 'Positive', 'Zero', 'Negative'].forEach((key) => {
-        document.getElementById(`paySum${key}`).classList.toggle('hidden', !paymentsTotalBalanceVisible);
-    });
-    if (paymentsTotalBalanceVisible) {
-        const sumAll = activeStudents.reduce((sum, s) => sum + (s.v2CreditBalance || 0), 0);
-        const sumPositive = activeStudents.filter((s) => s.v2CreditBalance > 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
-        const sumNegative = activeStudents.filter((s) => s.v2CreditBalance < 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
-        document.getElementById('paySumAll').textContent = `€${Math.round(sumAll)}`;
-        document.getElementById('paySumPositive').textContent = `€${Math.round(sumPositive)}`;
-        document.getElementById('paySumZero').textContent = '€0';
-        document.getElementById('paySumNegative').textContent = `€${Math.round(sumNegative)}`;
-    }
+    // Each box's own sum (credit / owed) — never one net figure: every
+    // student has their own balance.
+    const sumPositive = activeStudents.filter((s) => s.v2CreditBalance > 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
+    const sumNegative = activeStudents.filter((s) => s.v2CreditBalance < 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
+    document.getElementById('paySumPositive').textContent = `€${Math.round(sumPositive)}`;
+    document.getElementById('paySumNegative').textContent = `€${Math.round(sumNegative)}`;
 
-    document.querySelectorAll('.pay-summary-grid .stat-tile').forEach((el) => el.classList.remove('active'));
+    document.querySelectorAll('#payTilesGrid .stat-tile').forEach((el) => el.classList.remove('active'));
     const activeTileId = { all: 'payFilterAll', positive: 'payFilterPositive', zero: 'payFilterZero', negative: 'payFilterNegative' }[paymentsFilter];
-    document.getElementById(activeTileId)?.classList.add('active');
+    if (activeTileId) document.getElementById(activeTileId)?.classList.add('active');
 
     let filtered = activeStudents;
     if (paymentsFilter === 'positive') filtered = filtered.filter((s) => s.v2CreditBalance > 0);
@@ -2257,6 +2262,12 @@ function renderPaymentsList() {
         filtered = filtered.filter((s) => s.name.toLowerCase().includes(term) || (s.parentName || '').toLowerCase().includes(term));
     }
 
+    // Closed until a box is clicked; a search opens it over everyone.
+    if (!paymentsFilter && !term) {
+        document.getElementById('paymentsCountLabel').textContent = '';
+        list.innerHTML = '';
+        return;
+    }
     document.getElementById('paymentsCountLabel').textContent = `${filtered.length} of ${students.length} students`;
 
     if (filtered.length === 0) {
@@ -4475,7 +4486,8 @@ function normalizeExpense(expense) {
         description: expense.description ?? '',
         amount: Number(expense.amount ?? 0),
         expenseDate: String(expense.expenseDate ?? expense.expense_date ?? expense.expensedate ?? expense.date ?? '').slice(0, 10),
-        location_id: expense.location_id ?? null
+        location_id: expense.location_id ?? null,
+        payment_method: expense.payment_method ?? null
     };
 }
 function buildExpensePayloadForSchema(expense, variant) {
@@ -4483,12 +4495,13 @@ function buildExpensePayloadForSchema(expense, variant) {
         description: expense.description,
         amount: expense.amount,
         expenseDate: expense.expenseDate,
-        location_id: expense.location_id
+        location_id: expense.location_id,
+        payment_method: expense.payment_method
     };
-    if (variant === 'legacy') return { description: base.description, amount: base.amount, date: base.expenseDate, location_id: base.location_id };
-    if (variant === 'snake') return { description: base.description, amount: base.amount, expense_date: base.expenseDate, location_id: base.location_id };
-    if (variant === 'compact') return { description: base.description, amount: base.amount, expensedate: base.expenseDate, location_id: base.location_id };
-    return { description: base.description, amount: base.amount, expenseDate: base.expenseDate, location_id: base.location_id };
+    if (variant === 'legacy') return { description: base.description, amount: base.amount, date: base.expenseDate, location_id: base.location_id, payment_method: base.payment_method };
+    if (variant === 'snake') return { description: base.description, amount: base.amount, expense_date: base.expenseDate, location_id: base.location_id, payment_method: base.payment_method };
+    if (variant === 'compact') return { description: base.description, amount: base.amount, expensedate: base.expenseDate, location_id: base.location_id, payment_method: base.payment_method };
+    return { description: base.description, amount: base.amount, expenseDate: base.expenseDate, location_id: base.location_id, payment_method: base.payment_method };
 }
 async function insertExpensesWithSchemaFallback(expensesToInsert) {
     const variants = ['legacy', 'snake', 'compact', 'camel'];
@@ -4533,6 +4546,9 @@ function getFeesPeriodRange() {
             label: 'Last Month'
         };
     }
+    if (feesPeriodMode === 'all') {
+        return { from: '0000-01-01', to: '9999-12-31', label: 'All time', all: true };
+    }
     if (feesPeriodMode === 'custom') {
         const from = document.getElementById('feesCustomFrom').value || formatLocalDate(today);
         const to = document.getElementById('feesCustomTo').value || formatLocalDate(today);
@@ -4573,7 +4589,7 @@ function displayFeesTab() {
     displayReports();
     const feesLocationId = getLocationIdFilter();
     const feesLocationLabel = feesLocationId === null ? 'all locations' : getLocationName(feesLocationId);
-    document.getElementById('feesPeriodSubtitle').innerHTML = `<strong style="color:var(--ink);">${escapeHtml(feesLocationId === null ? 'All locations' : feesLocationLabel)}</strong> · Cash flow for ${label} (${formatShortDate(from)} – ${formatShortDate(to)}) — recharges collected and expenses recorded. Switch location at the top to see each one separately.`;
+    document.getElementById('feesPeriodSubtitle').innerHTML = `<strong style="color:var(--ink);">${escapeHtml(feesLocationId === null ? 'All locations' : feesLocationLabel)}</strong> · ${feesPeriodMode === 'all' ? 'All time' : `${label} (${formatShortDate(from)} – ${formatShortDate(to)})`}. Switch location at the top to see each one separately.`;
 
     // Same isolation as v2_credit_balance/v2_credit_transactions: expenses
     // is the SAME table admin.html already recorded into pre-cutover, so
@@ -4583,82 +4599,41 @@ function displayFeesTab() {
     // real cutover — is invisible here on purpose (see Add Expense note).
     const locationFilterId = getLocationIdFilter();
     const v2Expenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= CUTOVER_DATE && (locationFilterId === null || e.location_id === locationFilterId));
-    const totalExpenseAllTime = v2Expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    document.getElementById('inactiveIncomeCount').textContent = students.filter((s) => !isStudentActive(s) && (locationFilterId === null || s.locationId === locationFilterId)).length;
 
-    // Expenses carry their own location_id directly (filtered above, since
-    // they're studio-wide, not tied to a student) — recharges (real income)
-    // DO belong to a student, so location is applied by intersecting with
-    // that location's student ids here, same mechanism as the active/
-    // inactive filter already used. Inactive students' recharges are still
-    // real money once received, but excluded by default to match "proper" /
-    // active-only totals, same as Payments — "All" brings them back.
-    const studentsInLocationScope = locationFilterId === null ? students : students.filter((s) => s.locationId === locationFilterId);
-    const incomeIdsInScope = new Set((incomeActiveFilter === 'all' ? studentsInLocationScope
-        : incomeActiveFilter === 'inactive' ? studentsInLocationScope.filter((s) => !isStudentActive(s))
-        : studentsInLocationScope.filter(isStudentActive)).map((s) => s.id));
-    const rechargeInScope = (t) => t.type === 'recharge' && !t.deleted_at && incomeIdsInScope.has(t.student_id);
 
+    // Section 1: money in − expenses in the period. All students (inactive
+    // students' money is real money too) + hand-added fatture with no payment
+    // entry; only the location switch narrows it. «Active only» is for the
+    // students' credit section below, never for money.
     const grid = document.getElementById('feesStatsGrid');
     if (grid) {
-        const rechargesThisPeriod = v2CreditTransactions
-            .filter((t) => rechargeInScope(t) && String(t.created_at).slice(0, 10) >= from && String(t.created_at).slice(0, 10) <= to)
-            .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-        const totalIncomeAllTime = v2CreditTransactions
-            .filter(rechargeInScope)
-            .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-        const expensesThisPeriod = v2Expenses.filter((e) => String(e.expenseDate || '') >= from && String(e.expenseDate || '') <= to);
-        const totalExpenses = expensesThisPeriod.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-        const netIncomeThisPeriod = rechargesThisPeriod - totalExpenses;
-        grid.innerHTML = `
-            <div class="stat-tile hero" style="background:var(--success-soft); border-color:#bbf0d1;">
-                <div class="label" style="color:var(--success);">Recharges (${label})</div>
-                <div class="value" style="color:var(--success);">€${Math.round(rechargesThisPeriod)}</div>
-            </div>
-            <div class="stat-tile hero" style="background:var(--danger-soft); border-color:#f7c2c2;">
-                <div class="label" style="color:var(--danger);">Expense (${label})</div>
-                <div class="value" style="color:var(--danger);">€${Math.round(totalExpenses)}</div>
-            </div>
-            <div class="stat-tile hero" style="background:${netIncomeThisPeriod >= 0 ? 'var(--accent-soft)' : 'var(--danger-soft)'}; border-color:${netIncomeThisPeriod >= 0 ? '#c7d9fb' : '#f7c2c2'};">
-                <div class="label" style="color:${netIncomeThisPeriod >= 0 ? 'var(--accent-ink)' : 'var(--danger)'};">Income (${label})</div>
-                <div class="value" style="color:${netIncomeThisPeriod >= 0 ? 'var(--accent-ink)' : 'var(--danger)'};">€${Math.round(netIncomeThisPeriod)}</div>
-            </div>
-            <div class="stat-tile hero">
-                <div class="label">All Time Income</div>
-                <div class="value">€${Math.round(totalIncomeAllTime)}</div>
-            </div>
-        `;
-    }
-
-    // Same toggle as the income grid above — inactive students excluded by
-    // default so this reflects actually-enrolled members, not stale
-    // records, but "Show inactive" reveals everyone here too.
-    const balanceGrid = document.getElementById('feesBalanceStatsGrid');
-    if (balanceGrid) {
-        const activeForBalance = incomeActiveFilter === 'all' ? studentsInLocationScope
-            : incomeActiveFilter === 'inactive' ? studentsInLocationScope.filter((s) => !isStudentActive(s))
-            : studentsInLocationScope.filter(isStudentActive);
-        const totalCredit = activeForBalance.filter((s) => s.v2CreditBalance > 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
-        const totalOwed = activeForBalance.filter((s) => s.v2CreditBalance < 0).reduce((sum, s) => sum + s.v2CreditBalance, 0);
-        const netBalance = totalCredit + totalOwed;
-        balanceGrid.innerHTML = `
-            <div class="stat-tile hero" style="background:var(--success-soft); border-color:#bbf0d1;">
-                <div class="label" style="color:var(--success);">Total Credit Balance</div>
-                <div class="value" style="color:var(--success);">€${Math.round(totalCredit)}</div>
-            </div>
-            <div class="stat-tile hero" style="background:var(--danger-soft); border-color:#f7c2c2;">
-                <div class="label" style="color:var(--danger);">Total Owed (Negative)</div>
-                <div class="value" style="color:var(--danger);">€${Math.round(totalOwed)}</div>
-            </div>
-            <div class="stat-tile hero" style="background:${netBalance >= 0 ? 'var(--accent-soft)' : 'var(--danger-soft)'}; border-color:${netBalance >= 0 ? '#c7d9fb' : '#f7c2c2'};">
-                <div class="label" style="color:${netBalance >= 0 ? 'var(--accent-ink)' : 'var(--danger)'};">Net Balance</div>
-                <div class="value" style="color:${netBalance >= 0 ? 'var(--accent-ink)' : 'var(--danger)'};">€${Math.round(netBalance)}</div>
-            </div>
-            <div class="stat-tile hero">
-                <div class="label">All Time Expense</div>
-                <div class="value">€${Math.round(totalExpenseAllTime)}</div>
-            </div>
-        `;
+        const inRange = (d) => d >= from && d <= to;
+        const inLoc = (sid) => locationFilterId === null || (students.find((x) => x.id === sid) || {}).locationId === locationFilterId;
+        const moneyIn = [
+            ...v2CreditTransactions.filter((t) => t.type === 'recharge' && !t.deleted_at && inRange(String(t.created_at).slice(0, 10)) && inLoc(t.student_id))
+                .map((t) => ({ amount: Number(t.amount || 0), method: t.payment_method, manual: false })),
+            ...manualFattureForCollections().filter((f) => inRange(String(f.data_fattura).slice(0, 10)) && (locationFilterId === null || inLoc(f.student_id)))
+                .map((f) => ({ amount: Number(f.importo || 0), method: f.payment_method, manual: true }))
+        ];
+        const out = v2Expenses.filter((e) => inRange(String(e.expenseDate || '')));
+        const sumBy = (rows, key, val) => rows.filter((r) => (val ? r[key] === val : !r[key])).reduce((x, r) => x + Number(r.amount || 0), 0);
+        const inCash = sumBy(moneyIn, 'method', 'cash'), inBon = sumBy(moneyIn, 'method', 'bonifico'), inNone = sumBy(moneyIn, 'method', null);
+        const outCash = sumBy(out, 'payment_method', 'cash'), outBank = sumBy(out, 'payment_method', 'bank'), outNone = sumBy(out, 'payment_method', null);
+        const inTotal = inCash + inBon + inNone, outTotal = outCash + outBank + outNone, left = inTotal - outTotal;
+        const manualIn = moneyIn.filter((r) => r.manual).reduce((x, r) => x + r.amount, 0);
+        const split = (a, la, b, lb, c) => [[a, la], [b, lb], [c, 'method?']].filter(([v]) => v).map(([v, l]) => `€${eurPlain(v)} ${l}`).join(' · ') || '—';
+        const tile = (key, label, value, sub, color, bg, border) => `
+            <div class="stat-tile hero${key ? ' clickable' : ''}${key && feesOpenPanel === key ? ' active' : ''}"${key ? ` onclick="toggleFeesPanel('${key}')"` : ''} style="background:${bg}; border-color:${border};">
+                <div class="label" style="color:${color};">${label}</div>
+                <div class="value" style="color:${color};">€${eurPlain(value)}</div>
+                <div style="font-size:0.78em; font-weight:600; color:${color}; margin-top:4px;">${sub}</div>
+            </div>`;
+        grid.innerHTML = tile('in', '+ Money in', inTotal, split(inCash, 'cash', inBon, 'bonifico', inNone), 'var(--success)', 'var(--success-soft)', '#bbf0d1')
+            + tile('out', '− Expenses', outTotal, split(outCash, 'cash', outBank, 'bank', outNone), 'var(--danger)', 'var(--danger-soft)', '#f7c2c2')
+            + tile(null, '= Left', left, `${escapeHtml(label)}${manualIn ? ` · incl. €${eurPlain(manualIn)} fatture by hand` : ''}`,
+                left >= 0 ? 'var(--accent-ink)' : 'var(--danger)', left >= 0 ? 'var(--accent-soft)' : 'var(--danger-soft)', left >= 0 ? '#c7d9fb' : '#f7c2c2');
+        document.getElementById('feesInPanel')?.classList.toggle('hidden', feesOpenPanel !== 'in');
+        document.getElementById('feesOutPanel')?.classList.toggle('hidden', feesOpenPanel !== 'out');
     }
 
     const expensesList = document.getElementById('expensesList');
@@ -4671,7 +4646,7 @@ function displayFeesTab() {
                 <div class="student-row">
                     <div style="flex:1; min-width:0;">
                         <div style="font-weight:700;">${escapeHtml(e.description)}</div>
-                        <div class="student-meta">${escapeHtml(e.expenseDate)}</div>
+                        <div class="student-meta">${escapeHtml(e.expenseDate)}${e.payment_method === 'cash' ? ' · Cash' : e.payment_method === 'bank' ? ' · Bank' : ' · <span style="color:var(--warning); font-weight:700;">method?</span>'}</div>
                     </div>
                     <div style="text-align:right;">
                         <div style="font-weight:800; color:var(--danger); font-size:1.05em;">€${Math.round(e.amount || 0)}</div>
@@ -4680,28 +4655,240 @@ function displayFeesTab() {
                 </div>`).join('');
     }
     renderPaymentHistory();
+    renderPaymentsList();
 }
 
-// Default window: the last month (same day a month ago -> today). Set once,
-// so "Show All" (empty dates) stays empty instead of snapping back.
-let paymentHistoryDefaultsSet = false;
-function setPaymentHistoryLastMonth() {
-    const today = formatLocalDate(new Date());
-    document.getElementById('payHistFrom').value = addMonthsToDate(today, -1);
-    document.getElementById('payHistTo').value = today;
+// Which list under the boxes is open: 'in' (money in, day by day), 'out'
+// (expenses), 'cash' (bank deposits) — one at a time; same box again closes.
+let feesOpenPanel = null;
+function toggleFeesPanel(key) {
+    feesOpenPanel = feesOpenPanel === key ? null : key;
+    displayFeesTab();
+}
+
+// ===== Collections (cash register) =====
+// Cash on hand = cash recharges − cash taken to the bank − cash expenses.
+// Bank = bonifico recharges + deposits − bank expenses (studio money only,
+// not the real account balance). Rows with no method don't count.
+function eurPlain(v) { return (Math.round(Number(v || 0) * 100) / 100).toLocaleString('it-IT', { maximumFractionDigits: 2 }); }
+function rechargeMethodBadge(m) {
+    return m === 'cash' ? '<span class="badge badge-neutral">Cash</span>'
+        : m === 'bonifico' ? '<span class="badge badge-neutral">Bonifico</span>'
+        : '<span class="badge badge-warning">method?</span>';
+}
+// No fattura, or only a rejected one.
+function rechargeNotInvoiced(t) {
+    if (typeof fatturaForTransaction !== 'function') return false;
+    const f = fatturaForTransaction(t.id);
+    return !f || f.status === 'rejected';
+}
+function rechargeFatturaBadge(t) {
+    if (typeof fatturaForTransaction !== 'function') return '';
+    const f = fatturaForTransaction(t.id);
+    if (!f) return '<span class="badge badge-danger">❌ not invoiced</span>';
+    const nr = escapeHtml(fmtNumeroFattura(f));
+    if (f.status === 'rejected') return `<span class="badge badge-danger">${nr} ❌ rejected</span>`;
+    if (fatturaIsDone(f)) return `<span class="badge badge-success">${nr} ✅</span>`;
+    return `<span class="badge badge-warning">${nr} XML made</span>`;
+}
+// «€150 cash + €40 bonifico» (+ «€X method?»), only the parts that exist.
+function methodSplitText(rows) {
+    const part = (m) => rows.filter((r) => (m ? r.payment_method === m : !r.payment_method)).reduce((s, r) => s + Number(r.amount || 0), 0);
+    return [[part('cash'), 'cash'], [part('bonifico'), 'bonifico'], [part(null), 'method?']]
+        .filter(([v]) => v).map(([v, l]) => `€${eurPlain(v)} ${l}`).join(' + ');
+}
+// Fatture added by hand / imported that no payment in the app points to
+// (e.g. 1/26–10/26): invoiced money with no payment entry. Their Cash/Bonifico
+// lives on the fattura (collections_manual_fatture.sql). Rejected ones and
+// ones linked to a payment are skipped (that payment is already counted).
+function manualFattureForCollections() {
+    if (typeof fattureList === 'undefined' || typeof fatturaExtraIds !== 'function') return [];
+    // not a nota di credito, nor a fattura cancelled by one (its payment is counted already)
+    return fattureList.filter((f) => !f.transaction_id && !fatturaExtraIds(f).length && f.status !== 'rejected' && f.tipo_documento !== 'TD04' && !f.annullata_da && !f.orig_transaction_id);
+}
+function cashRegisterTotals() {
+    const sum = (rows, key) => rows.reduce((s, x) => s + Number(x[key] || 0), 0);
+    const recharges = v2CreditTransactions.filter((t) => t.type === 'recharge' && !t.deleted_at);
+    const v2Expenses = expenses.filter((e) => e.expenseDate && e.expenseDate >= CUTOVER_DATE);
+    const manual = manualFattureForCollections();
+    const deposited = sum(cashDeposits, 'importo');
+    const cash = sum(recharges.filter((t) => t.payment_method === 'cash'), 'amount') + sum(manual.filter((f) => f.payment_method === 'cash'), 'importo')
+        - deposited - sum(v2Expenses.filter((e) => e.payment_method === 'cash'), 'amount');
+    const bank = sum(recharges.filter((t) => t.payment_method === 'bonifico'), 'amount') + sum(manual.filter((f) => f.payment_method === 'bonifico'), 'importo')
+        + deposited - sum(v2Expenses.filter((e) => e.payment_method === 'bank'), 'amount');
+    return { cash, bank, deposited };
+}
+// The student a hand-added fattura is for: the only student whose own CF or
+// parent CF is the fattura's CF (siblings sharing a parent → no guess).
+function suggestStudentForFattura(f) {
+    const norm = (x) => String(x || '').trim().toUpperCase();
+    const cf = norm(f.recipient_cf);
+    if (!cf) return null;
+    const hits = students.filter((s) => norm(s.codiceFiscale) === cf || norm(s.parentCodiceFiscale) === cf);
+    return hits.length === 1 ? hits[0] : null;
+}
+function manualFatturaRowHtml(f) {
+    const s = f.student_id ? students.find((x) => x.id === f.student_id) : null;
+    const sug = !s ? suggestStudentForFattura(f) : null;
+    const opts = students.slice().sort((a, b) => a.name.localeCompare(b.name))
+        .map((x) => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
+    const studentCell = s
+        ? `<span style="font-weight:700; color:var(--accent-ink); cursor:pointer;" onclick="openStudentViewModal(${s.id})">${escapeHtml(s.name)}</span>`
+        : `${sug ? `<button class="btn btn-primary btn-sm" onclick="setManualFatturaStudent(${f.id}, ${sug.id})">Set: ${escapeHtml(sug.name)}</button>` : ''}
+           <select onchange="if (this.value) setManualFatturaStudent(${f.id}, Number(this.value))" style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.85em;"><option value="">— student —</option>${opts}</select>`;
+    const methodCell = `<select onchange="if (this.value) setManualFatturaMethod(${f.id}, this.value)" style="padding:5px 7px; border-radius:var(--radius-sm); border:1px solid ${f.payment_method ? 'var(--border)' : 'var(--warning)'}; font-size:0.85em;">
+            ${f.payment_method ? '' : '<option value="">method?</option>'}
+            <option value="cash" ${f.payment_method === 'cash' ? 'selected' : ''}>Cash</option>
+            <option value="bonifico" ${f.payment_method === 'bonifico' ? 'selected' : ''}>Bonifico</option></select>`;
+    return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:9px 12px; background:var(--bg); border:1px solid var(--border-soft); border-left:3px solid var(--accent); border-radius:var(--radius-sm); margin-bottom:6px; font-size:0.88em;">
+            <div><div><b>${escapeHtml(fmtNumeroFattura(f))}</b> · ${formatShortDate(f.data_fattura)} · ${escapeHtml(`${f.recipient_cognome || ''} ${f.recipient_nome || ''}`.trim())} · <b>€${eurPlain(f.importo)}</b></div>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:5px;">${studentCell}</div></div>
+            <div>${methodCell}</div>
+        </div>`;
+}
+// Last section of Collections: hand-added fatture, same date/method filters
+// as the payments above (they are invoiced, so «Not invoiced only» hides them).
+function manualFattureInView() {
+    if (document.getElementById('payHistNotInvoiced')?.checked) return [];
+    const { from, to } = getFeesPeriodRange();
+    const methodFilter = document.getElementById('payHistMethod')?.value || '';
+    const locId = getLocationIdFilter();
+    return manualFattureForCollections().filter((f) => {
+        const d = String(f.data_fattura).slice(0, 10);
+        if ((from && d < from) || (to && d > to)) return false;
+        if (locId !== null && (students.find((x) => x.id === f.student_id) || {}).locationId !== locId) return false;
+        return methodFilter === 'missing' ? !f.payment_method : !methodFilter || f.payment_method === methodFilter;
+    }).sort((a, b) => b.anno - a.anno || b.numero - a.numero);
+}
+function renderManualFattureCollections() {
+    const box = document.getElementById('manualFattureCollections');
+    if (!box) return;
+    const rows = manualFattureInView();
+    if (!rows.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div style="margin-top:6px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid var(--border-soft);">
+            <span style="font-weight:700;">Fatture added by hand</span>
+            <span class="badge badge-success">€${eurPlain(rows.reduce((s, f) => s + Number(f.importo || 0), 0))}</span>
+            <span style="color:var(--ink-soft); font-size:0.82em;">${escapeHtml(methodSplitText(rows.map((f) => ({ amount: f.importo, payment_method: f.payment_method }))))}</span>
+        </div>
+        <div style="font-size:0.78em; color:var(--ink-faint); margin-bottom:8px;">No payment entry in the app (paid before it). Set the student so they see the PDF, and how it was paid.</div>
+        ${rows.map(manualFatturaRowHtml).join('')}</div>`;
+}
+async function setManualFatturaMethod(id, method) {
+    const f = fattureList.find((x) => x.id === id);
+    if (!f) return;
+    const { error } = await supabaseClient.from('fatture').update({ payment_method: method }).eq('id', id);
+    if (error) { alert(/payment_method/.test(error.message) ? 'Run collections_manual_fatture.sql in Supabase first.' : 'Could not save: ' + error.message); renderPaymentHistory(); return; }
+    f.payment_method = method;
     renderPaymentHistory();
 }
+// Linking the student also publishes the PDF to their portal (accepted only).
+async function setManualFatturaStudent(id, studentId) {
+    const f = fattureList.find((x) => x.id === id);
+    const s = students.find((x) => x.id === studentId);
+    if (!f || !s) return;
+    if (!confirm(`Fattura ${fmtNumeroFattura(f)} (€${eurPlain(f.importo)}) is for ${s.name}?\n\n${s.name} will see its PDF in the member portal.`)) { renderPaymentHistory(); return; }
+    const update = { student_id: studentId };
+    try {
+        if (f.status === 'accepted' && !f.pdf_token) {
+            const token = await publishFatturaPdf({ ...f, student_id: studentId });
+            if (token) update.pdf_token = token;
+        }
+    } catch (e) {
+        console.error('Could not publish the PDF:', e);
+        alert(`Student set, but the PDF could not be sent to the portal: ${e?.message || e}`);
+    }
+    const { error } = await supabaseClient.from('fatture').update(update).eq('id', id);
+    if (error) { alert('Could not save: ' + error.message); return; }
+    Object.assign(f, update);
+    if (typeof refreshFattureViews === 'function') refreshFattureViews();
+    renderPaymentHistory();
+}
+// Section 2 «Money now»: balances over all dates — they don't follow the
+// period (cash in your pocket today is the same whatever month you look at).
+function renderCashRegister() {
+    const box = document.getElementById('cashRegisterBox');
+    if (!box) return;
+    const t = cashRegisterTotals();
+    const deposits = cashDeposits.slice().sort((a, b) => String(b.data).localeCompare(String(a.data)) || b.id - a.id);
+    box.innerHTML = `
+        ${cashDepositsMissing ? `<div style="font-size:0.82em; padding:8px 10px; margin-bottom:10px; background:var(--warning-soft); border-radius:var(--radius-sm);">Run <b>collections_cash.sql</b> in Supabase to record bank deposits and the method of expenses.</div>` : ''}
+        <div class="pay-summary-grid" style="margin-bottom:10px;">
+            <div class="stat-tile hero clickable${feesOpenPanel === 'cash' ? ' active' : ''}" onclick="toggleFeesPanel('cash')" style="background:var(--success-soft); border-color:#bbf0d1;">
+                <div class="label" style="color:var(--success);">Cash on hand</div>
+                <div class="value" style="color:${t.cash < 0 ? 'var(--danger)' : 'var(--success)'};">€${eurPlain(t.cash)}</div>
+                <div style="font-size:0.72em; color:var(--ink-faint);">all cash in − deposited to bank − cash expenses</div>
+            </div>
+            <div class="stat-tile hero clickable${feesOpenPanel === 'cash' ? ' active' : ''}" onclick="toggleFeesPanel('cash')" style="background:var(--accent-soft); border-color:#c7d9fb;">
+                <div class="label" style="color:var(--accent-ink);">Bank (studio)</div>
+                <div class="value" style="color:var(--accent-ink);">€${eurPlain(t.bank)}</div>
+                <div style="font-size:0.72em; color:var(--ink-faint);">all bonifico in + deposits − bank expenses (studio money only, not your real balance)</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="openCashDepositModal()" ${cashDepositsMissing ? 'disabled' : ''}>Deposit to bank</button>
+        </div>
+        ${feesOpenPanel === 'cash' ? `<div class="card" style="padding:12px 16px; margin-top:10px;"><div style="font-size:0.9em; font-weight:700; margin-bottom:6px;">Bank deposits (${deposits.length}) · €${eurPlain(t.deposited)}</div>
+            ${deposits.length ? '' : '<div style="font-size:0.85em; color:var(--ink-faint);">No deposits yet.</div>'}
+            ${deposits.map((d) => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em;">
+                <span>${formatShortDate(d.data)} · <b>€${eurPlain(d.importo)}</b>${d.note ? ' · ' + escapeHtml(d.note) : ''}</span>
+                <span style="display:flex; gap:6px;">
+                    ${d.receipt_path ? `<button class="btn btn-outline btn-sm" onclick="viewTaxPdf('${escapeHtml(d.receipt_path).replace(/'/g, "\\'")}')">Ricevuta</button>` : ''}
+                    <button class="btn btn-danger btn-sm" title="Delete" onclick="deleteCashDeposit(${Number(d.id)})">${icon('trash', 13)}</button>
+                </span>
+            </div>`).join('')}</div>` : ''}`;
+}
+function openCashDepositModal() {
+    const today = formatLocalDate(new Date());
+    taxModal('Deposit cash to bank',
+        `<div class="field"><label>Date</label><input type="date" id="cdData" value="${today}" max="${today}"></div>
+        <div class="field"><label>Amount (€)</label><input type="number" id="cdImporto" step="0.01" min="0.01"></div>
+        <div class="field"><label>Note (optional)</label><input type="text" id="cdNote" placeholder="e.g. Poste, sportello"></div>
+        <div class="field"><label>Ricevuta (optional, photo or PDF)</label><input type="file" id="cdReceipt" accept="application/pdf,image/*"></div>
+        <div style="font-size:0.8em; color:var(--ink-soft);">Cash on hand now: €${eurPlain(cashRegisterTotals().cash)}</div>`,
+        `<div style="display:flex; gap:8px; margin-left:auto;"><button class="btn btn-outline" onclick="closeTaxModal2()">Cancel</button>
+            <button class="btn btn-primary" id="cdSaveBtn" onclick="saveCashDeposit()">Save</button></div>`);
+}
+async function saveCashDeposit() {
+    const data = document.getElementById('cdData').value;
+    const importo = Number(document.getElementById('cdImporto').value);
+    const note = document.getElementById('cdNote').value.trim() || null;
+    if (!data) { alert('Choose the date.'); return; }
+    if (data > formatLocalDate(new Date())) { alert("The date can't be in the future."); return; }
+    if (!(importo > 0)) { alert('Enter the amount.'); return; }
+    const onHand = cashRegisterTotals().cash;
+    if (importo > onHand && !confirm(`That's more than the cash on hand (€${eurPlain(onHand)}). Save anyway?`)) return;
+    const btn = document.getElementById('cdSaveBtn');
+    if (btn) btn.disabled = true;
+    let receipt_path = null;
+    const file = document.getElementById('cdReceipt').files[0];
+    if (file) {
+        const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [])[1] || 'pdf';
+        const path = `cassa/deposit_${Date.now()}.${ext}`;
+        const { error: upErr } = await supabaseClient.storage.from(TAX_BUCKET).upload(path, file, { contentType: file.type || 'application/pdf', upsert: false });
+        if (upErr) { alert('Ricevuta not uploaded: ' + upErr.message); if (btn) btn.disabled = false; return; }
+        receipt_path = path;
+    }
+    const { data: row, error } = await supabaseClient.from('cash_deposits').insert({ data, importo, note, receipt_path }).select().single();
+    if (error) { alert('Could not save: ' + error.message); if (btn) btn.disabled = false; return; }
+    cashDeposits.push(row);
+    closeTaxModal2();
+    renderPaymentHistory();
+}
+async function deleteCashDeposit(id) {
+    const d = cashDeposits.find((x) => x.id === id);
+    if (!d || !confirm(`Delete the deposit of €${eurPlain(d.importo)} on ${formatShortDate(d.data)}?`)) return;
+    const { error } = await supabaseClient.from('cash_deposits').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error) { alert('Could not delete: ' + error.message); return; }
+    cashDeposits = cashDeposits.filter((x) => x.id !== id);
+    renderPaymentHistory();
+}
+
+
 function renderPaymentHistory() {
     const container = document.getElementById('paymentHistoryList');
     if (!container) return;
-    if (!paymentHistoryDefaultsSet) {
-        paymentHistoryDefaultsSet = true;
-        const today = formatLocalDate(new Date());
-        document.getElementById('payHistFrom').value = addMonthsToDate(today, -1);
-        document.getElementById('payHistTo').value = today;
-    }
-    const from = document.getElementById('payHistFrom')?.value || '';
-    const to = document.getElementById('payHistTo')?.value || '';
+    const { from, to, all: allTime } = getFeesPeriodRange();
 
     // Both manual-entry types from the same Recharge/Adjustment modal — not
     // class_deduction, which belongs to the per-student Transaction Ledger
@@ -4713,6 +4900,8 @@ function renderPaymentHistory() {
     // location of the student who paid it.
     const historyLocationId = getLocationIdFilter();
     const studentLocation = new Map(students.map((s) => [s.id, s.locationId]));
+    const methodFilter = document.getElementById('payHistMethod')?.value || '';
+    const notInvoicedOnly = !!document.getElementById('payHistNotInvoiced')?.checked;
     const records = v2CreditTransactions.filter((t) => {
         if (t.type !== 'recharge') return false;
         if (historyLocationId !== null && studentLocation.get(t.student_id) !== historyLocationId) return false;
@@ -4720,11 +4909,15 @@ function renderPaymentHistory() {
         if (!d) return false;
         if (from && d < from) return false;
         if (to && d > to) return false;
+        if (methodFilter === 'missing' ? !!t.payment_method : methodFilter && t.payment_method !== methodFilter) return false;
+        if (notInvoicedOnly && (t.deleted_at || !rechargeNotInvoiced(t))) return false;
         return true;
     });
+    renderCashRegister();
+    renderManualFattureCollections();
 
     const countEl = document.getElementById('rechargeHistoryCount');
-    if (countEl) countEl.textContent = `(${records.filter((t) => !t.deleted_at).length}${from || to ? '' : ', all time'})`;
+    if (countEl) countEl.textContent = `(${records.filter((t) => !t.deleted_at).length}${allTime ? ', all time' : ''})`;
     if (records.length === 0) {
         container.innerHTML = `<div style="color:var(--ink-faint); font-size:0.88em; padding:12px 0;">No recharges in this period.</div>`;
         return;
@@ -4759,7 +4952,8 @@ function renderPaymentHistory() {
                     <div>
                         <div style="${nameStyle}"${nameClick}>${name}${typeLabel}</div>
                         ${s?.parentName ? `<div style="font-size:0.82em; color:var(--ink-soft);">${escapeHtml(s.parentName)}</div>` : ''}
-                        ${isDeleted ? `<div style="font-size:0.78em; color:var(--danger); font-weight:700;">Deleted</div>` : ''}
+                        ${isDeleted ? `<div style="font-size:0.78em; color:var(--danger); font-weight:700;">Deleted</div>`
+                            : `<div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:4px; font-size:0.85em;">${rechargeMethodBadge(r.payment_method)}${rechargeFatturaBadge(r)}</div>`}
                     </div>
                     <div style="font-weight:800; color:${amountColor}; font-size:1.02em;${isDeleted ? ' text-decoration:line-through;' : ''}">€${r.amount}</div>
                 </div>`;
@@ -4768,8 +4962,9 @@ function renderPaymentHistory() {
             <div style="margin-bottom:18px;">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid var(--border-soft);">
                     <span style="font-weight:700;">${formatShortDate(date)}</span>
-                    <span class="badge badge-success">€${Math.round(dayTotal)} collected</span>
-                    <span style="color:var(--ink-faint); font-size:0.82em;">${activeDayRecs.length} transaction${activeDayRecs.length !== 1 ? 's' : ''}</span>
+                    <span class="badge badge-success">€${eurPlain(dayTotal)} collected</span>
+                    <span style="color:var(--ink-soft); font-size:0.82em;">${escapeHtml(methodSplitText(activeDayRecs))}</span>
+                    <span style="color:var(--ink-faint); font-size:0.82em;">${activeDayRecs.length} transaction${activeDayRecs.length !== 1 ? 's' : ''}${dayRecs.length > activeDayRecs.length ? ` · ${dayRecs.length - activeDayRecs.length} deleted` : ''}</span>
                 </div>
                 ${rows}
             </div>`;
@@ -4780,16 +4975,20 @@ async function addExpense(event) {
     event.preventDefault();
     const locationFilterId = getLocationIdFilter();
     if (locationFilterId === null) { alert('Pick a specific location above before adding an expense — expenses belong to one location each.'); return; }
+    const method = document.querySelector('input[name="expenseMethod"]:checked')?.value || '';
+    if (!method) { alert('Choose how it was paid: Cash or Bank.'); return; }
     const expenseData = {
         description: document.getElementById('expenseDesc').value,
         amount: parseFloat(document.getElementById('expenseAmount').value),
         expenseDate: document.getElementById('expenseDate').value,
-        location_id: locationFilterId
+        location_id: locationFilterId,
+        payment_method: method
     };
     try {
         await insertExpensesWithSchemaFallback([expenseData]);
         document.getElementById('expenseDesc').value = '';
         document.getElementById('expenseAmount').value = '';
+        document.querySelectorAll('input[name="expenseMethod"]').forEach((r) => { r.checked = false; });
         document.getElementById('expenseDate').valueAsDate = new Date();
         await loadAllData();
     } catch (error) {
@@ -8566,7 +8765,6 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') toggleNav(
 // ===== Static icon labels (buttons whose text is fixed, set once) =====
 function applyIcons() {
     document.getElementById('studentsTotalBalanceBtn').innerHTML = icon('credit-card', 14);
-    document.getElementById('paymentsTotalBalanceBtn').innerHTML = icon('credit-card', 14);
     document.getElementById('downloadBatchesPdfBtnLabel').innerHTML = iconLabel('download', 'Download PDF', 15);
     document.getElementById('refreshDataBtn').innerHTML = icon('refresh', 16);
     document.getElementById('perfCallsHeading').innerHTML = iconLabel('users', 'Performance Calls', 15);
@@ -8624,8 +8822,8 @@ function applyIcons() {
     document.getElementById('chargeStudentsBtnLabel').innerHTML = iconLabel('plus', 'Charge students', 14);
     document.getElementById('extraChargeCloseBtn').innerHTML = icon('x', 16);
 
-    const tabIcons = { tasse: 'credit-card', fatture: 'file-text', students: 'users', attendance: 'calendar', payments: 'credit-card', batches: 'filter', fees: 'file-text', reports: 'chevron-right', website: 'edit', performances: 'user' };
-    const tabLabels = { tasse: 'Taxes', fatture: 'Fatture', students: 'Students', attendance: 'Attendance', payments: 'Payments', batches: 'Batches', fees: 'Income & Expense', reports: 'Reports', website: 'Website', performances: 'Performances' };
+    const tabIcons = { tasse: 'credit-card', fatture: 'file-text', students: 'users', attendance: 'calendar', batches: 'filter', fees: 'file-text', reports: 'chevron-right', website: 'edit', performances: 'user' };
+    const tabLabels = { tasse: 'Taxes', fatture: 'Fatture', students: 'Students', attendance: 'Attendance', batches: 'Batches', fees: 'Income & Expense', reports: 'Reports', website: 'Website', performances: 'Performances' };
     // Notification dots for pending requests, visible from every tab —
     // passcode resets (Students), attendance requests (Attendance), batch
     // moves (Batches). Each id is filled/hidden by that request's own
