@@ -58,6 +58,10 @@ async function loadFattureData() {
         // fatture_todo.sql run? (it adds invoice_from — the «Invoice payments from» setting)
         const { error: e3 } = await supabaseClient.from('fattura_skips').select('transaction_id').limit(1);
         fatturaTodoReady = !e3;
+        // fatture_old_payments.sql run? (old payments of 2026 in the Fatture tab)
+        const { data: os, error: e4 } = await supabaseClient.from('fattura_old_skips').select('payment_key');
+        oldPaymentsReady = !e4;
+        fattureOldSkips = new Set((os || []).map((r) => r.payment_key));
         setTimeout(checkXmlUploads, 1500);
     } catch (e) {
         console.error('Fatture not available (has fatture_xml.sql been run?):', e);
@@ -608,6 +612,25 @@ async function publishFatturaPdf(f) {
     }
     return publishMemberDoc(blob, 'pdf');
 }
+// Never in the student's portal: a nota di credito, a cancelled fattura, and a
+// fattura made now for an old payment (today's date on a months-old payment
+// would only confuse them; it stays in the admin's register).
+function fatturaHiddenFromStudent(f) {
+    return fatturaIsNc(f) || !!f.annullata_da || fatturaMadeForOldPayment(f);
+}
+// Made now («Make fattura» in Old payments) for a payment of the old system
+function fatturaMadeForOldPayment(f) { return !!f && f.source !== 'manual' && fatturaOldKeys(f).length > 0; }
+// «old record · paid on …» under such a fattura in the student's list
+function fatturaOldRecordNote(f) {
+    if (!fatturaMadeForOldPayment(f)) return '';
+    const d = fatturaOldPaymentDate(f);
+    return `<div style="font-size:0.85em; color:var(--ink-faint);">${fatturaOldRecordLabel(f)} · not shown to the student</div>`;
+}
+// «old record (04/05/2026)»: the old payment's date when known
+function fatturaOldRecordLabel(f) {
+    const d = fatturaOldPaymentDate(f);
+    return `<b>old record</b>${d ? ` (${formatShortDate(d)})` : ''}`;
+}
 async function unpublishFatturaPdf(f) {
     if (!f.pdf_token) return;
     await supabaseClient.storage.from(MEMBER_DOCS_BUCKET).remove([f.pdf_token]);
@@ -624,7 +647,7 @@ async function setFatturaStatus(id, status, quick) {
     const update = { status, status_updated_at: new Date().toISOString() };
     try {
         if (status === 'accepted') {
-            if (!fatturaIsNc(f) && !f.annullata_da) update.pdf_token = await publishFatturaPdf(f);
+            if (!fatturaHiddenFromStudent(f)) update.pdf_token = await publishFatturaPdf(f);
         } else if (f.status === 'accepted' && f.pdf_token) {
             await unpublishFatturaPdf(f);
             update.pdf_token = null;
@@ -1322,6 +1345,7 @@ async function saveFatturaForm() {
         importo: d.importo, descrizione: d.descrizione
     };
     if (d.mode === 'create' && d.extra_transaction_ids && d.extra_transaction_ids.length) row.extra_transaction_ids = d.extra_transaction_ids;
+    if (d.mode === 'create' && d.old_payment_keys && d.old_payment_keys.length) row.old_payment_keys = d.old_payment_keys;
     if (manual && d.tipo_documento) row.tipo_documento = d.tipo_documento;
     if (d.mode === 'manual' && d.collegata_id) row.collegata_id = d.collegata_id;
     fatturaSaveInProgress = true;
@@ -1487,7 +1511,8 @@ function openFatturaView(id) {
         <div style="font-size:0.78em; color:var(--ink-soft); margin-top:8px; line-height:1.5;">
             ${escapeHtml(FATTURA_STATUS[f.status]?.hint || '')}<br>
             Check the outcome on AdE: «Fatture e Corrispettivi» → «Monitoraggio» → «Fatture emesse».
-            ${f.status === 'accepted' ? (f.pdf_token ? '<br><strong style="color:var(--success);">The student sees the PDF in their portal.</strong>' : (f.student_id ? '' : '<br>No student linked: the PDF is not in a portal.')) : '<br>The student sees the PDF only once it is Accepted.'}
+            ${fatturaHiddenFromStudent(f) ? `<br><strong>Not shown to the student</strong> (${fatturaIsNc(f) ? 'nota di credito' : f.annullata_da ? 'cancelled' : 'made now for an old payment'}): it stays in your register only.`
+                : f.status === 'accepted' ? (f.pdf_token ? '<br><strong style="color:var(--success);">The student sees the PDF in their portal.</strong>' : (f.student_id ? '' : '<br>No student linked: the PDF is not in a portal.')) : '<br>The student sees the PDF only once it is Accepted.'}
         </div>`;
     document.getElementById('fatturaModalFooter').innerHTML = `
         ${f.status === 'created' || f.source === 'manual' ? `<button class="btn btn-danger" onclick="deleteFattura(${f.id})" title="Delete from the register">${icon('trash', 15)}</button>` : ''}
@@ -1630,6 +1655,171 @@ async function restoreCancelledFattura(nc) {
     if (error) { alert('Could not restore fattura ' + fmtNumeroFattura(f) + ': ' + error.message); return false; }
     Object.assign(f, back);
     return true;
+}
+
+// ---------- old payments (before the app, fees_paid) of 2026 ----------
+// Read-only rows of the old system. Each one either has a hand-added fattura
+// (the app suggests which, see oldPaymentsToInvoice), gets a new fattura
+// (dated today: a fattura can't be backdated, never shown to the student),
+// or is «not needed» (fattura_old_skips). The user wants no «Not needed» button:
+// ignored ones are put there on request, from outside the screen.
+// fatture_old_payments.sql.
+const OLD_PAY_FROM = '2026-01-01';
+const OLD_PAY_FEE = 30; // the monthly fee in the old system (user, 2026-11-08)
+let oldPaymentsReady = false;
+let fattureOldSkips = new Set();
+function oldPaymentKey(r) {
+    const sid = r.studentid ?? r.studentId ?? r.student_id;
+    return r.id != null ? `id:${r.id}` : `s${sid}:${String(r.paiddate ?? r.paidDate ?? r.paid_date ?? '').slice(0, 10)}`;
+}
+function fatturaOldKeys(f) { return Array.isArray(f && f.old_payment_keys) ? f.old_payment_keys : []; }
+function oldPaymentsList() {
+    if (typeof oldPayments === 'undefined') return [];
+    const to = typeof CUTOVER_DATE !== 'undefined' ? CUTOVER_DATE : '2026-09-02';
+    const rows = oldPayments.map((r) => {
+        const sid = r.studentid ?? r.studentId ?? r.student_id;
+        const s = students.find((x) => String(x.id) === String(sid));
+        const date = String(r.paiddate ?? r.paidDate ?? r.paid_date ?? '').slice(0, 10);
+        const known = r.amount != null && r.amount !== '' && Number(r.amount) > 0;
+        // Many old rows never saved their amount: it was the monthly fee then, €30.
+        return { key: oldPaymentKey(r), s, date, month: String(r.month ?? r.feeMonth ?? r.fee_month ?? '').slice(0, 7), paid: !!(r.ispaid ?? r.isPaid ?? r.is_paid), amount: known ? Number(r.amount) : OLD_PAY_FEE, known };
+    }).filter((p) => p.paid && p.s && p.date && p.date >= OLD_PAY_FROM && p.date < to);
+    // One payment = one student on one day. The old system made a row per month
+    // paid (two months at once = two rows, one payment) and sometimes saved the
+    // same month twice: different months add up, a repeated month counts once.
+    const groups = new Map();
+    rows.forEach((p) => {
+        const g = groups.get(`${p.s.id}|${p.date}`) || groups.set(`${p.s.id}|${p.date}`, { key: p.key, keys: [], s: p.s, date: p.date, months: new Map(), known: true }).get(`${p.s.id}|${p.date}`);
+        g.keys.push(p.key);
+        if (!p.known) g.known = false;
+        if (!g.months.has(p.month)) g.months.set(p.month, p.amount);
+    });
+    return [...groups.values()].map((g) => ({
+        key: g.key, keys: g.keys, s: g.s, date: g.date, known: g.known,   // known: the amount was saved
+        months: [...g.months.keys()].filter(Boolean).sort(),
+        amount: [...g.months.values()].reduce((sum, a) => sum + a, 0)
+    }));
+}
+// The date of the old payment(s) a fattura covers (for income by payment date)
+function fatturaOldPaymentDate(f) {
+    const keys = fatturaOldKeys(f);
+    if (!keys.length) return null;
+    const ds = oldPaymentsList().filter((p) => p.keys.some((k) => keys.includes(k))).map((p) => p.date).sort();
+    return ds[0] || null;
+}
+// Can this student get a fattura now (CF, address, parent's data)?
+function oldPaymentDataOk(s) {
+    const today = formatLocalDate(new Date());
+    const d = { ...fatturaRecipientFor(s, today), importo: 1, descrizione: 'x', data_fattura: today, numero: 1 };
+    return fatturaDataChecks(d).problems.length === 0;
+}
+// Waiting ones (no fattura, not skipped), each with the hand-added fattura of
+// 2026 that probably covers it: same student (or parent's CF), the same
+// amount first, then the nearest date before OR after (the old date is often
+// the day it was marked paid, not the day of the payment). One fattura is
+// suggested for one payment only. Students whose details are incomplete are
+// left out, unless a hand-added fattura already covers them.
+function oldPaymentsToInvoice() {
+    const linked = new Set(fattureList.flatMap(fatturaOldKeys));
+    const waiting = oldPaymentsList().filter((p) => !p.keys.some((k) => linked.has(k) || fattureOldSkips.has(k))).sort((a, b) => a.date.localeCompare(b.date));
+    const used = new Set();
+    const norm = (x) => String(x || '').trim().toUpperCase();
+    const days = (a, b) => Math.abs(new Date(a + 'T12:00:00') - new Date(String(b).slice(0, 10) + 'T12:00:00')) / 86400000;
+    // Cancelled even if not linked: a nota di credito made on the AdE site (added
+    // here by hand) has no link to its fattura. Same CF and amount, same year,
+    // dated on or after it = that fattura is cancelled (e.g. fattura 1/26 + nota 1/26).
+    // One nota cancels one fattura: the latest one before it with that CF and amount.
+    const cancelledIds = new Set();
+    fattureList.filter((n) => fatturaIsNc(n) && n.status !== 'rejected').forEach((n) => {
+        if (n.collegata_id) { cancelledIds.add(n.collegata_id); return; }
+        const f = fattureList.filter((x) => !fatturaIsNc(x) && x.anno === n.anno && !cancelledIds.has(x.id)
+            && norm(x.recipient_cf) === norm(n.recipient_cf) && Math.abs(Number(x.importo) - Number(n.importo)) < 0.01
+            && String(x.data_fattura).slice(0, 10) <= String(n.data_fattura).slice(0, 10))
+            .sort((a, b) => String(b.data_fattura).localeCompare(String(a.data_fattura)))[0];
+        if (f) cancelledIds.add(f.id);
+    });
+    const cancelled = (f) => cancelledIds.has(f.id);
+    const all = waiting.map((p) => {
+        const an = getStudentAnagrafica(p.s);
+        const cfs = [norm(an.cf), norm(an.parentCf)].filter(Boolean);
+        const cands = fattureList.filter((f) => !fatturaIsNc(f) && f.status !== 'rejected' && !f.annullata_da && !cancelled(f) && !f.transaction_id
+            && !fatturaOldKeys(f).length && !used.has(f.id) && f.anno === Number(p.date.slice(0, 4))
+            && (f.student_id === p.s.id || cfs.includes(norm(f.recipient_cf)))
+            && days(p.date, f.data_fattura) <= 150)
+            .sort((a, b) => {
+                const sameA = Math.abs(Number(a.importo) - p.amount) < 0.01, sameB = Math.abs(Number(b.importo) - p.amount) < 0.01;
+                // amount saved: same amount first; not saved (€30 is only the fee): nearest date first
+                const byDate = days(p.date, a.data_fattura) - days(p.date, b.data_fattura);
+                return p.known ? (sameB - sameA) || byDate : byDate || (sameB - sameA);
+            });
+        const guess = cands[0] || null;
+        if (guess) used.add(guess.id);
+        return { ...p, guess, dataOk: oldPaymentDataOk(p.s) };
+    });
+    const shown = all.filter((p) => p.guess || p.dataOk);
+    shown.hiddenCount = all.length - shown.length;
+    return shown;
+}
+function oldPaymentsCardHtml() {
+    if (!oldPaymentsReady || typeof oldPayments === 'undefined') return '';
+    const list = oldPaymentsToInvoice();
+    if (!list.length) return '';
+    const row = (p) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0; border-top:1px solid var(--border-soft); font-size:0.85em;">
+            <span style="flex:1; min-width:200px;"><b>${dateIt(p.date)}</b> · ${escapeHtml(p.s.name)} · €${moneyIt(p.amount)}${p.months.length > 1 ? ` <span style="color:var(--ink-faint);">· ${p.months.length} months (${p.months.map((m) => m.split('-').reverse().join('/')).join(', ')})</span>` : ''}
+                ${p.guess ? `<div style="font-size:0.9em; color:var(--success); margin-top:2px;">Probably fattura <b>${fmtNumeroFattura(p.guess)}</b> of ${dateIt(p.guess.data_fattura)} (€${moneyIt(p.guess.importo)}, ${escapeHtml(p.guess.recipient_cognome || '')} ${escapeHtml(p.guess.recipient_nome || '')})</div>` : ''}</span>
+            <span style="display:flex; gap:6px; flex-wrap:wrap;">
+                ${p.guess ? `<button class="btn btn-success btn-sm" onclick="linkOldPayment('${escapeHtml(p.key)}', ${p.guess.id})">Yes, it's ${fmtNumeroFattura(p.guess)}</button>` : ''}
+                ${p.dataOk ? `<button class="btn ${p.guess ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="makeFatturaForOldPayment('${escapeHtml(p.key)}')">Make fattura</button>` : ''}
+            </span>
+        </div>`;
+    const guessed = list.filter((p) => p.guess).length;
+    return `
+        <details class="card" style="padding:14px 16px; margin-bottom:14px;" open>
+            <summary style="cursor:pointer; font-weight:700; font-size:0.92em;">Old payments 2026, before the app: ${list.length} without fattura${guessed ? ` · ${guessed} probably already invoiced` : ''}</summary>
+            <div style="font-size:0.8em; color:var(--ink-soft); margin:8px 0 4px;">Payments of the old system (Jan–Aug 2026). «Yes, it's …» links the fattura you already made by hand. «Make fattura» makes a new one dated today (a fattura can't be backdated). «Yes» only adds a note to that fattura: its number, PDF and what the student sees stay the same. A fattura made here stays in your register only: not shown to the student, not counted in Income &amp; Expense (the money came in before the app).${list.hiddenCount ? ` <b>${list.hiddenCount} hidden: student details incomplete</b> (codice fiscale or address, see Students → Controllo dati).` : ''}</div>
+            ${list.map(row).join('')}
+        </details>`;
+}
+async function linkOldPayment(key, fatturaId) {
+    const f = fattureList.find((x) => x.id === fatturaId);
+    if (!f) return;
+    const p = oldPaymentsList().find((x) => x.key === key);   // all the rows of that payment
+    const keys = [...new Set([...fatturaOldKeys(f), ...(p ? p.keys : [key])])];
+    const { error } = await supabaseClient.from('fatture').update({ old_payment_keys: keys }).eq('id', f.id);
+    if (error) { alert('Could not save: ' + error.message); return; }
+    f.old_payment_keys = keys;
+    refreshFattureViews();
+}
+// No button calls these (see above): kept to mark / restore from the console.
+async function skipOldPayment(key) {
+    const { error } = await supabaseClient.from('fattura_old_skips').upsert({ payment_key: key }, { onConflict: 'payment_key' });
+    if (error) { alert('Could not save: ' + error.message); return; }
+    fattureOldSkips.add(key);
+    refreshFattureViews();
+}
+async function unskipOldPayment(key) {
+    const { error } = await supabaseClient.from('fattura_old_skips').delete().eq('payment_key', key);
+    if (error) { alert('Could not save: ' + error.message); return; }
+    fattureOldSkips.delete(key);
+    refreshFattureViews();
+}
+function makeFatturaForOldPayment(key) {
+    if (!fatturaFeatureReady()) return;
+    const p = oldPaymentsList().find((x) => x.key === key);
+    if (!p) return;
+    const settingsProblems = fatturaSettingsProblems(fatturaSettings);
+    if (settingsProblems.length) { alert('First complete the fattura Settings:\n- ' + settingsProblems.join('\n- ')); openFatturaSettings(); return; }
+    const plan = planFatturaForPayment({ created_at: p.date, amount: p.amount }, p.s);
+    if (plan.risk) { alert(plan.risk.msg); return; }
+    const anno = Number(plan.d.data_fattura.slice(0, 4));
+    fatturaDraft = {
+        mode: 'create', student_id: p.s.id, transaction_id: null, source: 'app',
+        anno, numero: nextFatturaNumber(anno), revision: 0, ...plan.d,
+        old_payment_keys: p.keys, paymentDate: p.date
+    };
+    openFatturaModalShell('New fattura (old payment)', `${p.s.name} · paid €${moneyIt(p.amount)} on ${dateIt(p.date)}`);
+    renderFatturaForm();
 }
 
 // ---------- settings ----------
@@ -2157,6 +2347,7 @@ function renderFattureTab() {
         ${settingsWarn}
         ${xmlNotUploadedCardHtml()}
         ${fattureTodoCardHtml(chosenYear)}
+        ${oldPaymentsCardHtml()}
         ${legacyHtml}
         <div class="card" style="padding:14px 16px; margin-bottom:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
             <div class="field" style="margin:0; min-width:110px;"><label>Year</label>
@@ -2185,7 +2376,7 @@ function renderFattureTab() {
                 <div class="student-info" style="flex:1 1 220px;">
                     <div>
                         <div style="font-weight:700;">${escapeHtml(`${f.recipient_cognome}, ${f.recipient_nome}`)}${f.recipient_type === 'parent' ? ' <span style="font-weight:400; color:var(--ink-faint); font-size:0.85em;">(parent)</span>' : ''}</div>
-                        <div class="student-meta">${dateIt(f.data_fattura)} · ${escapeHtml(f.recipient_cf)}${s && f.recipient_type === 'parent' ? ' · student: ' + escapeHtml(s.name) : ''}${f.source === 'manual' ? ' · added by hand' : ''}${fatturaIsNc(f) && fattureList.some((x) => x.id === f.collegata_id) ? ` · cancels ${escapeHtml(fmtNumeroFattura(fattureList.find((x) => x.id === f.collegata_id)))}` : ''}</div>
+                        <div class="student-meta">${dateIt(f.data_fattura)} · ${escapeHtml(f.recipient_cf)}${s && f.recipient_type === 'parent' ? ' · student: ' + escapeHtml(s.name) : ''}${f.source === 'manual' ? ' · added by hand' : ''}${fatturaMadeForOldPayment(f) ? ' · ' + fatturaOldRecordLabel(f) : ''}${fatturaIsNc(f) && fattureList.some((x) => x.id === f.collegata_id) ? ` · cancels ${escapeHtml(fmtNumeroFattura(fattureList.find((x) => x.id === f.collegata_id)))}` : ''}</div>
                     </div>
                 </div>
                 <div style="font-weight:800;${fatturaIsNc(f) ? ' color:var(--danger);' : ''}">${fatturaIsNc(f) ? '−' : ''}€${moneyIt(f.importo)}</div>
@@ -2243,7 +2434,7 @@ function renderStudentFatture(s) {
             const paid = covered.length === 1 && String(covered[0].created_at).slice(0, 10) === String(f.data_fattura).slice(0, 10) ? [] : covered;
             return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-soft); font-size:0.85em; cursor:pointer;" onclick="openFatturaView(${f.id})">
                 <span><strong>${fmtNumeroFattura(f)}</strong>${fatturaIsNc(f) ? ' <span style="color:var(--danger);">nota di credito</span>' : ''} · ${dateIt(f.data_fattura)} · ${fatturaIsNc(f) ? '−' : ''}€${moneyIt(f.importo)}${paid.length
-                    ? `<div style="font-size:0.85em; color:var(--ink-faint);">paid on ${escapeHtml(paid.map((x) => `${formatShortDate(x.created_at)} · €${String(moneyIt(x.amount)).replace(/,00$/, '')}`).join(' + '))}</div>` : ''}</span>
+                    ? `<div style="font-size:0.85em; color:var(--ink-faint);">paid on ${escapeHtml(paid.map((x) => `${formatShortDate(x.created_at)} · €${String(moneyIt(x.amount)).replace(/,00$/, '')}`).join(' + '))}</div>` : ''}${fatturaOldRecordNote(f)}</span>
                 <span style="display:flex; gap:6px; align-items:center;">
                     ${f.annullata_da ? '<span class="badge badge-neutral">Cancelled</span>' : `<span class="badge ${st.badge}">${st.label}</span>`}
                     <button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openFatturaPdf(${f.id})">PDF</button>

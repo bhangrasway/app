@@ -466,6 +466,7 @@ function taxGuidesHtml() {
 
 // ---------- modals ----------
 function taxModal(title, bodyHtml, footerHtml) {
+    document.querySelector('#taxGenericModal .modal-box').style.maxWidth = '560px';   // a wider caller widens it after
     document.getElementById('taxGenModalTitle').textContent = title;
     document.getElementById('taxGenModalBody').innerHTML = bodyHtml;
     document.getElementById('taxGenModalFooter').innerHTML = footerHtml;

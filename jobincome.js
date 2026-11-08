@@ -110,7 +110,12 @@ function ricaviByPaymentDate(anno) {
         const txs = ids.map((id) => v2CreditTransactions.find((t) => t.id === id)).filter(Boolean);
         const imp = sign * Number(f.importo || 0);
         const txSum = txs.reduce((s, t) => s + Number(t.amount || 0), 0);
-        if (!txs.length || !(txSum > 0)) { if (String(base.data_fattura).slice(0, 4) === String(anno)) tot += imp; return; }
+        if (!txs.length || !(txSum > 0)) {
+            // an old payment (before the app) counts on its own date
+            const d = (typeof fatturaOldPaymentDate === 'function' && fatturaOldPaymentDate(base)) || base.data_fattura;
+            if (String(d).slice(0, 4) === String(anno)) tot += imp;
+            return;
+        }
         // A fattura covering several payments: split its amount by each payment
         txs.forEach((t) => { if (String(t.created_at).slice(0, 4) === String(anno)) tot += imp * Number(t.amount || 0) / txSum; });
     });
@@ -163,6 +168,7 @@ function renderJobIncome(el) {
           </div>` : '';
     el.innerHTML = `${taxViewPills()}
         ${taxAlertsHtml()}
+        ${incomeThresholdsCardHtml(anno)}
         ${totalTable}
         <div class="section-label">Jobs ${anno} (CU)</div>
         ${cuLine}
@@ -466,8 +472,59 @@ function assegnoSociale(anno) {
 function jobIncomeRows(anno) {
     return jobSourcesOf(anno).map((s) => {
         const fromCu = jobNum(s.cu_reddito) !== null;
-        return { src: s, reddito: fromCu ? Number(s.cu_reddito) : jobExpectedCu(s.id).imponibile, fromCu };
+        // No CU yet: the buste paga's «imponibile», or the lordo where it wasn't typed
+        const fromPay = r2(jobPayslipsOf(s.id).reduce((x, p) => x + Number(jobNum(p.imponibile) ?? jobNum(p.lordo) ?? 0), 0));
+        return { src: s, reddito: fromCu ? Number(s.cu_reddito) : fromPay, fromCu };
     });
+}
+// Months a job ran (whole months already over) with no busta paga entered
+function jobMissingMonths(s, anno) {
+    const today = formatLocalDate(new Date());
+    const lastOver = new Date(today.slice(0, 7) + '-01T12:00:00'); lastOver.setDate(0);   // end of last month
+    const from = String(s.dal || `${anno}-01-01`).slice(0, 10) > `${anno}-01-01` ? String(s.dal).slice(0, 7) : `${anno}-01`;
+    let to = s.al ? String(s.al).slice(0, 7) : formatLocalDate(lastOver).slice(0, 7);
+    if (to > formatLocalDate(lastOver).slice(0, 7)) to = formatLocalDate(lastOver).slice(0, 7);
+    if (to > `${anno}-12`) to = `${anno}-12`;
+    const have = new Set(jobPayslipsOf(s.id).map((p) => String(p.mese).slice(0, 7)));
+    const out = [];
+    for (let m = from; m <= to; ) {
+        if (!have.has(m)) out.push(m);
+        const d = new Date(m + '-01T12:00:00'); d.setMonth(d.getMonth() + 1); m = formatLocalDate(d).slice(0, 7);
+    }
+    return out;
+}
+// Total reddito of the year vs the permesso / ricongiungimento incomes, from
+// what's entered: job (CU, or buste paga) + forfettario (ricavi × 78% − INPS paid).
+function incomeThresholdsCardHtml(anno) {
+    const d = redditiSummaryData(anno);
+    const bar = (label, need) => {
+        const ok = d.tot >= need;
+        const pct = Math.min(100, Math.round(d.tot / need * 100));
+        return `<div style="margin-top:10px;">
+            <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:0.88em;">
+                <span><b>${label}</b> · needs ${eur(need)}</span>
+                <span style="font-weight:700; color:${ok ? 'var(--success)' : 'var(--danger)'};">${ok ? '✅ reached' : `❌ ${eur(r2(need - d.tot))} missing`}</span>
+            </div>
+            <div style="height:10px; border-radius:999px; background:var(--border-soft, #eee); overflow:hidden; margin-top:4px;">
+                <div style="height:100%; width:${pct}%; background:${ok ? 'var(--success)' : 'var(--warning, #d97706)'};"></div>
+            </div>
+        </div>`;
+    };
+    const missing = jobSourcesOf(anno).map((s) => ({ s, m: jobMissingMonths(s, anno) })).filter((x) => x.m.length);
+    return `
+        <div class="section-label">Income ${anno} for permesso / ricongiungimento</div>
+        <div class="card" style="padding:14px 16px; margin-bottom:22px;">
+            <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:0.88em;">
+                <span>Job ${d.jobs.some((r) => r.fromCu) ? '(CU / buste paga)' : '(buste paga)'}: <b>${eur(d.jobTot)}</b></span>
+                <span>Dance course (forfettario, ${d.fy.coeff}% − INPS): <b>${eur(d.forf)}</b></span>
+                <span style="font-size:1.1em;">Total reddito: <b>${eur(d.tot)}</b></span>
+            </div>
+            ${bar(`Permesso di soggiorno`, d.as.importo)}
+            ${bar(`Ricongiungimento, 1 family member`, d.ricong1)}
+            ${missing.length ? `<div style="margin-top:12px; padding:8px 12px; border-radius:var(--radius-sm); background:var(--warning-soft); font-size:0.85em;">
+                <b>Not complete yet: buste paga missing</b> — ${missing.map((x) => `${escapeHtml(x.s.nome)}: ${x.m.map((m) => JOB_MESI[Number(m.slice(5, 7)) - 1]).join(', ')}`).join(' · ')}. Add them and the total goes up.</div>` : ''}
+            <div style="font-size:0.78em; color:var(--ink-faint); margin-top:8px;">From what is entered in the app (thresholds ${d.as.anno}). Officially the Questura / Prefettura look at the CU and the Modello Redditi; ask a patronato which year they use.</div>
+        </div>`;
 }
 const jobIncomeTotal = (anno) => r2(jobIncomeRows(anno).reduce((s, r) => s + r.reddito, 0));
 function taxAlertsHtml() {

@@ -265,6 +265,52 @@
         return { via: p[0] || '', civico: p[1] || '', cap: p[2] || '', comune: p[3] || '', provincia: p[4] || '' };
     }
 
+    // A whole address typed in one field: "Via Roma 5, 26100 Cremona (CR)",
+    // "via roma 5 cremona", "Corso XX Settembre 39 26100" -> parts. The comune
+    // is checked against the official list (loadComuni() first), which also
+    // gives the provincia and, when it has a single one, the CAP.
+    function parseFreeAddress(text) {
+        let t = String(text || '').replace(/\s+/g, ' ').trim();
+        const empty = { via: '', civico: '', cap: '', comune: '', provincia: '' };
+        if (!t) return empty;
+        if (t.includes('|')) return parseLegacyAddress(t);
+        // all lower or all upper case -> "Via Roma"; mixed case is kept (Corso XX Settembre)
+        const fixCase = (s) => (s === s.toLowerCase() || s === s.toUpperCase() ? titleCase(s) : s.trim());
+        const trim = (s) => s.replace(/^[,\s\-–]+|[,\s\-–]+$/g, '');
+        let provincia = '';
+        const pm = t.match(/\(\s*([A-Za-z]{2})\s*\)\s*$/) || t.match(/[\s,]([A-Z]{2})$/);
+        if (pm) { provincia = pm[1].toUpperCase(); t = trim(t.slice(0, pm.index)); }
+        let cap = '', comune = '', street = t;
+        const cm = t.match(/(?:^|[\s,])(\d{5})(?=$|[\s,])/);
+        if (cm) {
+            cap = cm[1];
+            const at = cm.index + cm[0].indexOf(cap);
+            street = trim(t.slice(0, at));
+            comune = trim(t.slice(at + 5));
+        }
+        // no comune after the CAP: try the last words of the street (1–4 words),
+        // keeping at least two for the street («Via Roma» is a street, not Roma)
+        if (!comune && comuni) {
+            const words = street.split(/[\s,]+/).filter(Boolean);
+            for (let n = Math.min(4, words.length - 2); n >= 1; n--) {
+                const cand = words.slice(-n).join(' ');
+                if (findComune(cand, provincia)) { comune = cand; street = trim(words.slice(0, -n).join(' ')); break; }
+            }
+        }
+        // still none: the only comune with that CAP
+        let c = comune ? findComune(comune, provincia) : null;
+        if (!c && !comune && cap && comuni) {
+            const byCap = comuni.filter((x) => x.c.includes(cap));
+            if (byCap.length === 1) c = byCap[0];
+        }
+        if (c) { comune = c.n; provincia = c.s; if (!cap && c.c.length === 1) cap = c.c[0]; }
+        // house number at the end of the street: "5", "5/A", "5 B", "n. 5", "n°5"
+        let civico = '';
+        const nm = street.match(/[\s,]+(?:n\.?|n°|nr\.?|num\.?)?\s*(\d+\s*[A-Za-z]?(?:\s*\/\s*\w+)?)$/i);
+        if (nm) { civico = nm[1].replace(/\s+/g, '').toUpperCase(); street = trim(street.slice(0, nm.index)); }
+        return { via: fixCase(street), civico, cap, comune: c ? c.n : fixCase(comune), provincia };
+    }
+
     // ---------- comune picker UI ----------
     // Wires three inputs: comune (typed, with suggestions), provincia
     // (read-only, set from the pick) and CAP (suggestions from the pick,
@@ -371,7 +417,7 @@
     window.Anagrafica = {
         titleCase, normalizeCf, validateCodiceFiscale, cfMatchesName, cognomeCode, nomeCode,
         ageOnDate, isMinorOnDate, suggestNameSplit,
-        loadComuni, searchComuni, findComune, siglaFromText, validateAddress, parseLegacyAddress, hasToponimo,
+        loadComuni, searchComuni, findComune, siglaFromText, validateAddress, parseLegacyAddress, parseFreeAddress, hasToponimo,
         attachComunePicker, setComuneValue,
         get comuniLoaded() { return !!comuni; }
     };

@@ -25,13 +25,13 @@
 </script>
 <script src="membership.js?v=2"></script>
 <script>window.ANAGRAFICA_LANG = 'en';</script>
-<script src="anagrafica.js?v=4"></script>
+<script src="anagrafica.js?v=5"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="pdfview.js?v=2"></script>
-<script src="fatture.js?v=42"></script>
+<script src="fatture.js?v=54"></script>
 <script src="exports.js?v=10"></script>
-<script src="tasse.js?v=27"></script>
-<script src="jobincome.js?v=9"></script>
+<script src="tasse.js?v=28"></script>
+<script src="jobincome.js?v=11"></script>
 <script src="notifiche.js?v=9"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -4704,7 +4704,10 @@ function methodSplitText(rows) {
 function manualFattureForCollections() {
     if (typeof fattureList === 'undefined' || typeof fatturaExtraIds !== 'function') return [];
     // not a nota di credito, nor a fattura cancelled by one (its payment is counted already)
-    return fattureList.filter((f) => !f.transaction_id && !fatturaExtraIds(f).length && f.status !== 'rejected' && f.tipo_documento !== 'TD04' && !f.annullata_da && !f.orig_transaction_id);
+    return fattureList.filter((f) => !f.transaction_id && !fatturaExtraIds(f).length && f.status !== 'rejected' && f.tipo_documento !== 'TD04' && !f.annullata_da && !f.orig_transaction_id
+        // a fattura MADE from an old payment (dated today, money came months ago) is
+        // left out; a hand-added one stays counted even once linked to its old payment
+        && !(f.source !== 'manual' && Array.isArray(f.old_payment_keys) && f.old_payment_keys.length));
 }
 function cashRegisterTotals() {
     const sum = (rows, key) => rows.reduce((s, x) => s + Number(x[key] || 0), 0);
@@ -7883,6 +7886,113 @@ function sendMissingDataWhatsApp(studentId) {
     const s = students.find((x) => x.id === studentId);
     if (s) openWhatsApp(s.phone, missingDataWhatsAppMessage(s, getStudentDataProblems(s)));
 }
+// ----- Recover addresses typed in the wrong fields -----
+// An incomplete address whose text is all there, just in one field (e.g. the
+// whole «Via Roma 5, 26100 Cremona» in Street) or still only in the old
+// single «address» column: split it with Anagrafica.parseFreeAddress, show it,
+// and save only what the user ticks. Nothing is written without the tick.
+let addressRecoveryList = [];
+function addressRecoveryCandidates() {
+    const A = window.Anagrafica;
+    if (!A || !A.parseFreeAddress) return [];
+    const join = (a) => [a.via, a.civico, a.cap, a.comune, a.provincia].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
+    return students.map((s) => {
+        const stored = { via: s.addrVia, civico: s.addrCivico, cap: s.addrCap, comune: s.addrComune, provincia: s.addrProvincia };
+        if (A.validateAddress(stored).ok) return null;                       // already fine
+        const text = Object.values(stored).some(Boolean) ? join(stored) : String(s.address || '');
+        if (!text.trim()) return null;                                       // nothing to recover
+        const next = A.parseFreeAddress(text);
+        if (['via', 'civico', 'cap', 'comune', 'provincia'].every((k) => String(next[k] || '') === String(stored[k] || ''))) return null;
+        return { s, text, next, ok: A.validateAddress(next).ok };
+    }).filter(Boolean).sort((a, b) => (b.ok - a.ok) || a.s.name.localeCompare(b.s.name));
+}
+function openRecoverAddresses() {
+    addressRecoveryList = addressRecoveryCandidates();
+    closeDataCheckModal();   // the review box would sit behind it
+    // One card per student; every proposed field is a big input that wraps to
+    // the screen (no sideways scroll). ✓/⚠, the reason and the tick follow edits.
+    const field = (i, k, label, v, grow) => `<label style="display:flex; flex-direction:column; gap:3px; flex:${grow}; min-width:${grow >= 3 ? 200 : grow >= 2 ? 150 : 80}px; font-size:0.78em; color:var(--ink-faint); font-weight:600;">${label}
+        <input id="addrRec${i}_${k}" value="${escapeHtml(v || '')}" oninput="recheckRecoveredAddress(${i}, '${k}')" style="padding:9px 10px; font-size:1.25em; border:1px solid var(--border); border-radius:8px; color:var(--ink); width:100%; box-sizing:border-box;"></label>`;
+    taxModal(`Recover addresses (${addressRecoveryList.length})`,
+        `<p style="font-size:0.86em; margin-top:0;">Each address split into its fields. <b>Edit any box</b> if something is wrong. Only <b>ticked</b> ones are saved. <b>✓</b> = complete and checked against the official comuni list. Typing a comune fills its provincia (and the CAP when it has only one).</p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            ${addressRecoveryList.map((x, i) => `
+            <div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" id="addrRec${i}" ${x.ok ? 'checked' : ''} style="width:20px; height:20px; flex:none;">
+                    <b style="font-size:0.95em;">${escapeHtml(x.s.name)}</b>
+                    <span id="addrRec${i}_mark" style="margin-left:auto; font-size:0.85em;">${recoveredAddressMark(x)}</span>
+                </label>
+                <div style="font-size:0.8em; color:var(--ink-faint); margin:4px 0 8px 30px;">Now: ${escapeHtml(x.text)}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                    ${field(i, 'via', 'Via / Piazza', x.next.via, 3)}
+                    ${field(i, 'civico', 'N.', x.next.civico, 1)}
+                    ${field(i, 'cap', 'CAP', x.next.cap, 1)}
+                    ${field(i, 'comune', 'Comune', x.next.comune, 2)}
+                    ${field(i, 'provincia', 'Prov', x.next.provincia, 1)}
+                </div>
+            </div>`).join('')}
+        </div>`,
+        `<div style="display:flex; gap:8px; margin-left:auto;"><button class="btn btn-outline" onclick="closeTaxModal2(); openDataCheckModal();">Cancel</button>
+            <button class="btn btn-primary" id="addrRecSaveBtn" onclick="saveRecoveredAddresses()">Save ticked</button></div>`);
+    // wider than the usual 560px box (taxModal sets it back for the next one)
+    document.querySelector('#taxGenericModal .modal-box').style.maxWidth = '960px';
+    // Comune works as in the student form: suggestions while typing, the pick
+    // fills Provincia and offers its CAPs
+    const A = window.Anagrafica;
+    addressRecoveryList.forEach((x, i) => {
+        const com = document.getElementById(`addrRec${i}_comune`), prov = document.getElementById(`addrRec${i}_provincia`), cap = document.getElementById(`addrRec${i}_cap`);
+        if (!com || !prov || !cap) return;
+        A.attachComunePicker(com, prov, cap, () => recheckRecoveredAddress(i, 'comune'));
+        A.setComuneValue(com, prov, cap, x.next.comune, x.next.provincia, x.next.cap);
+    });
+}
+// ✓, or ⚠ with the reason (e.g. «CAP doesn't match the comune (26847)»)
+function recoveredAddressMark(x) {
+    if (x.ok) return '<span style="color:var(--success); font-weight:700;">✓ ready</span>';
+    const why = window.Anagrafica.validateAddress(x.next).problems.join(' · ');
+    return `<span style="color:var(--warning, #d97706); font-weight:600;">⚠ ${escapeHtml(why || 'check it')}</span>`;
+}
+// After an edit: comune → its provincia (and the only CAP), then re-check the row
+function recheckRecoveredAddress(i, field) {
+    const A = window.Anagrafica;
+    const x = addressRecoveryList[i];
+    if (!x) return;
+    const get = (k) => (document.getElementById(`addrRec${i}_${k}`)?.value || '').trim();
+    if (field === 'comune') {
+        const c = A.findComune(get('comune'), get('provincia'));
+        if (c) {
+            document.getElementById(`addrRec${i}_provincia`).value = c.s;
+            if (!get('cap') && c.c.length === 1) document.getElementById(`addrRec${i}_cap`).value = c.c[0];
+        }
+    }
+    x.next = { via: get('via'), civico: get('civico'), cap: get('cap'), comune: get('comune'), provincia: get('provincia').toUpperCase() };
+    x.ok = A.validateAddress(x.next).ok;
+    document.getElementById(`addrRec${i}_mark`).innerHTML = recoveredAddressMark(x);
+    document.getElementById('addrRec' + i).checked = x.ok;
+}
+async function saveRecoveredAddresses() {
+    const picked = addressRecoveryList.filter((x, i) => document.getElementById('addrRec' + i)?.checked);
+    if (!picked.length) { closeTaxModal2(); openDataCheckModal(); return; }
+    const btn = document.getElementById('addrRecSaveBtn');
+    if (btn) btn.disabled = true;
+    const failed = [];
+    for (const x of picked) {
+        const a = { ...x.next };
+        const c = window.Anagrafica.findComune(a.comune, a.provincia);
+        if (c) { a.comune = c.n; a.provincia = c.s; }   // official spelling: «cremona» → «Cremona»
+        const { error } = await writeStudentWithSchemaFallback({
+            addr_via: a.via || null, addr_civico: a.civico || null, addr_cap: a.cap || null,
+            addr_comune: a.comune || null, addr_provincia: a.provincia || null
+        }, x.s.id);
+        if (error) { failed.push(x.s.name); continue; }
+        Object.assign(x.s, { addrVia: a.via, addrCivico: a.civico, addrCap: a.cap, addrComune: a.comune, addrProvincia: a.provincia });
+    }
+    closeTaxModal2();
+    openDataCheckModal();
+    if (typeof refreshFattureViews === 'function') refreshFattureViews();
+    alert(`Saved ${picked.length - failed.length} address${picked.length - failed.length === 1 ? '' : 'es'}.` + (failed.length ? `\nNot saved: ${failed.join(', ')}` : ''));
+}
 function dataCheckAddressLine(s) {
     const a = getStudentAnagrafica(s).addr;
     return [[a.via, a.civico].filter(Boolean).join(' '), [a.cap, a.comune].filter(Boolean).join(' ')].filter(Boolean).join(', ');
@@ -7902,6 +8012,12 @@ function renderDataCheck() {
             <span>${rows.length} student${rows.length === 1 ? '' : 's'} · ${phones.length} with a phone number</span>
             ${phones.length ? '<button class="btn btn-outline btn-sm" onclick="copyDataCheckPhones()">Copy all numbers</button>' : ''}
         </div>` : '';
+    const recoverable = addressRecoveryCandidates().length;
+    if (recoverable) document.getElementById('dataCheckTools').innerHTML += `
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.84em; margin-bottom:10px; padding:8px 10px; border-radius:var(--radius-sm); background:var(--accent-soft);">
+            <span style="flex:1; min-width:200px;">${recoverable} address${recoverable === 1 ? '' : 'es'} look typed in the wrong fields (e.g. all in «Street»): the app can split them for you.</span>
+            <button class="btn btn-primary btn-sm" onclick="openRecoverAddresses()">Recover addresses (${recoverable})</button>
+        </div>`;
     document.getElementById('dataCheckList').innerHTML = rows.length
         ? rows.map(({ s, problems }) => `
             <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); flex-wrap:wrap;">
