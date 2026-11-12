@@ -508,7 +508,9 @@ const C = window.CompControl = {
     },
     hide() { return act(() => backend.setLive({ revealed: null })); },
     buildOrder() {
-        if (st.slots.length && !confirm('Make a NEW running order (new lottery)? The current order and any scores are replaced.')) return;
+        // Only after the teams are locked: making the order closes registration.
+        if (st.event.status === 'registration') { alert('Registration is still open. Lock the teams first (admin → Performances → "Lock teams + charge fee"), then make the running order.'); return; }
+        if (!confirm(st.slots.length ? 'Make a NEW running order (new lottery)? The current order and any scores are replaced.' : 'Make the running order now? Songs can no longer be changed by the dancers after this.')) return;
         return act(() => backend.buildOrder(st));
     },
     // Same running order, everything else back to zero (after a rehearsal).
@@ -559,7 +561,9 @@ function renderControl() {
     if (!st.slots.length) {
         body = `<div class="card"><h3 style="margin-top:0;">Running order</h3>
             <p class="muted">No running order yet. When the teams are locked and the songs are in, make it here: a lottery inside each category, B first, never two dancers of the same team one after the other, a judges break every 11 solos.</p>
-            <button class="btn primary" onclick="CompControl.buildOrder()" ${DEMO ? 'disabled' : ''}>Make running order (lottery)</button></div>`;
+            ${st.event.status === 'registration'
+                ? `<p style="color:#ffb3b1; font-weight:700;">Registration is still open. Lock the teams in admin first; then the running order can be made here.</p>`
+                : `<button class="btn primary" onclick="CompControl.buildOrder()" ${DEMO ? 'disabled' : ''}>Make running order (lottery)</button>`}</div>`;
     } else if (ctrlTab === 'live') body = controlLive(cur, live);
     else if (ctrlTab === 'order') body = controlOrder(cur);
     else if (ctrlTab === 'results') body = controlResults(set);

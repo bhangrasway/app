@@ -184,7 +184,7 @@ function renderCompetitionAdmin() {
             <button class="btn btn-outline btn-sm" onclick="compFillCategories()" ${compBusy || locked ? 'disabled' : ''}>Fill empty categories from batch</button>
             <button class="btn btn-outline btn-sm" onclick="compMakeAllTeams()" ${compBusy || locked ? 'disabled' : ''}>Make teams</button>
             <button class="btn btn-primary btn-sm" onclick="compLockTeams()" ${compBusy ? 'disabled' : ''}>${locked ? 'Charge fee to new dancers' : 'Lock teams + charge fee'}</button>
-            ${locked && ev.status === 'locked' ? `<button class="btn btn-outline btn-sm" onclick="compReopen()" ${compBusy ? 'disabled' : ''}>Reopen registration</button>` : ''}
+            ${(ev.status === 'locked' || ev.status === 'live') ? `<button class="btn btn-outline btn-sm" onclick="compReopen()" ${compBusy ? 'disabled' : ''}>Reopen registration</button>` : ''}
             <button class="btn btn-outline btn-sm" onclick="compPrintTeams()">Print teams</button>
         </div>
         ${compTeams.length ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;">${teamsSummary}</div>` : ''}
