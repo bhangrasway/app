@@ -21,7 +21,7 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=24"></script>
+<script src="i18n.js?v=27"></script>
 <script src="anagrafica.js?v=3"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -370,6 +370,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         </div>
 
         <div class="tab-panel active" data-panel="report">
+            <div class="report-block hidden" id="compBanner" style="cursor:pointer;" onclick="switchTab('perform')"></div>
             <div class="report-block">
                 <h3 id="creditHeadingLabel"></h3>
                 <p class="subtitle" id="creditSubLabel">€10 per class. Top up anytime with your instructor. No monthly plan to keep track of.</p>
@@ -497,6 +498,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
         </div>
 
         <div class="tab-panel" data-panel="perform">
+            <div class="report-block hidden" id="compCard"></div>
             <div class="report-block">
                 <div id="perfLoading"><div class="spinner small"></div></div>
                 <div id="perfAction" class="hidden">
@@ -2117,9 +2119,174 @@ function showPerf(id) {
 }
 let myPerformancesCache = [];
 let selectedPerformanceForView = null;
+// ---------- Bhangra Competition (competition.sql) ----------
+// One card above "My Performances": register (compete / kids show), cancel
+// before the close date, and after the lock the team, teammates and fee.
+let myCompetition = null;
+let compBusy = false;
+async function loadCompetitionCard() {
+    const card = document.getElementById('compCard');
+    const { data, error } = await supabaseClient.rpc('get_my_competition_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error) console.error('get_my_competition_by_phone failed (has competition.sql been run?):', error);
+    myCompetition = data?.status === 'ok' ? data : null;
+    card.classList.toggle('hidden', !myCompetition);
+    if (myCompetition) renderCompetitionCard();
+    renderCompetitionBanner();
+}
+// Short pointer on the first tab while registration is open and this
+// student has not registered yet, so nobody misses it.
+function renderCompetitionBanner() {
+    const banner = document.getElementById('compBanner');
+    const show = !!(myCompetition && myCompetition.event.can_register && !myCompetition.entry);
+    banner.classList.toggle('hidden', !show);
+    if (show) banner.innerHTML = `<div style="font-weight:700;">${escapeHtml(t('mv2_comp_title'))}</div><div style="color:var(--accent); font-weight:600; font-size:0.9em; margin-top:4px;">${escapeHtml(t('mv2_comp_register'))} &rarr;</div>`;
+}
+function compFormatDate(d) {
+    if (!d) return '';
+    const [y, m, day] = String(d).slice(0, 10).split('-');
+    return `${day}/${m}/${y}`;
+}
+function renderCompetitionCard() {
+    const { event, entry, team } = myCompetition;
+    const age = Number(lastReport?.student?.age);
+    const canKids = Number.isFinite(age) && age > 0 && age < 8;
+    const btn = (label, onclick, primary) => `<button class="btn btn-block ${primary ? 'btn-primary' : 'btn-outline'}" style="margin-top:8px;" onclick="${onclick}" ${compBusy ? 'disabled' : ''}>${escapeHtml(label)}</button>`;
+    let body = '';
+    if (team) {
+        body += `<div style="font-weight:700; margin-top:10px;">${escapeHtml(t('mv2_comp_team', { team: team.name, cat: team.category }))}</div>`;
+        if (team.teammates.length) body += `<div style="color:var(--ink-soft); font-size:0.88em; margin-top:4px;">${escapeHtml(t('mv2_comp_with', { names: team.teammates.join(', ') }))}</div>`;
+    }
+    if (entry) {
+        body += `<div style="margin-top:10px; font-weight:600; color:var(--success);">${escapeHtml(t(entry.kind === 'kids_show' ? 'mv2_comp_in_kids' : 'mv2_comp_in_compete'))}</div>`;
+        if (entry.fee_charged) body += `<div style="color:var(--ink-soft); font-size:0.85em; margin-top:4px;">${escapeHtml(t('mv2_comp_fee_charged', { fee: event.fee }))}</div>`;
+        if (entry.kind === 'compete' && event.songs_open) body += compSongsHtml();
+        if (event.can_register) {
+            if (canKids) body += btn(t(entry.kind === 'kids_show' ? 'mv2_comp_register' : 'mv2_comp_kids'), `registerCompetition('${entry.kind === 'kids_show' ? 'compete' : 'kids_show'}')`, false);
+            body += btn(t('mv2_comp_withdraw'), 'withdrawCompetition()', false);
+        }
+    } else if (event.can_register) {
+        body += btn(t('mv2_comp_register'), "registerCompetition('compete')", true);
+        if (canKids) body += btn(t('mv2_comp_kids'), "registerCompetition('kids_show')", false);
+    } else {
+        body += `<div style="margin-top:10px; color:var(--ink-faint);">${escapeHtml(t('mv2_comp_closed'))}</div>`;
+    }
+    if (event.can_register && event.reg_close) body += `<div style="color:var(--ink-faint); font-size:0.82em; margin-top:10px;">${escapeHtml(t('mv2_comp_closes', { date: compFormatDate(event.reg_close) }))}</div>`;
+    document.getElementById('compCard').innerHTML = `
+        <h3 style="font-size:1.05em; margin:0 0 4px;">${escapeHtml(t('mv2_comp_title'))}</h3>
+        <div style="color:var(--ink-soft); font-size:0.88em; line-height:1.45;">${escapeHtml(t('mv2_comp_sub', { fee: event.fee }))}</div>
+        <a href="comp/manifesto.pdf" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px; font-size:0.88em; font-weight:600;">${escapeHtml(t('mv2_comp_rules'))}</a>
+        ${body}
+        <p class="error-text" id="compError"></p>`;
+}
+// Songs: the dancer's solo song, and the team song (any team member, last
+// upload wins). Length is checked here first (target ± 10 s), then again
+// by set_my_comp_song_by_phone.
+function compSecs(x) { const n = Math.round(Number(x) || 0); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; }
+let compUploading = null;
+function compSongsHtml() {
+    const { entry, team } = myCompetition;
+    const row = (kind, title, has, name, secs, range, by) => {
+        const status = has
+            ? `<div style="font-weight:600; color:var(--success); font-size:0.88em;">${escapeHtml(name || '')}${secs ? ` · ${compSecs(secs)}` : ''}${by ? ` · ${escapeHtml(t('mv2_comp_song_by', { name: by }))}` : ''}</div>`
+            : `<div style="color:var(--danger); font-size:0.88em; font-weight:600;">${escapeHtml(t('mv2_comp_song_missing'))}</div>`;
+        const busy = compUploading === kind;
+        return `<div style="border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:10px 12px; margin-top:10px;">
+            <div style="font-weight:700; font-size:0.92em;">${escapeHtml(title)}</div>
+            ${status}
+            ${range ? `<div style="color:var(--ink-faint); font-size:0.8em; margin-top:2px;">${escapeHtml(t('mv2_comp_song_range', { min: compSecs(range[0]), max: compSecs(range[1]) }))}</div>` : ''}
+            <label class="btn btn-outline btn-sm" style="margin-top:8px; ${busy || compUploading ? 'pointer-events:none; opacity:0.6;' : ''}">
+                ${escapeHtml(busy ? t('mv2_comp_song_uploading') : t(has ? 'mv2_comp_song_change' : 'mv2_comp_song_upload'))}
+                <input type="file" accept="audio/*,.mp3,.m4a,.aac,.wav" style="display:none;" onchange="uploadCompSong('${kind}', this)">
+            </label>
+            <p class="error-text" id="compSongError_${kind}" style="margin:6px 0 0;"></p>
+        </div>`;
+    };
+    let html = row('solo', t('mv2_comp_solo_song'), entry.solo_song, entry.solo_song_name, entry.solo_song_seconds, entry.solo_range);
+    if (team) html += row('group', t('mv2_comp_group_song'), team.group_song, team.group_song_name, team.group_song_seconds, team.group_range, team.group_song_by);
+    else html += `<div style="color:var(--ink-faint); font-size:0.82em; margin-top:8px;">${escapeHtml(t('mv2_comp_song_after_lock'))}</div>`;
+    return html;
+}
+function compAudioSeconds(file) {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const audio = new Audio();
+        const done = (v) => { URL.revokeObjectURL(url); resolve(v); };
+        audio.preload = 'metadata';
+        audio.onloadedmetadata = () => done(Number.isFinite(audio.duration) ? audio.duration : null);
+        audio.onerror = () => done(null);
+        setTimeout(() => done(null), 15000);
+        audio.src = url;
+    });
+}
+async function uploadCompSong(kind, input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file || compUploading) return;
+    const showErr = (msg) => { const el = document.getElementById('compSongError_' + kind); if (el) el.textContent = msg; };
+    if (file.size > 25 * 1024 * 1024) { showErr(t('mv2_comp_song_too_big')); return; }
+    const secs = await compAudioSeconds(file);
+    if (!secs) { showErr(t('mv2_comp_song_unreadable')); return; }
+    const range = kind === 'solo' ? myCompetition.entry.solo_range : myCompetition.team.group_range;
+    if (range && (secs < range[0] || secs > range[1])) {
+        showErr(t('mv2_comp_song_bad_length', { len: compSecs(secs), min: compSecs(range[0]), max: compSecs(range[1]) }));
+        return;
+    }
+    compUploading = kind; renderCompetitionCard();
+    try {
+        const ext = (file.name.match(/\.([a-z0-9]{2,4})$/i) || [, 'mp3'])[1].toLowerCase();
+        const rand = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+        const path = `songs/${myCompetition.event.id}/${rand}.${ext}`;
+        const { error: upErr } = await supabaseClient.storage.from('comp-songs').upload(path, file, { contentType: file.type || 'audio/mpeg' });
+        if (upErr) throw upErr;
+        const { data, error } = await supabaseClient.rpc('set_my_comp_song_by_phone', {
+            p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode,
+            p_kind: kind, p_path: path, p_seconds: Math.round(secs * 10) / 10, p_name: file.name.replace(/\.[^.]+$/, '')
+        });
+        if (error) throw error;
+        compUploading = null;
+        await loadCompetitionCard();
+        if (data?.status === 'bad_length') showErr(t('mv2_comp_song_bad_length', { len: compSecs(secs), min: compSecs(data.min), max: compSecs(data.max) }));
+        else if (data?.status !== 'ok') { console.error('set_my_comp_song_by_phone:', data); showErr(t('mv2_comp_error')); }
+    } catch (err) {
+        console.error('comp song upload failed:', err);
+        compUploading = null;
+        renderCompetitionCard();
+        showErr(t('mv2_comp_error'));
+    }
+}
+async function registerCompetition(kind) {
+    if (compBusy) return;
+    compBusy = true; renderCompetitionCard();
+    const { data, error } = await supabaseClient.rpc('register_competition_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode, p_kind: kind
+    });
+    compBusy = false;
+    await loadCompetitionCard();
+    if (error || data?.status !== 'ok') {
+        console.error('register_competition_by_phone:', error || data);
+        document.getElementById('compError').textContent = t(data?.status === 'closed' ? 'mv2_comp_closed' : 'mv2_comp_error');
+    }
+}
+async function withdrawCompetition() {
+    if (compBusy || !confirm(t('mv2_comp_withdraw_confirm'))) return;
+    compBusy = true; renderCompetitionCard();
+    const { data, error } = await supabaseClient.rpc('withdraw_competition_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    compBusy = false;
+    await loadCompetitionCard();
+    if (error || data?.status !== 'ok') {
+        console.error('withdraw_competition_by_phone:', error || data);
+        document.getElementById('compError').textContent = t(data?.status === 'closed' ? 'mv2_comp_closed' : 'mv2_comp_error');
+    }
+}
+
 async function initPerform() {
     showPerf('perfLoading');
     document.getElementById('perfError').textContent = '';
+    loadCompetitionCard();
 
     // Roster-only: a student only ever learns about a performance once
     // admin has added them to performance_signups. No anon broadcast read
@@ -2710,7 +2877,7 @@ function applyStaticLabels() {
 // HTML, which i18n.js's own applyI18n() already handles) whenever the
 // language changes, so switching mid-session updates text immediately
 // instead of only on next page load.
-window.onLangChange = () => { applyStaticLabels(); renderPasscodeTexts(); renderInstallCard(); renderPushUi(); };
+window.onLangChange = () => { applyStaticLabels(); renderPasscodeTexts(); renderInstallCard(); renderPushUi(); if (myCompetition) { renderCompetitionCard(); renderCompetitionBanner(); } };
 
 // ---------- "Get the app" (home-screen install) ----------
 // Android/Chrome fires beforeinstallprompt → our Install button opens the real

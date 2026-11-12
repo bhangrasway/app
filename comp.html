@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Bhangra Competition · Live</title>
+<link rel="icon" type="image/png" href="logo.png">
+<meta name="theme-color" content="#141a3a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="comp-score.js?v=1"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+    --bg:#0f1430; --bg2:#161d44; --card:#1c2452; --card2:#232c60; --line:#2f3a78;
+    --ink:#f4f5fb; --soft:#b9bfe0; --faint:#7d86b8;
+    --saffron:#f08a24; --saffron-soft:rgba(240,138,36,.16); --gold:#ffc94d;
+    --green:#2fbf71; --green-soft:rgba(47,191,113,.16); --red:#ef5350; --red-soft:rgba(239,83,80,.16);
+    --blue:#5b8cff; --r:14px;
+}
+*{ box-sizing:border-box; }
+html,body{ overflow-x:hidden; margin:0; background:var(--bg); color:var(--ink); font-family:'Inter','Segoe UI',sans-serif; -webkit-font-smoothing:antialiased; }
+body{ min-height:100vh; }
+button{ font:inherit; color:inherit; cursor:pointer; border:0; }
+.hidden{ display:none !important; }
+.wrap{ max-width:1100px; margin:0 auto; padding:16px; }
+.top{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 16px; background:var(--bg2); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+.brand{ display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.2px; }
+.brand img{ height:30px; border-radius:7px; }
+.role-chip{ font-size:.78em; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--saffron-soft); color:var(--saffron); }
+.demo-chip{ font-size:.72em; font-weight:800; padding:4px 10px; border-radius:999px; background:#ffc94d; color:#3a2600; letter-spacing:.5px; }
+.card{ background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px; }
+.muted{ color:var(--soft); } .faint{ color:var(--faint); }
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 16px; border-radius:12px; font-weight:700; background:var(--card2); border:1px solid var(--line); min-height:46px; }
+.btn:disabled{ opacity:.45; cursor:not-allowed; }
+.btn.primary{ background:var(--saffron); border-color:var(--saffron); color:#1b1000; }
+.btn.go{ background:var(--green); border-color:var(--green); color:#04210f; }
+.btn.danger{ background:var(--red-soft); border-color:var(--red); color:#ffb3b1; }
+.btn.small{ min-height:34px; padding:6px 11px; font-size:.85em; border-radius:9px; }
+.grid{ display:grid; gap:14px; align-items:start; align-content:start; }
+a.btn{ text-decoration:none; color:var(--ink); }
+.code{ font-weight:900; color:var(--saffron); letter-spacing:.5px; }
+.badge{ font-size:.75em; font-weight:800; padding:3px 9px; border-radius:999px; background:var(--card2); color:var(--soft); white-space:nowrap; }
+.badge.ok{ background:var(--green-soft); color:var(--green); } .badge.bad{ background:var(--red-soft); color:var(--red); } .badge.now{ background:var(--saffron); color:#1b1000; }
+.big-timer{ font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:1px; }
+.over{ color:var(--red) !important; }
+input.pin{ font-size:1.6em; text-align:center; letter-spacing:10px; width:100%; padding:14px; border-radius:12px; border:1px solid var(--line); background:var(--bg2); color:var(--ink); }
+table{ width:100%; border-collapse:collapse; } th{ text-align:left; color:var(--faint); font-size:.78em; font-weight:700; padding:6px 8px; } td{ padding:8px; border-top:1px solid var(--line); }
+.seg{ display:inline-flex; background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:3px; gap:3px; }
+.seg button{ padding:7px 12px; border-radius:8px; font-weight:700; font-size:.85em; background:transparent; color:var(--soft); }
+.seg button.on{ background:var(--saffron); color:#1b1000; }
+
+/* judge */
+.crit{ margin-bottom:14px; }
+.crit-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+.crit-name{ font-weight:800; font-size:1.05em; }
+.crit-val{ font-weight:900; font-size:1.3em; color:var(--gold); min-width:44px; text-align:right; }
+.nums{ display:grid; grid-template-columns:repeat(10, 1fr); gap:5px; }
+.nums button{ min-width:0; padding:0; height:48px; border-radius:10px; background:var(--card2); border:1px solid var(--line); font-weight:800; font-size:1.05em; }
+.nums button.on{ background:var(--saffron); border-color:var(--saffron); color:#1b1000; }
+.half{ margin-top:6px; width:100%; height:38px; border-radius:10px; background:var(--bg2); border:1px dashed var(--line); font-weight:800; color:var(--soft); }
+.half.on{ background:var(--gold); color:#3a2600; border-style:solid; border-color:var(--gold); }
+
+/* projector */
+body.projector{ overflow:hidden; background:radial-gradient(1200px 700px at 50% -10%, #2a3580 0%, var(--bg) 60%); }
+.proj{ height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:4vh 4vw; }
+.proj-title{ position:fixed; top:3vh; left:0; right:0; text-align:center; font-weight:800; font-size:2.2vh; letter-spacing:6px; color:var(--saffron); text-transform:uppercase; }
+.proj-code{ font-size:4.2vh; font-weight:900; color:var(--saffron); letter-spacing:3px; }
+.proj-name{ font-size:11vh; font-weight:900; line-height:1.02; margin:1.5vh 0; }
+.proj-team{ font-size:3.6vh; color:var(--soft); font-weight:700; }
+.proj-timer{ font-size:16vh; margin-top:3vh; }
+.proj-next{ position:fixed; bottom:4vh; left:0; right:0; font-size:2.8vh; color:var(--faint); font-weight:700; }
+.podium{ display:flex; flex-direction:column; gap:1.6vh; width:min(1100px, 92vw); }
+.pod{ display:flex; align-items:center; gap:3vw; background:rgba(255,255,255,.06); border:1px solid var(--line); border-radius:2vh; padding:2vh 3vw; font-size:4.4vh; font-weight:800; opacity:0; transform:translateY(20px); animation:up .7s forwards; }
+.pod .p{ font-size:6vh; font-weight:900; color:var(--gold); min-width:9vw; }
+@keyframes up{ to{ opacity:1; transform:none; } }
+
+/* sound / door / anchor */
+.huge{ font-size:clamp(28px, 6vw, 56px); font-weight:900; line-height:1.1; }
+.counter{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px; }
+.counter .n{ font-size:3.2em; font-weight:900; text-align:center; min-width:90px; }
+.counter .btn{ min-height:84px; font-size:1.6em; }
+.list-row{ display:flex; align-items:center; gap:10px; padding:9px 4px; border-top:1px solid var(--line); }
+.list-row:first-child{ border-top:0; }
+.list-row.now{ background:var(--saffron-soft); border-radius:10px; }
+.list-row.done{ opacity:.45; }
+@media (max-width:760px){ .two{ grid-template-columns:1fr !important; } .nums{ gap:4px; } .nums button{ height:44px; font-size:.95em; border-radius:8px; } .wrap{ padding:12px; } .brand span{ font-size:.92em; } }
+</style>
+</head>
+<body>
+<div class="top" id="topBar">
+    <div class="brand"><img src="logo.png" alt=""><span id="topTitle">Bhangra Competition</span></div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;"><span id="langSwitch" style="display:inline-flex; gap:4px;"></span><span class="demo-chip hidden" id="demoChip">PRACTICE · FAKE DATA</span><span class="role-chip" id="roleChip"></span></div>
+</div>
+<div id="app"></div>
+
+<script>
+// ============================================================================
+// comp.html — the competition-day screens. One page, the role comes from the
+// link: ?role=control | judge1 | judge2 | judge3 | sound | anchor | projector | door
+// Add &demo=1 for a practice run with fake dancers (stored only in this
+// browser, shared between tabs, so several tabs can rehearse together).
+//
+// Control = the logged-in admin (same login as admin.html), reads/writes the
+// tables. Everyone else uses a PIN (set in admin → Performances → Competition
+// day) and the comp_screen_state / comp_judge_save / comp_door_count RPCs.
+// Scoring rules live in comp-score.js (shared with the tests).
+// ============================================================================
+const SUPABASE_URL = 'https://geeqcyfnkgamcjclulay.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
+</script>
+<script src="comp-live.js?v=22"></script>
+</body>
+</html>
