@@ -495,15 +495,19 @@ function jobMissingMonths(s, anno) {
 }
 // Total reddito of the year vs the permesso / ricongiungimento incomes, from
 // what's entered: job (CU, or buste paga) + forfettario (ricavi × 78% − INPS paid).
+// Permesso per lavoro autonomo (art. 26 TU Immigrazione): the self-employed
+// income alone must be above the «esenzione spesa sanitaria» level. Guides give
+// €8,263.31; not confirmed from an official 2026 source, ask a patronato.
+const AUTONOMO_MIN = 8263.31;
 function incomeThresholdsCardHtml(anno) {
     const d = redditiSummaryData(anno);
-    const bar = (label, need) => {
-        const ok = d.tot >= need;
-        const pct = Math.min(100, Math.round(d.tot / need * 100));
+    const bar = (label, need, have = d.tot) => {
+        const ok = have >= need;
+        const pct = Math.min(100, Math.round(have / need * 100));
         return `<div style="margin-top:10px;">
             <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:0.88em;">
                 <span><b>${label}</b> · needs ${eur(need)}</span>
-                <span style="font-weight:700; color:${ok ? 'var(--success)' : 'var(--danger)'};">${ok ? '✅ reached' : `❌ ${eur(r2(need - d.tot))} missing`}</span>
+                <span style="font-weight:700; color:${ok ? 'var(--success)' : 'var(--danger)'};">${ok ? '✅ reached' : `❌ ${eur(r2(need - have))} missing`}</span>
             </div>
             <div style="height:10px; border-radius:999px; background:var(--border-soft, #eee); overflow:hidden; margin-top:4px;">
                 <div style="height:100%; width:${pct}%; background:${ok ? 'var(--success)' : 'var(--warning, #d97706)'};"></div>
@@ -512,7 +516,7 @@ function incomeThresholdsCardHtml(anno) {
     };
     const missing = jobSourcesOf(anno).map((s) => ({ s, m: jobMissingMonths(s, anno) })).filter((x) => x.m.length);
     return `
-        <div class="section-label">Income ${anno} for permesso / ricongiungimento</div>
+        <div class="section-label">Income ${anno} for permesso / ricongiungimento / lavoro autonomo</div>
         <div class="card" style="padding:14px 16px; margin-bottom:22px;">
             <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:0.88em;">
                 <span>Job ${d.jobs.some((r) => r.fromCu) ? '(CU / buste paga)' : '(buste paga)'}: <b>${eur(d.jobTot)}</b></span>
@@ -521,9 +525,26 @@ function incomeThresholdsCardHtml(anno) {
             </div>
             ${bar(`Permesso di soggiorno`, d.as.importo)}
             ${bar(`Ricongiungimento, 1 family member`, d.ricong1)}
+            ${autonomoHtml(d, bar)}
             ${missing.length ? `<div style="margin-top:12px; padding:8px 12px; border-radius:var(--radius-sm); background:var(--warning-soft); font-size:0.85em;">
                 <b>Not complete yet: buste paga missing</b> — ${missing.map((x) => `${escapeHtml(x.s.nome)}: ${x.m.map((m) => JOB_MESI[Number(m.slice(5, 7)) - 1]).join(', ')}`).join(' · ')}. Add them and the total goes up.</div>` : ''}
             <div style="font-size:0.78em; color:var(--ink-faint); margin-top:8px;">From what is entered in the app (thresholds ${d.as.anno}). Officially the Questura / Prefettura look at the CU and the Modello Redditi; ask a patronato which year they use.</div>
+        </div>`;
+}
+// Lavoro autonomo: only the dance-course income counts here (not the job).
+// Shows how much more ricavi (fatture) the year needs: reddito ≈ ricavi × coeff.
+function autonomoHtml(d, bar) {
+    const coeff = Number(d.fy.coeff) || 78;
+    const ricaviNeed = r2(AUTONOMO_MIN / (coeff / 100));
+    const ricaviMissing = Math.max(0, r2(ricaviNeed - Number(d.fy.ricavi || 0)));
+    const now = new Date();
+    const monthsLeft = d.anno === now.getFullYear() ? 12 - now.getMonth() : d.anno > now.getFullYear() ? 12 : 0;
+    const perMonth = monthsLeft ? r2(ricaviMissing / monthsLeft) : 0;
+    return `${bar(`Permesso lavoro autonomo (dance course only)`, AUTONOMO_MIN, d.forf)}
+        <div style="font-size:0.82em; color:var(--ink-soft); margin-top:4px;">
+            Only the dance course counts (${eur(d.forf)} reddito), not the job. That needs about <b>${eur(ricaviNeed)}</b> of fatture in the year (reddito = fatture × ${coeff}%).
+            ${ricaviMissing > 0 ? `Fatture ${d.anno} so far: ${eur(d.fy.ricavi || 0)}, so <b>${eur(ricaviMissing)} more</b>${perMonth ? ` (about <b>${eur(perMonth)} a month</b> for the ${monthsLeft} month${monthsLeft === 1 ? '' : 's'} left)` : ''}.` : 'The fatture of this year are enough.'}
+            The €${AUTONOMO_MIN.toLocaleString('it-IT', { minimumFractionDigits: 2 })} level comes from guides, not an official ${d.anno} source: confirm with a patronato.
         </div>`;
 }
 const jobIncomeTotal = (anno) => r2(jobIncomeRows(anno).reduce((s, r) => s + r.reddito, 0));

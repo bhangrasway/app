@@ -1845,6 +1845,10 @@ function openFatturaSettings() {
             <div class="field" style="flex:1;"><label>ATECO code</label><input id="fsAteco" placeholder="85.52.01" value="${v(st.codice_ateco)}" ${'codice_ateco' in st ? '' : 'disabled title="Run fattura_settings_ateco.sql in Supabase first"'}></div>
         </div>
         <div style="display:flex; gap:10px;">
+            <div class="field" style="flex:2;"><label>IBAN (shown to students for bonifico)</label><input id="fsIban" maxlength="34" style="text-transform:uppercase;" placeholder="IT00X0000000000000000000000" value="${v(st.iban)}" ${'iban' in st ? '' : 'disabled title="Run studio_bank.sql in Supabase first"'}></div>
+            <div class="field" style="flex:1;"><label>Account holder</label><input id="fsIbanHolder" placeholder="Surname Name" value="${v(st.iban_holder)}" ${'iban_holder' in st ? '' : 'disabled title="Run studio_bank.sql in Supabase first"'}></div>
+        </div>
+        <div style="display:flex; gap:10px;">
             <div class="field" style="flex:3;"><label>Street («Via»)</label><input id="fsIndirizzo" value="${v(st.indirizzo)}"></div>
             <div class="field" style="flex:1;"><label>House no.</label><input id="fsCivico" value="${v(st.numero_civico)}"></div>
         </div>
@@ -1902,6 +1906,12 @@ async function saveFatturaSettings() {
     if (fatturaTodoReady) st.invoice_from = val('fsInvoiceFrom') || FATTURE_FROM_DEFAULT;
     // only once fattura_settings_ateco.sql has added the column (else the save would fail)
     if (fatturaSettings && 'codice_ateco' in fatturaSettings) st.codice_ateco = val('fsAteco') || null;
+    // only once studio_bank.sql has added the columns
+    if (fatturaSettings && 'iban' in fatturaSettings) {
+        st.iban = (val('fsIban') || '').replace(/\s+/g, '').toUpperCase() || null;
+        st.iban_holder = val('fsIbanHolder') || null;
+        if (st.iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(st.iban) && !confirm(`The IBAN «${st.iban}» does not look right. Save anyway?`)) return;
+    }
     const problems = fatturaSettingsProblems(st);
     if (problems.length && !confirm('Missing or not valid:\n- ' + problems.join('\n- ') + "\n\nSave anyway? (You can't create fatture until they are correct.)")) return;
     const { error } = await supabaseClient.from('fattura_settings').upsert(st, { onConflict: 'id' });

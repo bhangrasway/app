@@ -21,7 +21,7 @@
     // language, including English) is never overridden.
     try { if (!localStorage.getItem('bs_lang')) localStorage.setItem('bs_lang', 'it'); } catch {}
 </script>
-<script src="i18n.js?v=27"></script>
+<script src="i18n.js?v=28"></script>
 <script src="anagrafica.js?v=3"></script>
 <script src="pdfview.js?v=2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -82,6 +82,9 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
     transition:background .12s, border-color .12s, color .12s;
 }
 .btn-sm{ height:32px; padding:0 11px; font-size:0.82em; }
+#bankBox summary::-webkit-details-marker{ display:none; }
+#bankBox details[open] summary span:last-child{ transform:rotate(90deg); }
+#bankBox summary span:last-child{ transition:transform .15s; display:inline-block; }
 .btn-block{ width:100%; }
 .btn-primary{ background:var(--accent); color:#fff; }
 .btn-primary:hover{ background:var(--accent-ink); }
@@ -385,6 +388,7 @@ input, select, textarea{ font-family:inherit; font-size:0.92em; }
                         <span id="creditTotalClassesLine"></span>
                     </div>
                 </div>
+                <div id="bankBox" class="hidden" style="margin-top:10px; border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:9px 12px;"></div>
             </div>
 
             <div class="report-block">
@@ -1053,6 +1057,7 @@ async function loadDashboard(member) {
     switchTab('report');
     initAttendance();
     initPerform();
+    loadStudioBank();
 }
 
 // ---- Keep the account up to date without logging in again ----
@@ -1150,6 +1155,84 @@ function renderLiveAttendanceCard(report) {
     listEl.innerHTML = dates.length
         ? dates.map((d) => `<span class="badge hist-date-badge">${formatShortDate(d)}</span>`).join('')
         : `<span class="empty-note">${t('mv2_attendance_empty')}</span>`;
+}
+
+// ---------- Bonifico: the studio's IBAN with copy buttons (studio_bank.sql) ----------
+// The IBAN is set in admin → Fatture → Settings, never in the code.
+let studioBank = null;
+async function loadStudioBank() {
+    const box = document.getElementById('bankBox');
+    if (!box || !selectedMember) return;
+    bankChosen = null;   // a new page: start with this student chosen
+    const { data, error } = await supabaseClient.rpc('get_studio_bank_by_phone', {
+        p_student_id: selectedMember.id, p_phone: enteredPhone, p_passcode: enteredPasscode
+    });
+    if (error) console.error('get_studio_bank_by_phone failed (has studio_bank.sql been run?):', error);
+    studioBank = data && data.status === 'ok' && data.iban ? data : null;
+    renderStudioBank();
+}
+// Causale: every student on this phone (brothers, sisters), so one bonifico
+// can pay for all of them. Shown on one line; Copy gives the full text.
+// Brothers/sisters on one phone: the parent taps the names this bonifico is for
+// (the open page's student is chosen to start with). Copy gives only those.
+let bankChosen = null;   // Set of chosen names
+function bankNames() {
+    return householdMembers.length > 1 ? householdMembers.map((m) => m.name).filter(Boolean)
+        : [(lastReport && lastReport.student && lastReport.student.name) || ''].filter(Boolean);
+}
+function bankCausale() {
+    const all = bankNames();
+    if (!bankChosen) bankChosen = new Set([(lastReport && lastReport.student && lastReport.student.name) || all[0]]);
+    return all.filter((n) => bankChosen.has(n)).join(', ');
+}
+function toggleBankName(i) {
+    const name = bankNames()[i];
+    if (!name) return;
+    if (bankChosen.has(name)) { if (bankChosen.size > 1) bankChosen.delete(name); } else bankChosen.add(name);
+    const open = document.querySelector('#bankBox details')?.open;
+    renderStudioBank();
+    const d = document.querySelector('#bankBox details'); if (d && open) d.open = true;
+}
+function formatIban(iban) { return String(iban || '').replace(/(.{4})/g, '$1 ').trim(); }
+function renderStudioBank() {
+    const box = document.getElementById('bankBox');
+    if (!box) return;
+    box.classList.toggle('hidden', !studioBank);
+    if (!studioBank) return;
+    const studentName = bankCausale();
+    // One slim line, closed; tap to open (recharging is occasional).
+    // A 3-column grid: the label column is as wide as its longest word, on one line.
+    const cell = 'padding:6px 0; border-top:1px solid var(--border-soft); display:flex; align-items:center;';
+    const row = (label, shown, key) => `
+            <span style="${cell} font-size:0.72em; color:var(--ink-faint); font-weight:700; text-transform:uppercase; white-space:nowrap;">${escapeHtml(label)}</span>
+            <span style="${cell} font-weight:700; font-size:0.88em; min-width:0;"><span style="${key === 'iban' ? 'word-break:break-all;' : 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'}" title="${escapeHtml(shown)}">${escapeHtml(shown)}</span></span>
+            <span style="${cell}"><button class="btn btn-outline btn-sm" onclick="copyBank('${key}', this)" style="height:28px; padding:0 9px;">${escapeHtml(t('mv2_bank_copy'))}</button></span>`;
+    box.innerHTML = `
+        <details>
+            <summary style="cursor:pointer; font-weight:700; font-size:0.9em; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                <span>${escapeHtml(t('mv2_bank_title'))}</span><span style="color:var(--ink-faint);">›</span></summary>
+            <div style="margin-top:8px; display:grid; grid-template-columns:max-content 1fr max-content; column-gap:10px;">
+                ${row('IBAN', formatIban(studioBank.iban), 'iban')}
+                ${studioBank.holder ? row(t('mv2_bank_holder'), studioBank.holder, 'holder') : ''}
+                ${bankNames().length > 1 ? `
+            <span style="${cell} font-size:0.72em; color:var(--ink-faint); font-weight:700; text-transform:uppercase; white-space:nowrap;">${escapeHtml(t('mv2_bank_causale'))}</span>
+            <span style="${cell} min-width:0; gap:5px; flex-wrap:wrap;">${bankNames().map((n, i) => `<button type="button" onclick="toggleBankName(${i})" style="flex-shrink:0; height:24px; padding:0 8px; border-radius:999px; font-size:0.78em; font-weight:700; cursor:pointer; border:1px solid ${bankChosen.has(n) ? 'var(--accent)' : 'var(--border)'}; background:${bankChosen.has(n) ? 'var(--accent)' : 'var(--surface)'}; color:${bankChosen.has(n) ? '#fff' : 'var(--ink-soft)'};">${escapeHtml(n)}</button>`).join('')}</span>
+            <span style="${cell}"><button class="btn btn-outline btn-sm" onclick="copyBank('causale', this)" style="height:28px; padding:0 9px;">${escapeHtml(t('mv2_bank_copy'))}</button></span>`
+                : studentName ? row(t('mv2_bank_causale'), studentName, 'causale') : ''}
+            </div>
+            <div style="font-size:0.76em; color:var(--ink-faint); margin-top:4px;">${escapeHtml(t('mv2_bank_note'))}</div>
+        </details>`;
+}
+async function copyBank(key, btn) {
+    const studentName = bankCausale();
+    const value = key === 'iban' ? studioBank.iban : key === 'holder' ? studioBank.holder : studentName;
+    try { await navigator.clipboard.writeText(value); }
+    catch (e) {
+        const ta = document.createElement('textarea'); ta.value = value; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e2) { /* ignore */ } ta.remove();
+    }
+    const old = btn.textContent; btn.textContent = t('mv2_bank_copied');
+    setTimeout(() => { btn.textContent = old; }, 1500);
 }
 
 async function renderCreditStatus(student, totalClasses) {
@@ -2877,7 +2960,7 @@ function applyStaticLabels() {
 // HTML, which i18n.js's own applyI18n() already handles) whenever the
 // language changes, so switching mid-session updates text immediately
 // instead of only on next page load.
-window.onLangChange = () => { applyStaticLabels(); renderPasscodeTexts(); renderInstallCard(); renderPushUi(); if (myCompetition) { renderCompetitionCard(); renderCompetitionBanner(); } };
+window.onLangChange = () => { applyStaticLabels(); renderPasscodeTexts(); renderInstallCard(); renderPushUi(); if (myCompetition) { renderCompetitionCard(); renderCompetitionBanner(); } renderStudioBank(); };
 
 // ---------- "Get the app" (home-screen install) ----------
 // Android/Chrome fires beforeinstallprompt → our Install button opens the real
