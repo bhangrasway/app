@@ -40,7 +40,6 @@ const IT = {
     'Energy': 'Energia', 'Technique': 'Tecnica', 'Rhythm': 'Ritmo', 'Expression': 'Espressione', 'Costume': 'Costume',
     'Sync': 'Sincronia', 'Formations': 'Formazioni',
     'Judge 1': 'Giudice 1', 'Judge 2': 'Giudice 2', 'Judge 3': 'Giudice 3',
-    '(Best Costume only)': '(solo per Miglior Costume)',
     'Solo': 'Assolo', 'Group round': 'Gruppo', 'Category': 'Categoria', 'minutes': 'minuti',
     'Judges break': 'Pausa giudici', 'Break': 'Pausa', 'Kids special show': 'Spettacolo dei bambini',
     'All done. Thank you!': 'Finito. Grazie!', 'Waiting to start': 'In attesa dell’inizio',
@@ -60,6 +59,10 @@ const IT = {
     'In the real competition the coach does this.': 'Nella gara vera lo fa l’insegnante.',
     'Done practising: go to real scoring': 'Prova finita: vai ai voti veri',
     'First time? Practice with fake dancers': 'Prima volta? Prova con ballerini finti',
+    'Ranking': 'Classifica', 'Solo ranking': 'Classifica assolo', 'Group ranking': 'Classifica gruppi', 'Category': 'Categoria',
+    "Ranked by YOUR scores only. Other judges' scores are not shown.": 'Classifica in base ai TUOI voti. I voti degli altri giudici non si vedono.', 'Nothing scored yet.': 'Ancora nessun voto completo.',
+    'Live scoring': 'Voti in diretta', 'My scores': 'I miei voti', 'No scores given yet.': 'Nessun voto dato finora.',
+    'Total': 'Totale', 'in progress': 'in corso', 'not sent': 'non inviato', 'sent': 'inviato',
     'Enter the PIN the coach gave you.': 'Inserisci il PIN che ti ha dato l’insegnante.',
     'Open': 'Apri', 'Wrong PIN. Try again.': 'PIN sbagliato. Riprova.',
     'Too many wrong PINs from this device. Wait 15 minutes, then try again.': 'Troppi PIN sbagliati da questo dispositivo. Aspetta 15 minuti e riprova.'
@@ -116,18 +119,22 @@ function demoFresh() {
         { id: 5, name: 'A1', category: 'A' }, { id: 6, name: 'A2', category: 'A' }, { id: 7, name: 'A3', category: 'A' }, { id: 8, name: 'A4', category: 'A' }];
     const entries = [];
     let k = 0;
-    const addTeam = (teamId, n, cat) => { for (let i = 0; i < n; i++) entries.push({ id: 100 + k, kind: 'compete', category: cat, team_id: teamId, name: DEMO_NAMES[k++ % DEMO_NAMES.length] }); };
+    const addTeam = (teamId, n, cat) => { for (let i = 0; i < n; i++) entries.push({ id: 100 + k, do_solo: true, do_group: true, do_activity: false, category: cat, team_id: teamId, name: DEMO_NAMES[k++ % DEMO_NAMES.length] }); };
     addTeam(1, 5, 'B'); addTeam(2, 5, 'B'); addTeam(3, 6, 'B'); addTeam(4, 5, 'B');
     addTeam(5, 5, 'A'); addTeam(6, 5, 'A'); addTeam(7, 5, 'A'); addTeam(8, 5, 'A');
+    // two solo-only dancers (no team) and four people who only do the extra activity
+    ['Zaara', 'Dev'].forEach((nm, i) => entries.push({ id: 300 + i, do_solo: true, do_group: false, do_activity: false, category: 'B', team_id: null, name: nm }));
+    [['Gagandeep', ['backstage']], ['Mehak', ['music', 'stage']], ['Taran', ['mic']]].forEach(([nm, roles], i) => entries.push({ id: 500 + i, do_solo: false, do_group: false, do_activity: false, do_volunteer: true, volunteer_roles: roles, category: null, team_id: null, name: nm }));
+    ['Amaira', 'Ranbir', 'Siya', 'Kabir'].forEach((nm, i) => entries.push({ id: 400 + i, do_solo: false, do_group: false, do_activity: true, category: null, team_id: null, name: nm }));
     const order = S.buildRunningOrder({ entries, teams, rand: rnd });
     const slots = order.map((o, i) => {
         const e = entries.find((x) => x.id === o.entry_id);
         return { id: i + 1, ...o, status: 'waiting', team_id: o.team_id || (e && e.team_id) || null, name: e ? e.name : null, song_path: o.kind === 'solo' || o.kind === 'group' ? 'demo:song' : null, song_seconds: o.kind === 'solo' ? (o.category === 'A' ? 121 : 92) : o.kind === 'group' ? (o.category === 'A' ? 330 : 238) : null };
     });
     return {
-        event: { id: 1, title: 'Bhangra Competition 2027', status: 'live', settings: { gap: 1, extras_on: false } },
+        event: { id: 1, title: 'Bhangra Competition 2027', status: 'live', settings: { gap: 1 } },
         live: { current_slot_id: null, phase: 'idle', phase_started_at: null, revealed: null, door_cash: 0, door_free: 0 },
-        slots, teams, scores: {}, kids: ['Amaira', 'Ranbir', 'Siya', 'Kabir'],
+        slots, teams, entries, scores: {},
         judgeNames: { 1: 'Judge 1', 2: 'Judge 2', 3: 'Judge 3' }
     };
 }
@@ -161,7 +168,7 @@ function demoPreset(s, preset) {
     if (preset === 'reveal') {
         const r = S.computeResults({ slots: s.slots, scores: s.scores, teams: s.teams, gap: 1 });
         const cats = {};
-        ['B', 'A'].forEach((c) => { cats[c] = { teams: r[c].teams.map((t) => ({ pos: t.opt1, name: t.name })), awards: r[c].awards.map((a) => ({ award: a.award, name: a.name, team: a.team })) }; });
+        ['B', 'A'].forEach((c) => { cats[c] = { teams: r[c].teams.map((t) => ({ pos: t.opt1, name: t.name })), solos: r[c].solos.filter((x) => x.opt1).map((x) => ({ pos: x.opt1, name: x.name, team: x.teamName })) }; });
         s.live.revealed = { option: 1, cats, at: new Date().toISOString() };
     }
 }
@@ -205,7 +212,21 @@ const demo = {
         });
         return status;
     },
-    async door(kind, delta) { await this.mutate((s) => { const k = kind === 'cash' ? 'door_cash' : 'door_free'; s.live[k] = Math.max(0, (s.live[k] || 0) + delta); }); },
+    async door(kind, delta) { await this.mutate((s) => { const k = kind === 'cash' ? 'door_cash' : kind === 'student' ? 'door_students' : 'door_free'; s.live[k] = Math.max(0, (s.live[k] || 0) + delta); }); },
+    // practice coupons: DEMO22 and USED99 (already used)
+    async coupon(code, use) {
+        const c = String(code || '').trim().toUpperCase();
+        let out = { status: 'not_found' };
+        await this.mutate((s) => {
+            s.coupons = s.coupons || { DEMO22: { guest: 'Parent of Simran', student: 'Simran Kaur', used: false }, USED99: { guest: 'Aunt Kiran', student: 'Kiran Kaur', used: true } };
+            const x = s.coupons[c];
+            if (!x) return;
+            if (x.used) { out = { status: 'used', guest: x.guest, student: x.student }; return; }
+            if (use) { x.used = true; s.live.door_coupons = (s.live.door_coupons || 0) + 1; out = { status: 'ok', let_in: true, guest: x.guest, student: x.student }; }
+            else out = { status: 'ok', let_in: false, guest: x.guest, student: x.student };
+        });
+        return out;
+    },
     async setLive(patch) { await this.mutate((s) => Object.assign(s.live, patch)); },
     async setSlot(id, patch) { await this.mutate((s) => Object.assign(s.slots.find((x) => x.id === id), patch)); },
     async setSettings(patch) { await this.mutate((s) => Object.assign(s.event.settings, patch)); },
@@ -260,7 +281,7 @@ const real = {
             supa.from('comp_live').select('*').eq('event_id', event.id).maybeSingle(),
             supa.from('comp_slots').select('*').eq('event_id', event.id).order('position'),
             supa.from('comp_teams').select('*').eq('event_id', event.id).order('sort_order'),
-            supa.from('comp_entries').select('id, student_id, kind, category, team_id, withdrawn, solo_song_path, solo_song_seconds, students(name)').eq('event_id', event.id),
+            supa.from('comp_entries').select('id, student_id, kind, do_solo, do_group, do_activity, do_volunteer, volunteer_roles, category, team_id, withdrawn, solo_song_path, solo_song_seconds, students(name)').eq('event_id', event.id),
             supa.from('comp_scores').select('slot_id, judge, criteria, submitted').eq('event_id', event.id)
         ]);
         for (const r of [live, slots, teams, entries, scores]) if (r.error) throw r.error;
@@ -271,8 +292,7 @@ const real = {
         return {
             event, live: live.data || { phase: 'idle', door_cash: 0, door_free: 0 }, scores: sc, submitted: sent, serverOffset: 0,
             teams: teams.data || [],
-            entries: entries.data || [],
-            kids: (entries.data || []).filter((e) => e.kind === 'kids_show' && !e.withdrawn).map((e) => (e.students || {}).name || '?'),
+            entries: (entries.data || []).map((e) => ({ ...e, name: (e.students || {}).name || '?' })),
             slots: (slots.data || []).map((s) => {
                 const e = entryById[s.entry_id];
                 const t = teamById[s.team_id || (e && e.team_id)];
@@ -286,6 +306,12 @@ const real = {
         const { data, error } = await supa.rpc('comp_judge_save', { p_role: PIN_ROLE, p_pin: savedPin(), p_slot_id: slotId, p_criteria: criteria, p_submitted: !!submitted });
         if (error) throw error;
         return data.status;
+    },
+    async coupon(code, use) {
+        const { data, error } = await supa.rpc('comp_door_coupon', { p_pin: savedPin(), p_code: code, p_use: !!use });
+        if (error) throw error;
+        if (data.status === 'too_many' || data.status === 'bad_pin') throw new Error(data.status === 'too_many' ? 'too many wrong PINs, wait 15 minutes' : 'wrong PIN');
+        return data;
     },
     async door(kind, delta) {
         const { data, error } = await supa.rpc('comp_door_count', { p_pin: savedPin(), p_kind: kind, p_delta: delta });
@@ -359,7 +385,7 @@ function slotTitle(s) {
 }
 function slotSub(s) {
     if (!s) return '';
-    if (s.kind === 'solo') return `${tr('Solo')} · ${teamName(s.team_id)} · ${tr('Category')} ${s.category}`;
+    if (s.kind === 'solo') return `${tr('Solo')} · ${s.team_id ? teamName(s.team_id) + ' · ' : ''}${tr('Category')} ${s.category}`;
     if (s.kind === 'group') return `${tr('Group round')} · ${tr('Category')} ${s.category}`;
     if (s.kind === 'break') return s.minutes ? `${s.minutes} ${tr('minutes')}` : '';
     return '';
@@ -499,7 +525,6 @@ const C = window.CompControl = {
         });
     },
     gap(g) { return act(() => backend.setSettings({ gap: g })); },
-    extras(on) { return act(() => backend.setSettings({ extras_on: on })); },
     option(o) { return act(() => backend.setSettings({ option: o })); },
     reveal() {
         const snap = revealSnapshot();
@@ -510,6 +535,8 @@ const C = window.CompControl = {
     buildOrder() {
         // Only after the teams are locked: making the order closes registration.
         if (st.event.status === 'registration') { alert('Registration is still open. Lock the teams first (admin → Performances → "Lock teams + charge fee"), then make the running order.'); return; }
+        const noCat = (st.entries || []).filter((e) => !e.withdrawn && (e.do_solo || e.do_group) && !e.category);
+        if (noCat.length) { alert('These people have no category (A or B) yet, set it in admin first: ' + noCat.map((e) => e.name).join(', ')); return; }
         if (!confirm(st.slots.length ? 'Make a NEW running order (new lottery)? The current order and any scores are replaced.' : 'Make the running order now? Songs can no longer be changed by the dancers after this.')) return;
         return act(() => backend.buildOrder(st));
     },
@@ -532,10 +559,10 @@ const C = window.CompControl = {
 
 function results() {
     const set = st.event.settings || {};
-    return S.computeResults({ slots: st.slots, scores: st.scores || {}, teams: st.teams, gap: Number(set.gap ?? 1), extrasOn: !!set.extras_on });
+    return S.computeResults({ slots: st.slots, scores: st.scores || {}, teams: st.teams, gap: Number(set.gap ?? 1) });
 }
 function teamPos(t, option) { return option === 2 ? t.opt2 : t.opt1; }
-// What the projector shows: team positions (no scores) + special awards.
+// What the projector shows: group and solo positions (no scores).
 function revealSnapshot() {
     const set = st.event.settings || {};
     const option = Number(set.option || 1);
@@ -544,7 +571,7 @@ function revealSnapshot() {
     ['B', 'A'].forEach((c) => {
         cats[c] = {
             teams: r[c].teams.filter((t) => !t.disqualified).map((t) => ({ pos: teamPos(t, option), name: t.name })),
-            awards: r[c].awards.map((a) => ({ award: a.award, name: a.name, team: a.team }))
+            solos: r[c].solos.filter((x) => x.opt1).map((x) => ({ pos: teamPos(x, option), name: x.name, team: x.teamName }))
         };
     });
     return { option, cats, at: new Date().toISOString() };
@@ -556,7 +583,7 @@ function renderControl() {
     const set = st.event.settings || {};
     const tabs = `<div class="seg" style="margin-bottom:14px;">${[['live', 'Live'], ['order', 'Running order'], ['results', 'Results'], ['certs', 'Certificates']].map(([k, l]) =>
         `<button class="${ctrlTab === k ? 'on' : ''}" onclick="CompControl.tab('${k}')">${l}</button>`).join('')}</div>`;
-    const key = JSON.stringify([ctrlTab, resCat, live, st.slots.map((s) => [s.id, s.status, s.position]), set, Object.keys(st.scores || {}).length, cur && st.scores && st.scores[cur.id], busy]);
+    const key = JSON.stringify([ctrlTab, resCat, live, st.slots.map((s) => [s.id, s.status, s.position]), set, Object.keys(st.scores || {}).length, cur && st.scores && st.scores[cur.id], busy, ctrlTab === 'live' ? leadersNow() : 0]);
     let body = '';
     if (!st.slots.length) {
         body = `<div class="card"><h3 style="margin-top:0;">Running order</h3>
@@ -587,6 +614,28 @@ function judgeDots(cur) {
         const cls = sent ? 'ok' : n ? '' : 'bad';
         return `<span class="badge ${cls}">Judge ${j}: ${sent ? 'sent' : n === need.length ? 'filled, not sent yet' : n ? `still filling (${n} of ${need.length})` : 'not started'}</span>`;
     }).join(' ');
+}
+// Who is ahead right now (all 3 judges' scores in): top 3 solos and top 3 teams per category.
+function leadersNow() {
+    const r = results();
+    const out = [];
+    ['B', 'A'].forEach((cat) => {
+        const solos = r[cat].solos.filter((x) => x.complete && !x.disqualified && x.opt1 && x.opt1 <= 3).map((x) => ({ pos: x.opt1, name: x.name, sub: x.teamName, pts: `${x.soloTotal}/40` }));
+        const teams = r[cat].teams.filter((t) => t.complete && !t.disqualified && t.opt1 <= 3).map((t) => ({ pos: t.opt1, name: t.name, sub: '', pts: `${t.group}/50` }));
+        if (solos.length) out.push({ title: `Category ${cat} · Solo`, rows: solos });
+        if (teams.length) out.push({ title: `Category ${cat} · Group`, rows: teams });
+    });
+    return out;
+}
+function leadersHtml(l) {
+    const medal = (p) => ({ 1: '#ffc94d', 2: '#cfd5e8', 3: '#d99a63' }[p] || 'var(--faint)');
+    const row = (x) => `<div style="display:flex; align-items:center; gap:8px; padding:2px 0;">
+        <span style="font-weight:900; min-width:22px; color:${medal(x.pos)};">${x.pos}</span>
+        <span style="flex:1; font-weight:700; font-size:.9em;">${esc(x.name)}${x.sub ? ' <span class="faint" style="font-weight:500; font-size:.85em;">' + esc(x.sub) + '</span>' : ''}</span>
+        <span class="faint" style="font-size:.85em;">${x.pts}</span></div>`;
+    const block = (b) => `<div style="margin-bottom:8px;"><div style="font-weight:800; font-size:.86em; margin-bottom:2px;">${esc(b.title)}</div>${b.rows.map(row).join('')}</div>`;
+    const empty = '<div class="muted" style="font-size:.88em;">Nobody has all 3 judges scores yet.</div>';
+    return `<div class="card"><div class="faint" style="font-size:.8em; font-weight:700; margin-bottom:6px;">WHO IS LEADING (all 3 judges)</div>${l.length ? l.map(block).join('') : empty}</div>`;
 }
 function controlLive(cur, live) {
     const up = nextWaiting(cur ? cur.position : 0, 3);
@@ -632,9 +681,12 @@ function controlLive(cur, live) {
             <div class="card"><div class="faint" style="font-size:.8em; font-weight:700;">PROGRESS</div>
                 <div style="font-size:2em; font-weight:900; margin:4px 0;">${doneCount} / ${st.slots.length}</div>
                 <div style="height:8px; background:var(--bg2); border-radius:9px; overflow:hidden;"><div style="height:100%; width:${Math.round(doneCount / Math.max(1, st.slots.length) * 100)}%; background:var(--saffron);"></div></div></div>
+            ${leadersHtml(leadersNow())}
             <div class="card"><div class="faint" style="font-size:.8em; font-weight:700;">DOOR</div>
                 <div style="display:flex; gap:18px; margin-top:6px;"><div><div style="font-size:1.8em; font-weight:900;">€${(live.door_cash || 0) * DOOR_PRICE}</div><div class="faint" style="font-size:.82em;">${live.door_cash || 0} paid</div></div>
-                <div><div style="font-size:1.8em; font-weight:900;">${live.door_free || 0}</div><div class="faint" style="font-size:.82em;">under 6, free</div></div></div></div>
+                <div><div style="font-size:1.8em; font-weight:900;">${live.door_free || 0}</div><div class="faint" style="font-size:.82em;">under 6, free</div></div>
+                <div><div style="font-size:1.8em; font-weight:900;">${live.door_students || 0}</div><div class="faint" style="font-size:.82em;">students, free</div></div>
+                <div><div style="font-size:1.8em; font-weight:900;">${live.door_coupons || 0}</div><div class="faint" style="font-size:.82em;">coupon guests</div></div></div></div>
             <div class="card"><div class="faint" style="font-size:.8em; font-weight:700; margin-bottom:8px;">SCREENS</div>
                 <div style="display:flex; flex-wrap:wrap; gap:6px;">${['judge1', 'judge2', 'judge3', 'sound', 'anchor', 'projector', 'door'].map((r) => `<a class="btn small" href="comp.html?role=${r}${DEMO ? '&demo=1' : ''}" target="_blank" rel="noopener">${ROLES[r]}</a>`).join('')}</div>
                 <button class="btn small danger" style="margin-top:10px;" onclick="CompControl.restart()">Restart (clear scores)</button></div>
@@ -659,7 +711,6 @@ function controlResults(set) {
             <div class="seg">${['B', 'A'].map((c) => `<button class="${resCat === c ? 'on' : ''}" onclick="CompControl.cat('${c}')">Category ${c}</button>`).join('')}</div>
             <div class="seg">${[1, 2].map((o) => `<button class="${option === o ? 'on' : ''}" onclick="CompControl.option(${o})">Option ${o}</button>`).join('')}</div>
             <div style="display:flex; align-items:center; gap:6px;"><span class="faint" style="font-size:.82em; font-weight:700;">Option 2 gap</span><div class="seg">${[0, 0.5, 1, 2].map((g) => `<button class="${gap === g ? 'on' : ''}" onclick="CompControl.gap(${g})">${g}</button>`).join('')}</div></div>
-            <label style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:.88em;"><input type="checkbox" ${set.extras_on ? 'checked' : ''} onchange="CompControl.extras(this.checked)"> 2 extra prizes</label>
             <div style="margin-left:auto; display:flex; gap:8px;">
                 ${(st.live || {}).revealed ? `<button class="btn small" onclick="CompControl.hide()">Hide from projector</button>` : ''}
                 <button class="btn primary" onclick="CompControl.reveal()">Reveal on projector</button></div>
@@ -667,34 +718,93 @@ function controlResults(set) {
         ${incomplete ? `<div class="card" style="border-color:var(--red); margin-bottom:14px; color:#ffb3b1;">${incomplete} performance(s) do not have all 3 judges' scores yet.</div>` : ''}
         <div class="grid two" style="grid-template-columns:1fr 1fr;">
             <div class="card"><h3 style="margin-top:0;">Teams · Category ${resCat}</h3>
-                <table><tr><th>Pos</th><th>Team</th><th>Solo avg</th><th>Group</th><th>Score</th></tr>
-                ${r.teams.map((t) => `<tr><td style="font-weight:900; color:var(--gold); font-size:1.15em;">${t.disqualified ? 'DQ' : ordinal(teamPos(t, option))}</td><td style="font-weight:800;">${esc(t.name)}</td><td>${t.soloAvg}%</td><td>${t.group}/50</td><td style="font-weight:800;">${t.score}</td></tr>`).join('')}</table>
-                <p class="faint" style="font-size:.8em; margin-bottom:0;">Score = 40% solo average + 60% group. Option 1: exact order, equal scores share. Option 2: teams within ${gap} point(s) of the top of their group share the position.</p></div>
-            <div class="card"><h3 style="margin-top:0;">Special awards</h3>
-                ${r.awards.map((a) => `<div class="list-row"><span class="badge now">${esc(a.award)}</span><div style="flex:1; font-weight:800;">${esc(a.name)}</div><span class="faint">${esc(a.team)}</span></div>`).join('') || '<div class="faint">No scores yet.</div>'}</div>
+                <table><tr><th>Pos</th><th>Team</th><th>Group /50</th><th>Score %</th></tr>
+                ${r.teams.map((t) => `<tr><td style="font-weight:900; color:var(--gold); font-size:1.15em;">${t.disqualified ? 'DQ' : ordinal(teamPos(t, option))}</td><td style="font-weight:800;">${esc(t.name)}</td><td>${t.group}</td><td style="font-weight:800;">${t.score}</td></tr>`).join('')}</table>
+                <p class="faint" style="font-size:.8em; margin-bottom:0;">Team = group round only (solo is separate). Option 1: exact order, equal scores share. Option 2: within ${gap} point(s) of the top share the position.</p></div>
         </div>
         <div class="card" style="margin-top:14px;"><h3 style="margin-top:0;">Solos · Category ${resCat}</h3>
-            <table><tr><th>#</th><th>Dancer</th><th>Team</th><th>Solo /40</th><th>Expression</th><th>Costume</th><th></th></tr>
-            ${r.solos.map((s, i) => `<tr style="${s.disqualified ? 'opacity:.45;' : ''}"><td class="faint">${i + 1}</td><td style="font-weight:700;">${esc(s.name)}</td><td class="muted">${esc(s.teamName)}</td><td style="font-weight:800;">${s.soloTotal}</td><td>${s.expression}</td><td>${s.costume}</td><td>${s.disqualified ? '<span class="badge bad">DQ</span>' : s.complete ? '' : `<span class="badge bad">${s.judges}/3 judges</span>`}</td></tr>`).join('')}</table></div>`;
+            <table><tr><th>Pos</th><th>Dancer</th><th>Team</th><th>Solo /40</th><th>Expression</th><th></th></tr>
+            ${r.solos.map((s, i) => `<tr style="${s.disqualified ? 'opacity:.45;' : ''}"><td style="font-weight:900; color:var(--gold);">${s.opt1 ? ordinal(teamPos(s, option)) : ''}</td><td style="font-weight:700;">${esc(s.name)}</td><td class="muted">${esc(s.teamName)}</td><td style="font-weight:800;">${s.soloTotal}</td><td>${s.expression}</td><td>${s.disqualified ? '<span class="badge bad">DQ</span>' : s.complete ? '' : `<span class="badge bad">${s.judges}/3 judges</span>`}</td></tr>`).join('')}</table></div>`;
+}
+// One trophy per person. A win (solo podium place, or a place of a podium team,
+// each member of it) = a big trophy; everybody else one small; a winner gets no small.
+function entryName(e) { return e.name || (e.students || {}).name || '?'; }
+function trophyData() {
+    const set = st.event.settings || {};
+    const option = Number(set.option || 1);
+    const entries = (st.entries || []).filter((e) => !e.withdrawn);
+    const people = entries.filter((e) => e.do_solo || e.do_group || e.do_activity).map((e) => ({ id: e.id, name: entryName(e) }));   // volunteers alone are not participants
+    const groupMembers = {};
+    entries.filter((e) => e.do_group && e.team_id).forEach((e) => (groupMembers[e.team_id] = groupMembers[e.team_id] || []).push(e.id));
+    const soloPerson = {};
+    st.slots.filter((x) => x.kind === 'solo').forEach((x) => { soloPerson[x.id] = x.entry_id; });
+    return { ...S.computeTrophies({ results: results(), option, people, groupMembers, soloPerson }), entries };
+}
+function trophyPanelHtml() {
+    const td = trophyData();
+    const nameOf = (id) => (td.entries.find((e) => e.id === id) || {}).name || '?';
+    return `<div class="card" style="margin-bottom:14px;"><h3 style="margin-top:0;">Trophies to hand out</h3>
+        <div style="display:flex; gap:22px; flex-wrap:wrap; margin-bottom:8px;">
+            <div><div style="font-size:2.2em; font-weight:900; color:var(--gold);">${td.big.length}</div><div class="faint" style="font-size:.82em; font-weight:700;">BIG (winners)</div></div>
+            <div><div style="font-size:2.2em; font-weight:900;">${td.small.length}</div><div class="faint" style="font-size:.82em; font-weight:700;">SMALL (everybody else)</div></div>
+            <div><div style="font-size:2.2em; font-weight:900;">${td.people}</div><div class="faint" style="font-size:.82em; font-weight:700;">PEOPLE TAKING PART</div></div></div>
+        <p class="muted" style="font-size:.85em; margin:0 0 8px;">One trophy per person. A win is a big trophy (solo podium, or each member of a podium team), so someone who wins both solo and group gets two big ones. A winner does not also get a small one.</p>
+        ${td.big.length ? `<div class="faint" style="font-size:.8em; font-weight:700;">BIG</div><div style="font-size:.88em; margin-bottom:8px; display:flex; flex-wrap:wrap;">${td.big.map((b) => `<span class="badge" style="margin:2px;">${esc(nameOf(b.person))} · ${esc(b.why)}</span>`).join('')}</div>` : '<div class="muted" style="font-size:.88em;">No results yet: the big trophies appear once the judges have scored.</div>'}
+        <div style="margin:8px 0; padding:8px 10px; border-radius:10px; background:var(--saffron-soft); font-size:.88em;">🎁 <span id="giftSummary">${giftSummaryHtml()}</span><div class="faint" style="font-size:.8em; margin-top:2px;">Volunteers, judges and sponsors each get a thank-you gift (like a trophy). Lists are in the Certificates card below.</div></div>
+        ${td.small.length ? `<div class="faint" style="font-size:.8em; font-weight:700;">SMALL</div><div style="font-size:.88em; display:flex; flex-wrap:wrap;">${td.small.map((p) => `<span class="badge" style="margin:2px;">${esc(p.name)}</span>`).join('')}</div>` : ''}
+    </div>`;
+}
+// Thank-you gifts (like a trophy) for the volunteers, the judges and the sponsors.
+// The three lists are typed here (one per line) and kept on this device; the volunteers
+// who registered are filled in. Judges start with Judge 1-3.
+function giftList(key) {
+    try { return (localStorage.getItem(key) || '').split('\n').map((x) => x.trim()).filter(Boolean); } catch (e) { return []; }
+}
+function giftCounts() {
+    const vol = giftList('comp_volunteers'), jud = giftList('comp_judges'), spo = giftList('comp_sponsors');
+    const v = vol.length || (st.entries || []).filter((e) => !e.withdrawn && e.do_volunteer).length;
+    const j = jud.length || 3;
+    return { v, j, s: spo.length };
+}
+function giftSummaryHtml() {
+    const g = giftCounts();
+    return `<b>${g.v + g.j + g.s}</b> thank-you gifts: volunteers <b>${g.v}</b> · judges <b>${g.j}</b> · sponsors <b>${g.s}</b>`;
+}
+window.giftChanged = (key, el) => {
+    try { localStorage.setItem(key, el.value); } catch (e) { /* ignore */ }
+    const sum = document.getElementById('giftSummary'); if (sum) sum.innerHTML = giftSummaryHtml();
+};
+const JOB_LABEL = { backstage: 'Backstage', music: 'Music', stage: 'On stage', mic: 'On the mic' };
+function registeredVolunteerLines() {
+    return (st.entries || []).filter((e) => !e.withdrawn && e.do_volunteer)
+        .map((e) => `${entryName(e)} | ${(e.volunteer_roles || []).map((r) => JOB_LABEL[r] || r).join(', ')}`).sort().join('\n');
 }
 function controlCerts() {
-    return `<div class="card"><h3 style="margin-top:0;">Certificates (PDF, A4, ready to print)</h3>
-        <p class="muted">They use the results you revealed (option and positions). Reveal first.</p>
+    return `${trophyPanelHtml()}<div class="card"><h3 style="margin-top:0;">Certificates (PDF, A4, ready to print)</h3>
+        <p class="muted">One certificate per trophy: a winner gets one per win, everybody else one participation certificate (only once). Reveal the results first.</p>
         <div class="grid" style="grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));">
-            <button class="btn primary" onclick="CompControl.certificates('dancers')">Every dancer (position or participation)</button>
-            <button class="btn" onclick="CompControl.certificates('awards')">Special awards</button>
-            <button class="btn" onclick="CompControl.certificates('kids')">Kids show</button>
+            <button class="btn primary" onclick="CompControl.certificates('dancers')">Solo / group (winners + participation)</button>
+            <button class="btn" onclick="CompControl.certificates('kids')">Extra activities only</button>
             <button class="btn" onclick="CompControl.certificates('volunteers')">Volunteers</button>
+            <button class="btn" onclick="CompControl.certificates('judges')">Judges</button>
+            <button class="btn" onclick="CompControl.certificates('sponsors')">Sponsors</button>
         </div>
-        <div style="margin-top:14px;"><label class="faint" style="font-size:.82em; font-weight:700;">VOLUNTEERS (one name per line)</label>
-            <textarea id="volNames" rows="5" oninput="try { localStorage.setItem('comp_volunteers', this.value); } catch (e) {}" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc((() => { try { return localStorage.getItem('comp_volunteers') || ''; } catch (e) { return ''; } })())}</textarea></div>
+        <div style="margin-top:14px;"><label class="faint" style="font-size:.82em; font-weight:700;">VOLUNTEERS (one per line: name | jobs)</label>
+            <textarea id="volNames" rows="5" oninput="giftChanged('comp_volunteers', this)" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc((() => { try { const v = localStorage.getItem('comp_volunteers'); return v !== null && v !== '' ? v : registeredVolunteerLines(); } catch (e) { return registeredVolunteerLines(); } })())}</textarea>
+            <div class="faint" style="font-size:.78em; margin-top:4px;">The volunteers who registered are filled in (name | jobs). Add or remove lines as you like.</div></div>
+        <div style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+            <div><label class="faint" style="font-size:.82em; font-weight:700;">JUDGES (one name per line)</label>
+                <textarea rows="4" oninput="giftChanged('comp_judges', this)" placeholder="Judge 1&#10;Judge 2&#10;Judge 3" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc((() => { try { return localStorage.getItem('comp_judges') || ''; } catch (e) { return ''; } })())}</textarea></div>
+            <div><label class="faint" style="font-size:.82em; font-weight:700;">SPONSORS (one name per line)</label>
+                <textarea rows="4" oninput="giftChanged('comp_sponsors', this)" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc((() => { try { return localStorage.getItem('comp_sponsors') || ''; } catch (e) { return ''; } })())}</textarea></div>
+        </div>
     </div>`;
 }
 
 // ---------------- certificates (jsPDF) ----------------
 function makeCertificates(kind) {
     const snap = (st.live || {}).revealed;
-    if ((kind === 'dancers' || kind === 'awards') && !snap) { alert('Reveal the results first, so the certificates match what everyone saw.'); return; }
+    if (kind === 'dancers' && !snap) { alert('Reveal the results first, so the certificates match what everyone saw.'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const W = 297, H = 210;
@@ -718,24 +828,32 @@ function makeCertificates(kind) {
         doc.text(date, 40, 180); doc.text('Bhangra Sway', W - 40, 180, { align: 'right' });
     };
     if (kind === 'dancers') {
-        ['B', 'A'].forEach((cat) => {
-            const teamsInCat = snap.cats[cat].teams;
-            st.slots.filter((s) => s.kind === 'solo' && s.category === cat).sort((a, b) => String(a.name).localeCompare(String(b.name))).forEach((s) => {
-                const tn = teamName(s.team_id);
-                const t = teamsInCat.find((x) => x.name === tn);
-                const podium = t && t.pos <= 3;
-                page(podium ? `${ordinal(t.pos)} Place` : 'Certificate of Participation', s.name || '', `${podium ? 'Winning team' : 'Team'}: ${tn} · Category ${cat}`, 'Thank you for your energy, dedication and bhangra spirit.');
+        const td = trophyData();
+        const wins = {};
+        td.big.forEach((b) => (wins[b.person] = wins[b.person] || []).push(b.why));
+        td.entries.filter((e) => e.do_solo || e.do_group).sort((a, b) => entryName(a).localeCompare(entryName(b))).forEach((e) => {
+            const did = [e.do_solo && 'Solo', e.do_group && `Group · ${teamName(e.team_id)}`].filter(Boolean).join(' + ');
+            const w = wins[e.id] || [];
+            if (w.length) w.forEach((why) => {
+                const m = why.match(/^(.*?) \((.*)\)$/) || [why, why, ''];
+                page(`${m[1]} Place`, entryName(e), m[1].startsWith('Solo') ? `Solo · Category ${m[2]}` : `Group · Team ${m[2]}`, 'Congratulations, a big win!');
             });
+            else page('Certificate of Participation', entryName(e), did + (e.category ? ` · Category ${e.category}` : ''), 'Thank you for your energy, dedication and bhangra spirit.');
         });
-    } else if (kind === 'awards') {
-        ['B', 'A'].forEach((cat) => snap.cats[cat].awards.forEach((a) => page(a.award, a.name, `Category ${cat} · ${a.team}`, 'Special award')));
     } else if (kind === 'kids') {
-        (st.kids || []).forEach((n) => page('Special Performance', n, 'Kids special show', 'Our youngest stars. Well done!'));
+        // only people who do the extra activity and nothing else (the rest already get a certificate above)
+        (st.entries || []).filter((e) => !e.withdrawn && e.do_activity && !e.do_solo && !e.do_group).sort((a, b) => entryName(a).localeCompare(entryName(b)))
+            .forEach((e) => page('Certificate of Participation', entryName(e), 'Extra activities', 'Thank you for taking part. Well done!'));
+    } else if (kind === 'judges' || kind === 'sponsors') {
+        const key = kind === 'judges' ? 'comp_judges' : 'comp_sponsors';
+        const names = giftList(key);
+        if (!names.length) { alert('Type the ' + kind + ' names first (one per line), in the box below the buttons.'); return; }
+        names.forEach((n) => page('Thank You', n, kind === 'judges' ? 'for judging the Bhangra Competition 2027' : 'for supporting the Bhangra Competition 2027', kind === 'judges' ? 'Judge' : 'Sponsor'));
     } else {
         const names = (document.getElementById('volNames').value || '').split('\n').map((x) => x.trim()).filter(Boolean);
         try { localStorage.setItem('comp_volunteers', names.join('\n')); } catch (e) { /* ignore */ }
         if (!names.length) { alert('Type the volunteers\' names first (one per line).'); return; }
-        names.forEach((n) => page('Thank You', n, 'for making the Bhangra Competition 2027 happen', 'Volunteer'));
+        names.forEach((line) => { const [n, jobs] = line.split('|').map((x) => x.trim()); page('Thank You', n, 'for making the Bhangra Competition 2027 happen', jobs ? 'Volunteer · ' + jobs : 'Volunteer'); });
     }
     if (first) { alert('Nothing to print yet.'); return; }
     doc.save(`certificates-${kind}.pdf`);
@@ -744,7 +862,71 @@ function makeCertificates(kind) {
 // ---------------- JUDGE ----------------
 const draft = {};     // slotId -> criteria being edited (survives polls)
 let saveState = '';   // '', 'saving', 'saved', 'locked', 'error'
+// Two tabs: live scoring, and the scores this judge has already given (read-only).
+let judgeTab = ['mine', 'rank'].includes(params.get('tab')) ? params.get('tab') : 'live';
+function judgeTabsHtml() {
+    const b = (k, label) => `<button onclick="CompJudge.tab('${k}')" style="flex:1; padding:10px 6px; border-radius:10px; font-weight:800; font-size:.92em; background:${judgeTab === k ? 'var(--saffron)' : 'var(--card2)'}; color:${judgeTab === k ? '#1b1000' : 'var(--soft)'}; border:1px solid var(--line);">${tr(label)}</button>`;
+    return `<div style="display:flex; gap:8px; margin-bottom:12px;">${b('live', 'Live scoring')}${b('mine', 'My scores')}${b('rank', 'Ranking')}</div>`;
+}
+// Who is ahead according to THIS judge's own scores (never other judges').
+function renderJudgeRank() {
+    const mine = st.myScores || {};
+    const board = (kind, cat) => {
+        const keys = kind === 'solo' ? S.SOLO_CRITERIA : S.GROUP_CRITERIA;
+        const rows = st.slots.filter((x) => x.kind === kind && x.category === cat && x.status !== 'disqualified').map((x) => {
+            const sc = mine[x.id] || {};
+            if (!keys.every((c) => typeof sc[c] === 'number')) return null;
+            return { x, total: S.r1(keys.reduce((t, c) => t + sc[c], 0)) };
+        }).filter(Boolean).sort((a, b) => b.total - a.total);
+        let pos = 0, prev = null;
+        rows.forEach((r, i) => { if (prev === null || r.total !== prev) pos = i + 1; r.pos = pos; prev = r.total; });
+        return { rows, max: keys.length * 10 };
+    };
+    const sections = [];
+    ['B', 'A'].forEach((cat) => ['solo', 'group'].forEach((kind) => { const b = board(kind, cat); if (b.rows.length) sections.push({ cat, kind, ...b }); }));
+    const key = JSON.stringify(['rank', LANG, sections.map((x) => [x.cat, x.kind, x.rows.map((r) => [r.x.id, r.total])])]);
+    const medal = (p) => ({ 1: '#ffc94d', 2: '#cfd5e8', 3: '#d99a63' }[p] || null);
+    paint(key, `<div class="wrap" style="max-width:680px;">${judgeModeBar()}${judgeTabsHtml()}
+        <div class="faint" style="font-size:.82em; margin:0 0 10px;">${tr("Ranked by YOUR scores only. Other judges' scores are not shown.")}</div>
+        ${sections.length ? sections.map((sec) => `<div class="card" style="margin-bottom:12px;">
+            <div style="font-weight:900; margin-bottom:6px;">${tr(sec.kind === 'solo' ? 'Solo ranking' : 'Group ranking')} · ${tr('Category')} ${sec.cat}</div>
+            ${sec.rows.map((r) => `<div class="list-row" style="${r.pos <= 3 ? 'background:var(--saffron-soft); border-radius:10px; padding-left:8px; padding-right:8px;' : ''}">
+                <span style="font-weight:900; font-size:1.15em; min-width:34px; color:${medal(r.pos) || 'var(--faint)'};">${r.pos}</span>
+                <div style="flex:1; min-width:0;"><div style="font-weight:800;">${esc(slotTitle(r.x))}</div>${r.x.kind === 'solo' && r.x.team_id ? `<div class="faint" style="font-size:.78em;">${esc(teamName(r.x.team_id))}</div>` : ''}</div>
+                <span style="font-weight:900;">${r.total}<span class="faint" style="font-weight:600; font-size:.8em;">/${sec.max}</span></span></div>`).join('')}
+        </div>`).join('') : `<div class="card muted" style="text-align:center;">${tr('Nothing scored yet.')}</div>`}
+    </div>`);
+}
+function renderJudgeMine() {
+    const cur = current();
+    const mine = st.myScores || {};
+    const sentIds = (st.mySubmitted || []).map(Number);
+    const rows = st.slots.filter((x) => (x.kind === 'solo' || x.kind === 'group') && (mine[x.id] || (draft[x.id] && x.id === (cur && cur.id))))
+        .map((x) => ({ x, sc: (x.id === (cur && cur.id) && draft[x.id]) ? draft[x.id] : mine[x.id] }))
+        .filter((r) => r.sc && Object.keys(r.sc).length)
+        .sort((a, b) => b.x.position - a.x.position);   // latest first
+    const key = JSON.stringify(['mine', LANG, rows.map((r) => [r.x.id, r.sc]), sentIds, cur && cur.id]);
+    paint(key, `<div class="wrap" style="max-width:680px;">${judgeModeBar()}${judgeTabsHtml()}
+        ${rows.length ? rows.map(({ x, sc }) => {
+            const crit = x.kind === 'solo' ? S.SOLO_CRITERIA.concat(S.SOLO_EXTRA) : S.GROUP_CRITERIA;
+            const totalKeys = x.kind === 'solo' ? S.SOLO_CRITERIA : S.GROUP_CRITERIA;
+            const total = S.r1(totalKeys.reduce((t, c) => t + (typeof sc[c] === 'number' ? sc[c] : 0), 0));
+            const state = x.id === (cur && cur.id) && !sentIds.includes(x.id) ? tr('in progress') : sentIds.includes(x.id) ? tr('sent') : tr('not sent');
+            return `<div class="card" style="margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                    <div><span class="code">${esc(x.code || '')}</span> <b>${esc(slotTitle(x))}</b></div>
+                    <span class="badge ${sentIds.includes(x.id) ? 'ok' : ''}">${state}</span></div>
+                <div class="muted" style="font-size:.82em; margin:2px 0 8px;">${esc(slotSub(x))}</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(92px, 1fr)); gap:6px;">
+                    ${crit.map((c) => `<div style="background:var(--bg2); border-radius:8px; padding:6px 8px;"><div class="faint" style="font-size:.7em; font-weight:700;">${esc(tr(CRIT_LABEL[c]))}</div><div style="font-weight:900; font-size:1.1em; color:var(--gold);">${typeof sc[c] === 'number' ? sc[c] : '–'}</div></div>`).join('')}
+                    <div style="background:var(--saffron-soft); border-radius:8px; padding:6px 8px;"><div class="faint" style="font-size:.7em; font-weight:700;">${tr('Total')}</div><div style="font-weight:900; font-size:1.1em;">${total}/${totalKeys.length * 10}</div></div>
+                </div></div>`;
+        }).join('') : `<div class="card muted" style="text-align:center;">${tr('No scores given yet.')}</div>`}
+    </div>`);
+}
 function renderJudge() {
+    if (judgeTab === 'mine') { renderJudgeMine(); return; }
+    if (judgeTab === 'rank') { renderJudgeRank(); return; }
     const cur = current();
     const live = st.live || {};
     const scorable = cur && (cur.kind === 'solo' || cur.kind === 'group') && cur.status !== 'disqualified';
@@ -755,10 +937,10 @@ function renderJudge() {
     }
     const d = scorable ? draft[cur.id] : {};
     const sent = scorable && !!sentLocal[cur.id];
-    const key = JSON.stringify([cur && cur.id, live.phase, scorable && d, saveState, st.judgeName, sent, LANG]);
+    const key = JSON.stringify(['live', cur && cur.id, live.phase, scorable && d, saveState, st.judgeName, sent, LANG]);
     if (!scorable) {
         const up = nextWaiting(cur ? cur.position : 0)[0];
-        paint(key, `<div class="wrap" style="max-width:620px; text-align:center; padding-top:4vh;">${judgeModeBar()}
+        paint(key, `<div class="wrap" style="max-width:620px; text-align:center; padding-top:4vh;">${judgeModeBar()}${judgeTabsHtml()}
             <div class="faint" style="font-weight:700;">${esc(st.judgeName || tr(ROLES[ROLE]))}</div>
             <div class="huge" style="margin:14px 0;">${cur ? esc(slotTitle(cur)) : live.phase === 'results' ? tr('All done. Thank you!') : tr('Waiting to start')}</div>
             ${cur && cur.kind === 'break' ? `<div style="font-size:3em;">${clock()}</div>` : ''}
@@ -767,7 +949,7 @@ function renderJudge() {
         return;
     }
     const filled = crit.filter((c) => typeof d[c] === 'number').length;
-    paint(key, `<div class="wrap" style="max-width:680px;">${judgeModeBar()}
+    paint(key, `<div class="wrap" style="max-width:680px;">${judgeModeBar()}${judgeTabsHtml()}
         <div class="card" style="margin-bottom:14px; border-color:var(--saffron);">
             <div style="display:flex; justify-content:space-between; align-items:center;"><span class="code">${esc(cur.code || '')}</span><span style="font-size:1.4em;">${clock()}</span></div>
             <div class="huge" style="font-size:clamp(26px,7vw,40px); margin:6px 0 2px;">${esc(slotTitle(cur))}</div>
@@ -777,7 +959,7 @@ function renderJudge() {
             const v = d[c];
             const whole = typeof v === 'number' ? Math.floor(v) : null;
             const isHalf = typeof v === 'number' && v % 1 !== 0;
-            return `<div class="card crit"><div class="crit-head"><span class="crit-name">${tr(CRIT_LABEL[c])}${c === 'costume' && cur.kind === 'solo' ? ` <span class="faint" style="font-size:.7em; font-weight:600;">${tr('(Best Costume only)')}</span>` : ''}</span><span class="crit-val">${typeof v === 'number' ? v : '–'}</span></div>
+            return `<div class="card crit"><div class="crit-head"><span class="crit-name">${tr(CRIT_LABEL[c])}</span><span class="crit-val">${typeof v === 'number' ? v : '–'}</span></div>
                 <div class="nums">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `<button class="${whole === n ? 'on' : ''}" onclick="CompJudge.set('${c}', ${n})">${n}</button>`).join('')}</div>
                 <button class="half ${isHalf ? 'on' : ''}" onclick="CompJudge.half('${c}')" ${whole === null || whole === 10 ? 'disabled' : ''}>+ ½</button></div>`;
         }).join('')}
@@ -801,6 +983,7 @@ function judgeModeBar() {
     return `<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button class="btn small" onclick="CompJudge.practice()">${tr('First time? Practice with fake dancers')}</button></div>`;
 }
 window.CompJudge = {
+    tab(k) { judgeTab = k; lastRenderKey = ''; render(); },
     practice() {
         try { localStorage.removeItem(DEMO_KEY); } catch (e) { /* fresh practice anyway */ }
         location.href = `comp.html?role=${ROLE}&demo=1&preset=live&autonext=1`;
@@ -1031,20 +1214,22 @@ function renderAnchor() {
 }
 
 // ---------------- PROJECTOR ----------------
-let projCat = params.get('cat') || 'B';
-setInterval(() => { if (ROLE === 'projector' && st && st.live && st.live.revealed) { projCat = projCat === 'B' ? 'A' : 'B'; lastRenderKey = ''; render(); } }, 20000);
+// Results rotate every 20 s: B teams, B solos, A teams, A solos.
+let projStep = params.get('cat') === 'A' ? 2 : 0;
+setInterval(() => { if (ROLE === 'projector' && st && st.live && st.live.revealed) { projStep = (projStep + 1) % 4; lastRenderKey = ''; render(); } }, 20000);
 function renderProjector() {
     const live = st.live || {};
     const cur = current();
     const title = `<div class="proj-title">${esc(st.event.title)}</div>`;
     if (live.revealed) {
+        const projCat = projStep < 2 ? 'B' : 'A';
+        const solo = projStep % 2 === 1;
         const c = live.revealed.cats[projCat];
-        const key = JSON.stringify(['rev', projCat, live.revealed.at]);
-        const teams = [...c.teams].sort((a, b) => a.pos - b.pos).filter((t) => t.pos <= 3);
+        const key = JSON.stringify(['rev', projStep, live.revealed.at]);
+        const rows = (solo ? (c.solos || []) : c.teams).filter((t) => t.pos <= 3).sort((x, y) => x.pos - y.pos);
         paint(key, `${title}<div class="proj">
-            <div class="proj-code" style="margin-bottom:3vh;">CATEGORY ${projCat} · RESULTS</div>
-            <div class="podium">${teams.map((t, i) => `<div class="pod" style="animation-delay:${(teams.length - i) * 0.6}s;"><span class="p">${ordinal(t.pos)}</span><span>${esc(t.name)}</span></div>`).join('')}</div>
-            <div class="podium" style="margin-top:4vh;">${c.awards.map((a, i) => `<div class="pod" style="font-size:3vh; padding:1.4vh 3vw; animation-delay:${(teams.length + 1 + i) * 0.6}s;"><span style="color:var(--saffron); min-width:24vw; text-align:left;">${esc(a.award)}</span><span>${esc(a.name)}</span><span class="faint" style="margin-left:auto; font-size:.8em;">${esc(a.team)}</span></div>`).join('')}</div>
+            <div class="proj-code" style="margin-bottom:3vh;">CATEGORY ${projCat} · ${solo ? 'SOLO' : 'GROUP'} RESULTS</div>
+            <div class="podium">${rows.map((t, i) => `<div class="pod" style="animation-delay:${(rows.length - i) * 0.6}s;"><span class="p">${ordinal(t.pos)}</span><span>${esc(t.name)}</span>${solo && t.team ? `<span class="faint" style="margin-left:auto; font-size:.7em;">${esc(t.team)}</span>` : ''}</div>`).join('')}</div>
         </div>`);
         return;
     }
@@ -1067,25 +1252,56 @@ function renderProjector() {
 // ---------------- DOOR ----------------
 function renderDoor() {
     const live = st.live || {};
-    const key = JSON.stringify([live.door_cash, live.door_free]);
+    const key = JSON.stringify([live.door_cash, live.door_free, live.door_students, live.door_coupons, doorCoupon]);
+    const total = (live.door_cash || 0) + (live.door_free || 0) + (live.door_students || 0) + (live.door_coupons || 0);
+    const cp = doorCoupon;
+    const verdict = !cp ? '' : cp.status === 'ok'
+        ? `<div style="border:2px solid var(--green); background:var(--green-soft); border-radius:12px; padding:12px; margin-top:10px; text-align:center;">
+            <div style="font-size:1.6em; font-weight:900; color:var(--green);">${cp.let_in ? '✓ Let in' : '✓ Valid coupon'}</div>
+            <div style="font-weight:800; font-size:1.15em;">${esc(cp.guest)}</div><div class="muted">invited by ${esc(cp.student)}</div>
+            ${cp.let_in ? '<div class="muted" style="margin-top:4px;">Give a wristband.</div>' : `<button class="btn go" style="width:100%; margin-top:10px;" onclick="CompDoor.letIn()">Let in + wristband</button>`}</div>`
+        : cp.status === 'used'
+            ? `<div style="border:2px solid var(--red); background:var(--red-soft); border-radius:12px; padding:12px; margin-top:10px; text-align:center;"><div style="font-size:1.4em; font-weight:900; color:var(--red);">✗ Already used</div><div class="muted">${esc(cp.guest)} · invited by ${esc(cp.student)}</div></div>`
+            : `<div style="border:2px solid var(--red); background:var(--red-soft); border-radius:12px; padding:12px; margin-top:10px; text-align:center;"><div style="font-size:1.4em; font-weight:900; color:var(--red);">✗ Code not found</div><div class="muted">Check the letters. Or take €${DOOR_PRICE}.</div></div>`;
     paint(key, `<div class="wrap" style="max-width:560px;">
         <div class="card" style="text-align:center; margin-bottom:14px;"><div class="faint" style="font-weight:800; font-size:.85em;">CASH IN THE BOX</div>
             <div style="font-size:3.4em; font-weight:900; color:var(--gold);">€${(live.door_cash || 0) * DOOR_PRICE}</div>
-            <div class="muted">${(live.door_cash || 0) + (live.door_free || 0)} people in · give everyone a wristband</div></div>
+            <div class="muted">${total} people in · give everyone a wristband</div></div>
+        <div class="card" style="margin-bottom:14px;"><div style="font-weight:800; margin-bottom:6px;">Guest with a coupon (free)</div>
+            <div style="display:flex; gap:8px;"><input id="couponCode" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="CODE" style="flex:1; min-width:0; text-transform:uppercase; letter-spacing:4px; font-weight:800; font-size:1.3em; text-align:center; padding:12px; border-radius:12px; border:1px solid var(--line); background:var(--bg2); color:var(--ink);" onkeydown="if (event.key === 'Enter') CompDoor.check()">
+                <button class="btn primary" onclick="CompDoor.check()">Check</button></div>${verdict}
+            <div class="faint" style="font-size:.82em; margin-top:6px;">Coupons let in ${live.door_coupons || 0} so far.</div></div>
         <div class="card" style="margin-bottom:14px;"><div style="font-weight:800; margin-bottom:10px;">Paid €${DOOR_PRICE}</div>
             <div class="counter"><button class="btn" onclick="CompDoor.add('cash', -1)">−1</button><div class="n">${live.door_cash || 0}</div><button class="btn primary" onclick="CompDoor.add('cash', 1)">+1</button></div></div>
+        <div class="card" style="margin-bottom:14px;"><div style="font-weight:800; margin-bottom:10px;">Studio students (free)</div>
+            <div class="counter"><button class="btn" onclick="CompDoor.add('student', -1)">−1</button><div class="n">${live.door_students || 0}</div><button class="btn go" onclick="CompDoor.add('student', 1)">+1</button></div></div>
         <div class="card"><div style="font-weight:800; margin-bottom:10px;">Under 6 (free)</div>
             <div class="counter"><button class="btn" onclick="CompDoor.add('free', -1)">−1</button><div class="n">${live.door_free || 0}</div><button class="btn go" onclick="CompDoor.add('free', 1)">+1</button></div></div>
-        <p class="faint" style="text-align:center; font-size:.85em;">Dancers enter free. Everyone else pays €${DOOR_PRICE}.</p>
+        <p class="faint" style="text-align:center; font-size:.85em;">Free: dancers, all studio students, children under 6, guests with a coupon. Everyone else pays €${DOOR_PRICE}.</p>
     </div>`);
 }
+let doorCoupon = null;   // last coupon answer shown on the Door screen
 window.CompDoor = {
     async add(kind, delta) {
         if (delta < 0 && !confirm('Remove one?')) return;
         try { await backend.door(kind, delta); } catch (e) { alert('Not saved: ' + (e.message || e)); }
         lastRenderKey = ''; await refresh();
+    },
+    async check() {
+        const code = (document.getElementById('couponCode').value || '').trim();
+        if (!code) return;
+        try { doorCoupon = await backend.coupon(code, false); } catch (e) { alert('Cannot check: ' + (e.message || e)); return; }
+        doorCode = code; lastRenderKey = ''; render();
+        const i = document.getElementById('couponCode'); if (i) i.value = code.toUpperCase();
+    },
+    async letIn() {
+        if (!doorCode) return;
+        try { doorCoupon = await backend.coupon(doorCode, true); } catch (e) { alert('Not saved: ' + (e.message || e)); return; }
+        lastRenderKey = ''; await refresh();
+        setTimeout(() => { doorCoupon = null; doorCode = ''; lastRenderKey = ''; render(); }, 4000);
     }
 };
+let doorCode = '';
 
 // ---------------------------------------------------------------- start
 if (!DEMO && !supa) messageScreen('Cannot connect', 'Check the internet and reload.');

@@ -1,22 +1,18 @@
 // ===== Bhangra Competition: scoring (shared by comp.html and the tests) =====
 // Rules (agreed with the coach, see comp/manifesto.pdf):
 //   * 3 judges, every criterion 1–10 with halves; a score is the judges' average.
-//   * Solo = energy + technique + rhythm + expression (max 40). Costume is
-//     scored too but only decides Best Costume.
+//   * Solo = energy + technique + rhythm + expression (max 40).
 //   * Group = sync + formations + energy + technique + costume (max 50).
-//   * Team = 40% of the team's solo average (%) + 60% of the group (%).
+//   * Solo and group are separate competitions (coach, 2026-11-17):
+//       - Team score = the group round only, as a % (group / 50 × 100).
+//       - Solo has its own ranking per category (solo total /40), 1st/2nd/3rd for dancers.
+//   * No special awards (Best Solo / Expression / Costume): the solo positions replace them.
 //   * Option 1: exact ranking, equal scores share the position.
-//     Option 2: teams within `gap` points of the group's top share the position
+//     Option 2: within `gap` points of the top of the group share the position
 //     (admin only, gap changeable on the day).
-//   * Special awards per category, one per dancer: Best Solo → Best Expression
-//     → Best Costume. Best Solo tie: the higher expression gets Best
-//     Expression, the other Best Solo. Other ties: higher solo total, then
-//     higher expression; shared only if everything is equal.
-//   * Extras (switch): Best Solo runner-up, Best Costume runner-up, to the
-//     next best dancers without an award.
 (function (root) {
     const SOLO_CRITERIA = ['energy', 'technique', 'rhythm', 'expression'];
-    const SOLO_EXTRA = ['costume'];
+    const SOLO_EXTRA = [];   // costume is no longer scored in the solo
     const GROUP_CRITERIA = ['sync', 'formations', 'energy', 'technique', 'costume'];
     const r2 = (x) => Math.round(x * 100) / 100;
     const r1 = (x) => Math.round(x * 10) / 10;
@@ -44,40 +40,11 @@
         rows.forEach((r) => { if (top === null || r2(top - r.score) > gap) { pos++; top = r.score; } r.opt2 = pos; });
     }
 
-    function pickAwards(solos, extrasOn) {
-        const pool = solos.filter((s) => !s.disqualified && s.judges > 0);
-        const won = new Set();
-        const awards = [];
-        const give = (award, list, note) => list.forEach((d) => { won.add(d.slotId); awards.push({ award, slotId: d.slotId, name: d.name, team: d.teamName, note }); });
-        const best = (key, tb) => {
-            const left = pool.filter((d) => !won.has(d.slotId));
-            if (!left.length) return [];
-            left.sort((a, b) => b[key] - a[key] || tb.reduce((r, k) => r || b[k] - a[k], 0));
-            return left.filter((d) => d[key] === left[0][key] && tb.every((k) => d[k] === left[0][k]));
-        };
-        const soloTop = Math.max(...pool.map((d) => d.soloTotal), -Infinity);
-        const tied = pool.filter((d) => d.soloTotal === soloTop).sort((a, b) => b.expression - a.expression);
-        if (tied.length > 1 && tied[0].expression > tied[1].expression) {
-            give('Best Expression', [tied[0]], 'tied for Best Solo, higher expression');
-            give('Best Solo', best('soloTotal', ['expression']), 'tied for Best Solo');
-        } else {
-            give('Best Solo', best('soloTotal', ['expression']));
-            give('Best Expression', best('expression', ['soloTotal']));
-        }
-        give('Best Costume', best('costume', ['soloTotal', 'expression']));
-        if (extrasOn) {
-            give('Best Solo runner-up', best('soloTotal', ['expression']));
-            give('Best Costume runner-up', best('costume', ['soloTotal', 'expression']));
-        }
-        const order = ['Best Solo', 'Best Expression', 'Best Costume', 'Best Solo runner-up', 'Best Costume runner-up'];
-        return awards.sort((a, b) => order.indexOf(a.award) - order.indexOf(b.award));
-    }
-
     // slots: [{id, kind:'solo'|'group', category, team_id, name, status}]
     // scores: {slotId: {1:{...}, 2:{...}, 3:{...}}}
     // teams: [{id, name, category}]
-    function computeResults({ slots, scores, teams, gap = 1, extrasOn = false }) {
-        const teamName = (id) => (teams.find((t) => t.id === id) || {}).name || '?';
+    function computeResults({ slots, scores, teams, gap = 1 }) {
+        const teamName = (id) => (id == null ? '' : (teams.find((t) => t.id === id) || {}).name || '?');
         const out = {};
         ['B', 'A'].forEach((cat) => {
             const solos = slots.filter((s) => s.kind === 'solo' && s.category === cat).map((s) => {
@@ -87,30 +54,33 @@
                     slotId: s.id, name: s.name, teamId: s.team_id, teamName: teamName(s.team_id),
                     disqualified: s.status === 'disqualified', complete: a.complete, judges: a.judges,
                     soloTotal, solo100: r2(soloTotal / 40 * 100),
-                    expression: r2(a.avg.expression), costume: r2(a.avg.costume), criteria: a.avg
+                    expression: r2(a.avg.expression), criteria: a.avg
                 };
             });
             const teamRows = teams.filter((t) => t.category === cat).map((t) => {
-                const mine = solos.filter((s) => s.teamId === t.id && !s.disqualified && s.judges > 0);
                 const gslot = slots.find((s) => s.kind === 'group' && s.team_id === t.id);
                 const g = averageCriteria(gslot ? scores[gslot.id] : {}, GROUP_CRITERIA);
                 const group = r2(GROUP_CRITERIA.reduce((x, c) => x + g.avg[c], 0));
-                const soloAvg = mine.length ? r2(mine.reduce((x, s) => x + s.solo100, 0) / mine.length) : 0;
                 const group100 = r2(group / 50 * 100);
                 return {
-                    teamId: t.id, name: t.name, soloCount: mine.length, soloAvg, group, group100,
-                    score: r2(0.4 * soloAvg + 0.6 * group100),
+                    teamId: t.id, name: t.name, group, group100,
+                    score: group100,   // team = group round only
                     disqualified: !!(gslot && gslot.status === 'disqualified'),
-                    complete: !!gslot && g.complete && mine.every((s) => s.complete)
+                    complete: !!gslot && g.complete
                 };
             });
-            const ranked = teamRows.filter((t) => !t.disqualified).sort((a, b) => b.score - a.score || b.group100 - a.group100);
+            const ranked = teamRows.filter((t) => !t.disqualified).sort((a, b) => b.score - a.score);
             rankOption1(ranked);
             rankOption2(ranked, gap);
+            // Solo ranking: its own positions (same tie / gap rules, on the solo %).
+            const soloRanked = solos.filter((x) => !x.disqualified && x.judges > 0)
+                .sort((a, b) => b.soloTotal - a.soloTotal || b.expression - a.expression);
+            soloRanked.forEach((x) => { x.score = x.solo100; });
+            rankOption1(soloRanked);
+            rankOption2(soloRanked, gap);
             out[cat] = {
                 solos: solos.sort((a, b) => b.soloTotal - a.soloTotal || b.expression - a.expression),
-                teams: ranked.concat(teamRows.filter((t) => t.disqualified)),
-                awards: pickAwards(solos, extrasOn)
+                teams: ranked.concat(teamRows.filter((t) => t.disqualified))
             };
         });
         return out;
@@ -118,47 +88,77 @@
 
     // Lottery running order for one category: shuffled, then fixed so two
     // dancers of the same team never dance one after the other (when possible).
+    // A solo-only dancer (no team) counts as a team of one.
+    const teamKey = (x) => (x.team_id == null ? 'solo' + x.id : String(x.team_id));
     function lotteryOrder(items, rand) {
         const rnd = rand || Math.random;
         const left = items.slice();
         for (let i = left.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [left[i], left[j]] = [left[j], left[i]]; }
         const out = [];
         while (left.length) {
-            const last = out.length ? out[out.length - 1].team_id : undefined;
+            const last = out.length ? teamKey(out[out.length - 1]) : undefined;
             const counts = {};
-            left.forEach((x) => { counts[x.team_id] = (counts[x.team_id] || 0) + 1; });
+            left.forEach((x) => { counts[teamKey(x)] = (counts[teamKey(x)] || 0) + 1; });
             // A team holding more than half of what is left must go now, or
             // it would end up dancing back to back later.
-            const must = Object.keys(counts).find((k) => counts[k] * 2 > left.length && String(last) !== k);
-            let idx = must !== undefined ? left.findIndex((x) => String(x.team_id) === must) : left.findIndex((x) => x.team_id !== last);
+            const must = Object.keys(counts).find((k) => counts[k] * 2 > left.length && last !== k);
+            let idx = must !== undefined ? left.findIndex((x) => teamKey(x) === must) : left.findIndex((x) => teamKey(x) !== last);
             if (idx < 0) idx = 0; // only one team left: nothing else possible
             out.push(left.splice(idx, 1)[0]);
         }
         return out;
     }
 
-    // Full day: B solos (break every 11) → B groups → break → A solos → A groups → kids show.
+    // Full day (coach, 2026-11-17): B solos (a judges break every 11) → A solos →
+    // the extra, non-competitive activities → B groups → A groups.
+    // entries: {id, do_solo, do_group, do_activity, category, team_id}
     function buildRunningOrder({ entries, teams, rand, breakEvery = 11 }) {
         const slots = [];
         let pos = 1;
+        const n = { A: 0, B: 0 };
         const push = (s) => slots.push({ position: pos++, ...s });
-        ['B', 'A'].forEach((cat, ci) => {
-            const solos = lotteryOrder(entries.filter((e) => e.kind === 'compete' && e.category === cat && e.team_id), rand);
-            let n = 0;
+        const code = (cat) => `${cat}-${String(++n[cat]).padStart(2, '0')}`;
+        ['B', 'A'].forEach((cat) => {
+            const solos = lotteryOrder(entries.filter((e) => e.do_solo && e.category === cat), rand);
             solos.forEach((e, i) => {
                 if (i > 0 && i % breakEvery === 0) push({ kind: 'break', category: cat, label: 'Judges break', minutes: 5 });
-                push({ kind: 'solo', category: cat, entry_id: e.id, code: `${cat}-${String(++n).padStart(2, '0')}` });
+                push({ kind: 'solo', category: cat, entry_id: e.id, code: code(cat) });
             });
             if (solos.length) push({ kind: 'break', category: cat, label: 'Break', minutes: 5 });
-            lotteryOrder(teams.filter((t) => t.category === cat).map((t) => ({ ...t, team_id: t.id })), rand)
-                .forEach((t) => push({ kind: 'group', category: cat, team_id: t.id, code: `${cat}-${String(++n).padStart(2, '0')}` }));
-            if (ci === 0) push({ kind: 'break', category: null, label: 'Break', minutes: 15 });
         });
-        if (entries.some((e) => e.kind === 'kids_show')) push({ kind: 'kids', category: null, label: 'Kids special show' });
+        if (entries.some((e) => e.do_activity)) {
+            push({ kind: 'kids', category: null, label: 'Extra activities (not a competition)' });
+            push({ kind: 'break', category: null, label: 'Break', minutes: 10 });
+        }
+        ['B', 'A'].forEach((cat, ci) => {
+            const cats = teams.filter((t) => t.category === cat);
+            lotteryOrder(cats.map((t) => ({ ...t, team_id: t.id })), rand)
+                .forEach((t) => push({ kind: 'group', category: cat, team_id: t.id, code: code(cat) }));
+            if (ci === 0 && cats.length) push({ kind: 'break', category: null, label: 'Break', minutes: 5 });
+        });
         return slots;
     }
 
-    const api = { SOLO_CRITERIA, SOLO_EXTRA, GROUP_CRITERIA, computeResults, lotteryOrder, buildRunningOrder, r1 };
+    // Trophies: one per person. Every win = a big trophy: a solo podium place, or a
+    // podium place of a team (each member of the team gets one). Everyone else takes
+    // one small trophy; a winner never also gets a small one.
+    // results = computeResults(...); people = [{id, name}];
+    // groupMembers = {teamId: [personId, ...]}; soloPerson = {slotId: personId}
+    function computeTrophies({ results, option = 1, people, groupMembers, soloPerson }) {
+        const pos = (r) => (option === 2 ? r.opt2 : r.opt1);
+        const big = [];
+        ['B', 'A'].forEach((cat) => {
+            (results[cat].solos || []).filter((x) => x.opt1 && pos(x) <= 3)
+                .forEach((x) => big.push({ person: soloPerson[x.slotId], why: `Solo ${pos(x)}${['st', 'nd', 'rd'][pos(x) - 1]} (${cat})` }));
+            (results[cat].teams || []).filter((t) => !t.disqualified && pos(t) <= 3)
+                .forEach((t) => (groupMembers[t.teamId] || []).forEach((pid) => big.push({ person: pid, why: `Group ${pos(t)}${['st', 'nd', 'rd'][pos(t) - 1]} (${t.name})` })));
+        });
+        const winners = new Set(big.map((b) => b.person));
+        const small = people.filter((p) => !winners.has(p.id));
+        return { big, small, people: people.length, winners: winners.size };
+    }
+
+    const api = { SOLO_CRITERIA, SOLO_EXTRA, GROUP_CRITERIA, computeResults, lotteryOrder, buildRunningOrder, computeTrophies, r1 };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.CompScore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
