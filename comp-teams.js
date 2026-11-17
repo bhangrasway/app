@@ -14,6 +14,14 @@ let compBoardCat = 'A';
 let compBoardSel = null;        // entry id picked by tapping
 let compBoardSearch = '';
 let compBoardMsg = '';
+// Parent name + age are for the coach only. Hidden by default, so a screenshot of the
+// board never shows them; the switch in the top bar shows them (remembered on this device).
+let compBoardDetails = (() => { try { return localStorage.getItem('comp_board_details') === '1'; } catch (e) { return false; } })();
+function compBoardToggleDetails() {
+    compBoardDetails = !compBoardDetails;
+    try { localStorage.setItem('comp_board_details', compBoardDetails ? '1' : '0'); } catch (e) { /* ignore */ }
+    renderTeamBoard();
+}
 
 function compBoardEl() {
     let el = document.getElementById('compBoard');
@@ -80,9 +88,11 @@ function renderTeamBoard() {
         const s = compStudent(e.student_id) || {};
         return `<div class="cb-chip ${compBoardSel === e.id ? 'sel' : ''}" draggable="true"
             ondragstart="compBoardDragStart(event, ${e.id})" onclick="event.stopPropagation(); compBoardPickChip(${e.id})">
-            <span style="flex:1; min-width:0; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(compBoardName(e))}</span>
+            <span style="flex:1; min-width:0;">
+                <span style="display:block; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(compBoardName(e))}</span>
+                ${compBoardDetails ? `<span style="display:block; color:var(--ink-faint, #889); font-size:.78em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(s.parentName ? 'Parent: ' + s.parentName : 'Parent: —')}${s.age != null ? ' · ' + escapeHtml(String(s.age)) + ' yrs' : ''}</span>` : ''}
+            </span>
             ${e.do_solo ? '<span class="cb-tag" title="also does the solo">Solo</span>' : ''}
-            <span style="color:var(--ink-faint, #889); font-size:.85em;">${s.age ?? ''}</span>
         </div>`;
     };
     const teamCard = (t) => {
@@ -109,6 +119,8 @@ function renderTeamBoard() {
             <div style="display:flex; gap:6px;">${['A', 'B'].map((c) => `<button class="btn ${cat === c ? 'btn-primary' : 'btn-outline'} btn-sm" onclick="compBoardSetCat('${c}')">Category ${c} (${count(c)})</button>`).join('')}</div>
             <button class="btn btn-outline btn-sm" onclick="compBoardNewTeam()">+ New team</button>
             <span style="flex:1; color:var(--ink-soft, #667); font-size:.82em;">${compBoardSel ? 'Now tap the team to move <b>' + escapeHtml(compBoardName(compEntries.find((e) => e.id === compBoardSel) || {})) + '</b>' : 'Drag a person into a team (or tap a person, then a team).'}${compBoardMsg ? ' · ' + escapeHtml(compBoardMsg) : ''}</span>
+            <button class="btn ${compBoardDetails ? 'btn-primary' : 'btn-outline'} btn-sm" onclick="compBoardToggleDetails()" title="Hidden by default so a screenshot does not show them">${compBoardDetails ? 'Parent + age: shown (hide)' : 'Parent + age: hidden (show)'}</button>
+            <button class="btn btn-outline btn-sm" onclick="compBoardExportPdf()" title="A PDF with only the team names and the people names">Export teams PDF</button>
             <button class="btn btn-primary btn-sm" onclick="compCloseBoard()">Done</button>
         </div>
         <div class="cb-body">
@@ -254,3 +266,34 @@ async function compBoardAdd() {
 }
 
 if (typeof module !== 'undefined') module.exports = {};
+
+// ---------- PDF of the teams: ONLY the team name and the people's names ----------
+// No age, no parent, no category, no phone: safe to share as it is.
+function compBoardExportPdf() {
+    if (!window.jspdf) { alert('The PDF tool did not load. Reload the page and try again.'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, H = 297, M = 16;
+    const nameOf = (e) => compBoardName(e);
+    const members = (t) => compBoardPeople().filter((e) => e.team_id === t.id).map(nameOf).sort((a, b) => a.localeCompare(b));
+    const teams = compTeams.slice().sort((a, b) => (a.category + a.name).localeCompare(b.category + b.name)).map((t) => ({ name: t.name, list: members(t) })).filter((t) => t.list.length);
+    if (!teams.length) { alert('There are no teams with people yet.'); return; }
+    const title = (compEvent && compEvent.title ? compEvent.title : 'Competition') + ' · Teams';
+    let y = M;
+    const head = () => { doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(20, 26, 58); doc.text(title, M, y); y += 10; };
+    head();
+    const colW = (W - 2 * M) / 2;
+    let col = 0, rowTop = y, rowMax = y;
+    teams.forEach((t) => {
+        const h = 9 + t.list.length * 5.6 + 4;
+        if (col === 0 && rowTop + h > H - M) { doc.addPage(); y = M; rowTop = y; rowMax = y; }
+        const x = M + col * colW;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.setTextColor(240, 138, 36);
+        doc.text(t.name + ' (' + t.list.length + ')', x, rowTop + 5);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 26, 58);
+        t.list.forEach((n, i) => doc.text((i + 1) + '. ' + n, x, rowTop + 11 + i * 5.6));
+        rowMax = Math.max(rowMax, rowTop + h);
+        if (col === 1) { rowTop = rowMax + 2; rowMax = rowTop; col = 0; } else col = 1;
+    });
+    doc.save('teams.pdf');
+}
