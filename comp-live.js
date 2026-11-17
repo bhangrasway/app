@@ -142,7 +142,7 @@ function demoFresh() {
     ['Zaara', 'Dev'].forEach((nm, i) => entries.push({ id: 300 + i, do_solo: true, do_group: false, do_activity: false, category: 'B', team_id: null, name: nm }));
     [['Gagandeep', ['backstage']], ['Mehak', ['music', 'stage']], ['Taran', ['mic']]].forEach(([nm, roles], i) => entries.push({ id: 500 + i, do_solo: false, do_group: false, do_activity: false, do_volunteer: true, volunteer_roles: roles, category: null, team_id: null, name: nm }));
     ['Amaira', 'Ranbir', 'Siya', 'Kabir'].forEach((nm, i) => entries.push({ id: 400 + i, do_solo: false, do_group: false, do_activity: true, category: null, team_id: null, name: nm }));
-    entries.forEach((e, i) => { e.parent = e.name ? 'Parent of ' + e.name : ''; e.age = i % 3 === 0 ? 24 : 9 + (i % 8); });   // practice: some grown-ups, some children
+    entries.forEach((e, i) => { e.parent = e.name ? ['Harjit Kaur', 'Paramjit Singh', 'Gurpreet Kaur', 'Baljinder Singh', 'Manjit Kaur', 'Sukhdev Singh', 'Rajwinder Kaur', 'Jaswant Singh'][i % 8] : ''; e.age = i % 3 === 0 ? 24 : 9 + (i % 8); });   // practice: some grown-ups, some children
     const order = S.buildRunningOrder({ entries, teams, rand: rnd, guests: ['Demo Guest Crew | 6'] });
     const slots = order.map((o, i) => {
         const e = entries.find((x) => x.id === o.entry_id);
@@ -191,9 +191,10 @@ function demoPreset(s, preset) {
 }
 const demo = {
     read() {
-        try { const s = JSON.parse(localStorage.getItem(DEMO_KEY)); if (s && s.slots && Array.isArray(s.entries) && s.entries.length) return s; } catch (e) { /* fresh */ }   // an old practice state without the people list is replaced
+        try { const s = JSON.parse(localStorage.getItem(DEMO_KEY)); const want = params.get('preset') || ''; if (s && s.slots && Array.isArray(s.entries) && s.entries.length && (!want || s.preset === want)) return s; } catch (e) { /* fresh */ }   // a link with &preset= always starts from that moment   // an old practice state without the people list is replaced
         const f = demoFresh();
         demoPreset(f, params.get('preset'));
+        f.preset = params.get('preset') || '';
         this.write(f);
         return f;
     },

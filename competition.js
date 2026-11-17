@@ -195,7 +195,9 @@ function renderCompetitionAdmin() {
                 <option value="A" ${entry.category === 'A' ? 'selected' : ''}>A</option>
                 <option value="B" ${entry.category === 'B' ? 'selected' : ''}>B</option></select>`;
         const age = Number(s.age);
-        const feeCell = entry.fee_tx_id ? `<span style="color:var(--success); font-weight:600;">€${Number(ev.fee)} paid</span>`
+        const feeTx = entry.fee_tx_id ? (typeof v2CreditTransactions !== 'undefined' ? v2CreditTransactions.find((t) => t.id === entry.fee_tx_id) : null) : null;
+        const feeCell = entry.fee_tx_id && feeTx && feeTx.deleted_at ? `<span style="color:var(--ink-faint); font-weight:600;" title="The charge was deleted in the student's account: the money is back">fee deleted (refunded)</span>`
+            : entry.fee_tx_id ? `<span style="color:var(--success); font-weight:600;">€${Number(ev.fee)} paid</span>`
             : compIsActivityOnly(entry)
                 ? `<select onchange="compSetActivityPaid(${entry.id}, this.value)" ${compBusy ? 'disabled' : ''} style="padding:4px 6px; font-size:0.85em;" title="Extra activity only: the app does not charge, you mark it"><option value="">paid? —</option><option value="paid" ${entry.activity_paid === 'paid' ? 'selected' : ''}>Paid student</option><option value="unpaid" ${entry.activity_paid === 'unpaid' ? 'selected' : ''}>Not paid</option></select>`
                 : (Number.isFinite(age) && age > 0 && age < 9 ? '<span style="color:var(--ink-faint);">free (under 9)</span>' : '');
@@ -442,7 +444,14 @@ function compLockTeams() {
             v2CreditTransactions.push(tx);
             await recomputeV2Balance(e.student_id);
             const { error: linkErr } = await supabaseClient.from('comp_entries').update({ fee_tx_id: tx.id }).eq('id', e.id);
-            if (linkErr) console.error('could not link fee row', e, linkErr);
+            if (linkErr) {
+                // charged but not remembered: take that charge back, otherwise the next press would charge this person again
+                console.error('could not link fee row', e, linkErr);
+                await supabaseClient.from('v2_credit_transactions').update({ deleted_at: new Date().toISOString() }).eq('id', tx.id);
+                tx.deleted_at = new Date().toISOString();
+                await recomputeV2Balance(e.student_id);
+                failed.push(e);
+            }
         }
         if (first) compCheck(await supabaseClient.from('comp_events').update({ status: 'locked' }).eq('id', compEvent.id));
         if (typeof renderStudentsList === 'function') renderStudentsList();
@@ -456,19 +465,17 @@ function compReopen() {
 }
 // Removing a dancer who was already charged offers to give the fee back
 // (soft-deletes the charge row, same as the ledger's trash button).
+// Removing somebody after the lock does NOT give the fee back by itself (coach, 2026-11-17): if you want to
+// refund, delete the charge in the student's account (the trash button in the ledger). The charge stays linked
+// to the entry, so a restored person is not charged twice.
 function compWithdraw(entryId) {
     const e = compEntries.find((x) => x.id === entryId);
     const name = (compStudent(e.student_id) || {}).name || '';
-    if (!confirm(`Remove ${name} from the competition?`)) return;
-    const refund = e.fee_tx_id && confirm(`Give the €${Number(compEvent.fee)} fee back to ${name}'s account?`);
+    const paid = !!e.fee_tx_id;
+    const note = paid ? `\nThe €${Number(compEvent.fee)} fee stays charged. To give it back, delete the charge in ${name}'s account.` : '';
+    if (!confirm(`Remove ${name} from the competition?` + note)) return;
     return compRun(async () => {
-        if (refund) {
-            compCheck(await supabaseClient.from('v2_credit_transactions').update({ deleted_at: new Date().toISOString() }).eq('id', e.fee_tx_id));
-            const tx = v2CreditTransactions.find((t) => t.id === e.fee_tx_id);
-            if (tx) tx.deleted_at = new Date().toISOString();
-            await recomputeV2Balance(e.student_id);
-        }
-        compCheck(await supabaseClient.from('comp_entries').update({ withdrawn: true, team_id: null, ...(refund ? { fee_tx_id: null } : {}) }).eq('id', entryId));
+        compCheck(await supabaseClient.from('comp_entries').update({ withdrawn: true, team_id: null }).eq('id', entryId));
     });
 }
 function compRestore(entryId) {
