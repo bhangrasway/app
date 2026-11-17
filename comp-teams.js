@@ -267,33 +267,128 @@ async function compBoardAdd() {
 
 if (typeof module !== 'undefined') module.exports = {};
 
-// ---------- PDF of the teams: ONLY the team name and the people's names ----------
-// No age, no parent, no category, no phone: safe to share as it is.
+// ---------- PDF of the teams and the solo performers: ONLY team names and people's names ----------
+// No age, no parent, no phone: safe to share as it is. Colourful: every team has its own colour.
 function compBoardExportPdf() {
     if (!window.jspdf) { alert('The PDF tool did not load. Reload the page and try again.'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const W = 210, H = 297, M = 16;
+    const W = 210, H = 297, M = 14, GAP = 6, COLW = (W - 2 * M - GAP) / 2;
+    const NAVY = [20, 26, 58], SAFFRON = [240, 138, 36];
+    const PALETTE = [[240, 138, 36], [0, 150, 136], [124, 77, 255], [229, 57, 112], [30, 136, 229], [67, 160, 71], [244, 81, 30], [0, 172, 193]];
+    const CAT = { A: { label: 'Category A · Advanced and Intermediate', color: [240, 138, 36] }, B: { label: 'Category B · Beginners', color: [0, 150, 136] } };
+    const tint = (c, k) => c.map((v) => Math.round(v + (255 - v) * k));
     const nameOf = (e) => compBoardName(e);
-    const members = (t) => compBoardPeople().filter((e) => e.team_id === t.id).map(nameOf).sort((a, b) => a.localeCompare(b));
-    const teams = compTeams.slice().sort((a, b) => (a.category + a.name).localeCompare(b.category + b.name)).map((t) => ({ name: t.name, list: members(t) })).filter((t) => t.list.length);
-    if (!teams.length) { alert('There are no teams with people yet.'); return; }
-    const title = (compEvent && compEvent.title ? compEvent.title : 'Competition') + ' · Teams';
-    let y = M;
-    const head = () => { doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(20, 26, 58); doc.text(title, M, y); y += 10; };
-    head();
-    const colW = (W - 2 * M) / 2;
-    let col = 0, rowTop = y, rowMax = y;
-    teams.forEach((t) => {
-        const h = 9 + t.list.length * 5.6 + 4;
-        if (col === 0 && rowTop + h > H - M) { doc.addPage(); y = M; rowTop = y; rowMax = y; }
-        const x = M + col * colW;
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.setTextColor(240, 138, 36);
-        doc.text(t.name + ' (' + t.list.length + ')', x, rowTop + 5);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 26, 58);
-        t.list.forEach((n, i) => doc.text((i + 1) + '. ' + n, x, rowTop + 11 + i * 5.6));
-        rowMax = Math.max(rowMax, rowTop + h);
-        if (col === 1) { rowTop = rowMax + 2; rowMax = rowTop; col = 0; } else col = 1;
+    const sortNames = (l) => l.sort((a, b) => a.localeCompare(b));
+    const teams = compTeams.slice().sort((a, b) => (a.category + a.name).localeCompare(b.category + b.name))
+        .map((t) => ({ t, list: sortNames(compBoardPeople().filter((e) => e.team_id === t.id).map(nameOf)) })).filter((x) => x.list.length);
+    const solos = { A: [], B: [] };
+    compActiveEntries().filter((e) => e.do_solo && (e.category === 'A' || e.category === 'B')).forEach((e) => solos[e.category].push(nameOf(e)));
+    sortNames(solos.A); sortNames(solos.B);
+    const extras = sortNames(compActiveEntries().filter((e) => e.do_activity).map(nameOf));
+    const soloAny = solos.A.length + solos.B.length + extras.length;
+    if (!teams.length && !soloAny) { alert('There are no teams, solo performers or extra activities yet.'); return; }
+
+    const title = 'Bhangra Sway · Inter Academy Competition 2027';
+    // fit a name into a width by shrinking the font a little
+    const fit = (txt, w, size) => { doc.setFontSize(size); let s = size; while (s > 7 && doc.getTextWidth(txt) > w) { s -= 0.5; doc.setFontSize(s); } };
+    let y = 0;
+    const band = () => {
+        doc.setFillColor(...NAVY); doc.rect(0, 0, W, 38, 'F');
+        doc.setFillColor(...SAFFRON); doc.rect(0, 38, W, 2.5, 'F');
+        PALETTE.forEach((c, i) => { doc.setFillColor(...c); doc.rect(i * (W / PALETTE.length), 40.5, W / PALETTE.length, 1.2, 'F'); });
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(23); doc.text(title, M, 20);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(12.5); doc.setTextColor(255, 210, 150);
+        doc.text('Teams, solo performers and extra activities', M, 30);
+        y = 52;
+    };
+    const newPage = () => { doc.addPage(); y = M + 4; };
+    const heading = (text, color) => {
+        if (y + 14 > H - M) newPage();
+        doc.setFillColor(...color); doc.roundedRect(M, y, W - 2 * M, 9.5, 2.5, 2.5, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.text(text, M + 4, y + 6.5);
+        y += 14;
+    };
+    band();
+
+    // ---- group teams, Category B first (as on the day), then A ----
+    ['B', 'A'].forEach((cat) => {
+        const list = teams.filter((x) => x.t.category === cat);
+        if (!list.length) return;
+        heading('GROUP TEAMS · ' + CAT[cat].label, CAT[cat].color);
+        let col = 0, rowTop = y, rowMax = y;
+        list.forEach((x, idx) => {
+            const color = PALETTE[(cat === 'B' ? idx : idx + 3) % PALETTE.length];
+            const h = 11 + x.list.length * 6 + 3;
+            if (col === 0 && rowTop + h > H - M) { newPage(); rowTop = y; rowMax = y; }
+            const px = M + col * (COLW + GAP);
+            doc.setFillColor(...tint(color, 0.88)); doc.roundedRect(px, rowTop, COLW, h, 3, 3, 'F');
+            doc.setFillColor(...color); doc.roundedRect(px, rowTop, COLW, 10, 3, 3, 'F'); doc.rect(px, rowTop + 5, COLW, 5, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); fit(x.t.name, COLW - 22, 12); doc.text(x.t.name, px + 4, rowTop + 6.8);
+            doc.setFontSize(10); doc.text(String(x.list.length), px + COLW - 5, rowTop + 6.8, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            x.list.forEach((n, i) => {
+                const ty = rowTop + 10 + 5 + i * 6;
+                doc.setFillColor(...color); doc.circle(px + 6, ty - 1.2, 2.1, 'F');
+                doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.text(String(i + 1), px + 6, ty - 0.2, { align: 'center' });
+                doc.setTextColor(...NAVY); doc.setFont('helvetica', 'normal'); fit(n, COLW - 16, 11); doc.text(n, px + 11, ty);
+            });
+            rowMax = Math.max(rowMax, rowTop + h);
+            if (col === 1) { rowTop = rowMax + 4; rowMax = rowTop; col = 0; } else col = 1;
+        });
+        y = (col === 1 ? rowMax : rowTop) + 4;
     });
-    doc.save('teams.pdf');
+
+    // ---- solo performers and extra-activity people, names only, in colourful chips ----
+    const chips = (names, headText, headColor) => {
+        heading(headText + ' (' + names.length + ')', headColor);
+        const colN = 3, cw = (W - 2 * M - 2 * 4) / colN, rh = 8.5;
+        names.forEach((n, i) => {
+            const c = i % colN, r = Math.floor(i / colN);
+            if (c === 0 && r > 0 && (y + rh > H - M)) { newPage(); }
+            const px = M + c * (cw + 4);
+            const color = PALETTE[i % PALETTE.length];
+            doc.setFillColor(...tint(color, 0.85)); doc.roundedRect(px, y, cw, rh - 1.5, 2.2, 2.2, 'F');
+            doc.setFillColor(...color); doc.roundedRect(px, y, 2.4, rh - 1.5, 1.2, 1.2, 'F');
+            doc.setTextColor(...NAVY); doc.setFont('helvetica', 'normal'); fit(n, cw - 8, 10.5); doc.text(n, px + 5, y + 4.6);
+            if (c === colN - 1 || i === names.length - 1) y += rh;   // y moves down only when a row is complete
+        });
+        y += 6;
+    };
+    ['B', 'A'].forEach((cat) => {
+        if (solos[cat].length) chips(solos[cat], 'SOLO PERFORMERS · ' + CAT[cat].label, cat === 'B' ? [30, 136, 229] : [229, 57, 112]);
+    });
+    if (extras.length) chips(extras, 'EXTRA ACTIVITIES (not a competition)', [67, 160, 71]);
+
+    // ---- trophies needed (the same guess as the Shopping list) ----
+    if (typeof compTrophyEstimate === 'function') {
+        const te = compTrophyEstimate();
+        const items = [['LARGEST', '1st place', te.tiers[0], [212, 160, 23]], ['MEDIUM', '2nd place', te.tiers[1], [120, 134, 160]], ['SMALL', '3rd place', te.tiers[2], [205, 127, 50]], ['PARTICIPANT', 'solo/group, guess', te.participantGuess ?? te.people, [0, 150, 136]], ['EXTRA', 'extra activity', te.extraAll || 0, [124, 77, 255]]];
+        if (y + 50 > H - M) newPage();
+        heading('TROPHIES NEEDED', NAVY);
+        const cw = (W - 2 * M - 4 * 4) / 5;
+        items.forEach((it, i) => {
+            const px = M + i * (cw + 4);
+            doc.setFillColor(...tint(it[3], 0.86)); doc.roundedRect(px, y, cw, 30, 3, 3, 'F');
+            doc.setFillColor(...it[3]); doc.roundedRect(px, y, cw, 8, 3, 3, 'F'); doc.rect(px, y + 4, cw, 4, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(it[0], px + cw / 2, y + 5.6, { align: 'center' });
+            doc.setTextColor(...NAVY); doc.setFontSize(24); doc.text(String(it[2]), px + cw / 2, y + 21, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(110, 116, 150); doc.text(it[1], px + cw / 2, y + 27, { align: 'center' });
+        });
+        y += 34;
+        const podium = te.tiers[0] + te.tiers[1] + te.tiers[2];
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(110, 116, 150);
+        doc.text(doc.splitTextToSize('Podium trophies: ' + podium + ' at most (every member of a winning team gets his or her own; one more largest is counted as a spare). Participant trophies: about ' + (te.participantGuess ?? te.people) + ' (solo/group people minus the members of the podium teams; at least ' + te.sure.participant + '). Extra activity: ' + (te.extraAll || 0) + ', everybody who does it has an extra trophy of their own, also if they dance solo or group. A guess from the teams above, the exact numbers come after the results.', W - 2 * M), M, y + 3);
+        y += 12;
+    }
+
+    // footer on every page
+    const pages = doc.getNumberOfPages();
+    for (let p = 1; p <= pages; p++) {
+        doc.setPage(p);
+        doc.setFillColor(...SAFFRON); doc.rect(0, H - 8, W, 1, 'F');
+        doc.setTextColor(120, 126, 150); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+        doc.text(title, M, H - 3.5); doc.text('Page ' + p + ' of ' + pages, W - M, H - 3.5, { align: 'right' });
+    }
+    doc.save('teams-and-solos.pdf');
 }

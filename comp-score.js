@@ -35,7 +35,9 @@
         rows.forEach((r, i) => { if (prev === null || r.score !== prev) pos = i + 1; r.opt1 = pos; prev = r.score; });
     }
     // Groups by distance from the group's top score; positions are 1,2,3… per group.
+    // Gap 0 = no gap at all: exactly the same as Option 1 (equal scores share, the next place is skipped: 1, 1, 3).
     function rankOption2(rows, gap) {
+        if (!(Number(gap) > 0)) { rows.forEach((r) => { r.opt2 = r.opt1; }); return; }
         let pos = 0, top = null;
         rows.forEach((r) => { if (top === null || r2(top - r.score) > gap) { pos++; top = r.score; } r.opt2 = pos; });
     }
@@ -43,7 +45,7 @@
     // slots: [{id, kind:'solo'|'group', category, team_id, name, status}]
     // scores: {slotId: {1:{...}, 2:{...}, 3:{...}}}
     // teams: [{id, name, category}]
-    function computeResults({ slots, scores, teams, gap = 1 }) {
+    function computeResults({ slots, scores, teams, gap = 0 }) {
         const teamName = (id) => (id == null ? '' : (teams.find((t) => t.id === id) || {}).name || '?');
         const out = {};
         ['B', 'A'].forEach((cat) => {
@@ -63,13 +65,14 @@
                 const group = r2(GROUP_CRITERIA.reduce((x, c) => x + g.avg[c], 0));
                 const group100 = r2(group / 50 * 100);
                 return {
-                    teamId: t.id, name: t.name, group, group100,
+                    teamId: t.id, name: t.name, group, group100, judges: g.judges,
                     score: group100,   // team = group round only
                     disqualified: !!(gslot && gslot.status === 'disqualified'),
                     complete: !!gslot && g.complete
                 };
             });
-            const ranked = teamRows.filter((t) => !t.disqualified).sort((a, b) => b.score - a.score);
+            // only teams the judges have scored get a place (no scores yet = no place, not a shared 1st)
+            const ranked = teamRows.filter((t) => !t.disqualified && t.judges > 0).sort((a, b) => b.score - a.score);
             rankOption1(ranked);
             rankOption2(ranked, gap);
             // Solo ranking: its own positions (same tie / gap rules, on the solo %).
@@ -80,7 +83,7 @@
             rankOption2(soloRanked, gap);
             out[cat] = {
                 solos: solos.sort((a, b) => b.soloTotal - a.soloTotal || b.expression - a.expression),
-                teams: ranked.concat(teamRows.filter((t) => t.disqualified))
+                teams: ranked.concat(teamRows.filter((t) => !ranked.includes(t)))
             };
         });
         return out;
@@ -112,7 +115,8 @@
     // Full day (coach, 2026-11-17): B solos (a judges break every 11) → A solos →
     // the extra, non-competitive activities → B groups → A groups.
     // entries: {id, do_solo, do_group, do_activity, category, team_id}
-    function buildRunningOrder({ entries, teams, rand, breakEvery = 11 }) {
+    // guests: lines "name | minutes" (guest performers). They dance right after the last solo, no break before them.
+    function buildRunningOrder({ entries, teams, rand, breakEvery = 11, guests = [] }) {
         const slots = [];
         let pos = 1;
         const n = { A: 0, B: 0 };
@@ -124,6 +128,12 @@
                 if (i > 0 && i % breakEvery === 0) push({ kind: 'break', category: cat, label: 'Judges break', minutes: 5 });
                 push({ kind: 'solo', category: cat, entry_id: e.id, code: code(cat) });
             });
+            if (cat === 'A') {
+                (guests || []).map((g) => String(g).split('|')).filter((p) => p[0].trim()).forEach((p) => {
+                    const m = parseFloat(String(p[1] || '').replace(',', '.'));
+                    push({ kind: 'kids', category: null, label: 'Guest performance: ' + p[0].trim(), minutes: m > 0 ? Math.round(m) : null });
+                });
+            }
             if (solos.length) push({ kind: 'break', category: cat, label: 'Break', minutes: 5 });
         });
         if (entries.some((e) => e.do_activity)) {
@@ -146,16 +156,23 @@
     // groupMembers = {teamId: [personId, ...]}; soloPerson = {slotId: personId}
     function computeTrophies({ results, option = 1, people, groupMembers, soloPerson }) {
         const pos = (r) => (option === 2 ? r.opt2 : r.opt1);
-        const big = [];
+        const ord = (p) => p + ['st', 'nd', 'rd'][p - 1];
+        const big = [];      // podium trophies: one per solo winner AND one for every member of a podium team
         ['B', 'A'].forEach((cat) => {
             (results[cat].solos || []).filter((x) => x.opt1 && pos(x) <= 3)
-                .forEach((x) => big.push({ person: soloPerson[x.slotId], why: `Solo ${pos(x)}${['st', 'nd', 'rd'][pos(x) - 1]} (${cat})` }));
+                .forEach((x) => big.push({ person: soloPerson[x.slotId], place: pos(x), why: `Solo ${ord(pos(x))} (${cat})` }));
             (results[cat].teams || []).filter((t) => !t.disqualified && pos(t) <= 3)
-                .forEach((t) => (groupMembers[t.teamId] || []).forEach((pid) => big.push({ person: pid, why: `Group ${pos(t)}${['st', 'nd', 'rd'][pos(t) - 1]} (${t.name})` })));
+                .forEach((t) => (groupMembers[t.teamId] || []).forEach((pid) => big.push({ person: pid, place: pos(t), why: `Group ${ord(pos(t))} (${t.name})` })));
         });
-        const winners = new Set(big.map((b) => b.person));
-        const small = people.filter((p) => !winners.has(p.id));
-        return { big, small, people: people.length, winners: winners.size };
+        // Trophy sizes by place: 1st = largest, 2nd = medium, 3rd = small. Everybody who won nothing gets ONE
+        // participant trophy (also if he did solo + group). A winner gets no participant trophy.
+        const winners = new Set(big.map((x) => x.person));
+        // Extra activity: everybody who did it gets its OWN trophy, on top of anything else (also when they do solo/group).
+        // Somebody who ONLY did the extra activity has that one trophy and no participant trophy.
+        const extra = people.filter((p) => p.activity);
+        const participant = people.filter((p) => !winners.has(p.id) && !(p.activity && !p.compete));
+        const tiers = { largest: big.filter((x) => x.place === 1).length, medium: big.filter((x) => x.place === 2).length, small: big.filter((x) => x.place === 3).length };
+        return { big, certs: big, small: participant, participant, extra, tiers, people: people.length, winners: winners.size };
     }
 
     const api = { SOLO_CRITERIA, SOLO_EXTRA, GROUP_CRITERIA, computeResults, lotteryOrder, buildRunningOrder, computeTrophies, r1 };

@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Bhangra Competition · Live</title>
+<title>Bhangra Sway · Inter Academy Competition · Live</title>
 <link rel="icon" type="image/png" href="logo.png">
 <meta name="theme-color" content="#141a3a">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="comp-score.js?v=5"></script>
+<script src="comp-score.js?v=13"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
@@ -29,6 +29,8 @@ button{ font:inherit; color:inherit; cursor:pointer; border:0; }
 .top{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 16px; background:var(--bg2); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
 .brand{ display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.2px; }
 .brand img{ height:30px; border-radius:7px; }
+.cn-short{ display:none; }
+@media (max-width:760px){ .cn-long{ display:none; } .cn-short{ display:inline; } }
 .role-chip{ font-size:.78em; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--saffron-soft); color:var(--saffron); }
 .demo-chip{ font-size:.72em; font-weight:800; padding:4px 10px; border-radius:999px; background:#ffc94d; color:#3a2600; letter-spacing:.5px; }
 .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px; }
@@ -91,7 +93,7 @@ body.projector{ overflow:hidden; background:radial-gradient(1200px 700px at 50% 
 </head>
 <body>
 <div class="top" id="topBar">
-    <div class="brand"><img src="logo.png" alt=""><span id="topTitle">Bhangra Competition</span></div>
+    <div class="brand"><img src="logo.png" alt=""><span id="topTitle"><b>Bhangra Sway</b> · <span class="cn-long">Inter Academy Competition 2027</span><span class="cn-short">Inter Academy</span></span></div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;"><span id="langSwitch" style="display:inline-flex; gap:4px;"></span><span class="demo-chip hidden" id="demoChip">PRACTICE · FAKE DATA</span><span class="role-chip" id="roleChip"></span></div>
 </div>
 <div id="app"></div>
@@ -111,6 +113,6 @@ body.projector{ overflow:hidden; background:radial-gradient(1200px 700px at 50% 
 const SUPABASE_URL = 'https://geeqcyfnkgamcjclulay.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZXFjeWZua2dhbWNqY2x1bGF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDYyNjMsImV4cCI6MjA5NzYyMjI2M30.FPEQGtuDMxWK8GnPNQfh88ubXlQ2EIkV7X6FZN_TQpo';
 </script>
-<script src="comp-live.js?v=34"></script>
+<script src="comp-live.js?v=56"></script>
 </body>
 </html>

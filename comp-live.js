@@ -96,6 +96,22 @@ document.getElementById('demoChip').classList.toggle('hidden', !DEMO);
 if (ROLE === 'projector') { document.body.classList.add('projector'); document.getElementById('topBar').classList.add('hidden'); }
 setTimeout(() => renderLangSwitch(), 0);
 
+// Name shown on every screen and printed paper: brand + competition (the title saved in the database is not used)
+const COMP_BRAND = 'Bhangra Sway', COMP_NAME = 'Inter Academy Competition 2027';
+// Age from an Italian codice fiscale (null when it cannot be read)
+function ageFromCf(cf) {
+    const m = /^[A-Z]{6}(\d\d)([ABCDEHLMPRST])(\d\d)/i.exec(String(cf || '').trim());
+    if (!m) return null;
+    const month = 'ABCDEHLMPRST'.indexOf(m[2].toUpperCase());
+    let day = Number(m[3]); if (day > 40) day -= 40;
+    const now = new Date();
+    let year = 2000 + Number(m[1]); if (year > now.getFullYear()) year -= 100;
+    let age = now.getFullYear() - year;
+    if (now.getMonth() < month || (now.getMonth() === month && now.getDate() < day)) age--;
+    return age >= 0 && age < 120 ? age : null;
+}
+// The parent's name is only shown for children (under 18, or age unknown): a grown-up dancer has no parent line.
+const parentOf = (x) => (x && x.parent && (x.age == null || x.age < 18) ? String(x.parent) : '');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mmss = (sec) => { const s = Math.max(0, Math.round(sec)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const ordinal = (n) => ({ 1: '1st', 2: '2nd', 3: '3rd' }[n] || `${n}th`);
@@ -126,13 +142,14 @@ function demoFresh() {
     ['Zaara', 'Dev'].forEach((nm, i) => entries.push({ id: 300 + i, do_solo: true, do_group: false, do_activity: false, category: 'B', team_id: null, name: nm }));
     [['Gagandeep', ['backstage']], ['Mehak', ['music', 'stage']], ['Taran', ['mic']]].forEach(([nm, roles], i) => entries.push({ id: 500 + i, do_solo: false, do_group: false, do_activity: false, do_volunteer: true, volunteer_roles: roles, category: null, team_id: null, name: nm }));
     ['Amaira', 'Ranbir', 'Siya', 'Kabir'].forEach((nm, i) => entries.push({ id: 400 + i, do_solo: false, do_group: false, do_activity: true, category: null, team_id: null, name: nm }));
-    const order = S.buildRunningOrder({ entries, teams, rand: rnd });
+    entries.forEach((e, i) => { e.parent = e.name ? 'Parent of ' + e.name : ''; e.age = i % 3 === 0 ? 24 : 9 + (i % 8); });   // practice: some grown-ups, some children
+    const order = S.buildRunningOrder({ entries, teams, rand: rnd, guests: ['Demo Guest Crew | 6'] });
     const slots = order.map((o, i) => {
         const e = entries.find((x) => x.id === o.entry_id);
-        return { id: i + 1, ...o, status: 'waiting', team_id: o.team_id || (e && e.team_id) || null, name: e ? e.name : null, song_path: o.kind === 'solo' || o.kind === 'group' ? 'demo:song' : null, song_seconds: o.kind === 'solo' ? (o.category === 'A' ? 121 : 92) : o.kind === 'group' ? (o.category === 'A' ? 330 : 238) : null };
+        return { id: i + 1, ...o, status: 'waiting', team_id: o.team_id || (e && e.team_id) || null, name: e ? e.name : null, parent: e ? e.parent : '', age: e ? e.age : null, song_path: o.kind === 'solo' || o.kind === 'group' ? 'demo:song' : null, song_seconds: o.kind === 'solo' ? (o.category === 'A' ? 121 : 92) : o.kind === 'group' ? (o.category === 'A' ? 330 : 238) : null };
     });
     return {
-        event: { id: 1, title: 'Bhangra Competition 2027', status: 'live', settings: { gap: 1 } },
+        event: { id: 1, title: 'Inter Academy Competition 2027', status: 'live', settings: { gap: 0 } },
         live: { current_slot_id: null, phase: 'idle', phase_started_at: null, revealed: null, door_cash: 0, door_free: 0 },
         slots, teams, entries, scores: {},
         judgeNames: { 1: 'Judge 1', 2: 'Judge 2', 3: 'Judge 3' }
@@ -166,15 +183,15 @@ function demoPreset(s, preset) {
         s.live = { ...s.live, current_slot_id: null, phase: 'results', door_cash: 81, door_free: 12 };
     }
     if (preset === 'reveal') {
-        const r = S.computeResults({ slots: s.slots, scores: s.scores, teams: s.teams, gap: 1 });
+        const r = S.computeResults({ slots: s.slots, scores: s.scores, teams: s.teams, gap: 0 });
         const cats = {};
         ['B', 'A'].forEach((c) => { cats[c] = { teams: r[c].teams.map((t) => ({ pos: t.opt1, name: t.name })), solos: r[c].solos.filter((x) => x.opt1).map((x) => ({ pos: x.opt1, name: x.name, team: x.teamName })) }; });
-        s.live.revealed = { option: 1, cats, at: new Date().toISOString() };
+        s.live.revealed = { option: 1, cats, at: new Date().toISOString(), step: Number(params.get('step')) || 0, shown: params.has('shown') ? Number(params.get('shown')) : 0 };   // practice: starts empty, &step=&shown= jump ahead
     }
 }
 const demo = {
     read() {
-        try { const s = JSON.parse(localStorage.getItem(DEMO_KEY)); if (s && s.slots) return s; } catch (e) { /* fresh */ }
+        try { const s = JSON.parse(localStorage.getItem(DEMO_KEY)); if (s && s.slots && Array.isArray(s.entries) && s.entries.length) return s; } catch (e) { /* fresh */ }   // an old practice state without the people list is replaced
         const f = demoFresh();
         demoPreset(f, params.get('preset'));
         this.write(f);
@@ -218,12 +235,12 @@ const demo = {
         const c = String(code || '').trim().toUpperCase();
         let out = { status: 'not_found' };
         await this.mutate((s) => {
-            s.coupons = s.coupons || { DEMO22: { guest: 'Parent of Simran', student: 'Simran Kaur', used: false }, USED99: { guest: 'Aunt Kiran', student: 'Kiran Kaur', used: true } };
+            s.coupons = s.coupons || { DEMO22: { guest: 'Parent of Simran', student: 'Simran Kaur', parent: 'Harjit Kaur', used: false }, USED99: { guest: 'Aunt Kiran', student: 'Kiran Kaur', parent: 'Paramjit Singh', used: true } };
             const x = s.coupons[c];
             if (!x) return;
-            if (x.used) { out = { status: 'used', guest: x.guest, student: x.student }; return; }
-            if (use) { x.used = true; s.live.door_coupons = (s.live.door_coupons || 0) + 1; out = { status: 'ok', let_in: true, guest: x.guest, student: x.student }; }
-            else out = { status: 'ok', let_in: false, guest: x.guest, student: x.student };
+            if (x.used) { out = { status: 'used', guest: x.guest, student: x.student, parent: x.parent }; return; }
+            if (use) { x.used = true; s.live.door_coupons = (s.live.door_coupons || 0) + 1; out = { status: 'ok', let_in: true, guest: x.guest, student: x.student, parent: x.parent }; }
+            else out = { status: 'ok', let_in: false, guest: x.guest, student: x.student, parent: x.parent };
         });
         return out;
     },
@@ -281,7 +298,7 @@ const real = {
             supa.from('comp_live').select('*').eq('event_id', event.id).maybeSingle(),
             supa.from('comp_slots').select('*').eq('event_id', event.id).order('position'),
             supa.from('comp_teams').select('*').eq('event_id', event.id).order('sort_order'),
-            supa.from('comp_entries').select('id, student_id, kind, do_solo, do_group, do_activity, do_volunteer, volunteer_roles, category, team_id, withdrawn, solo_song_path, solo_song_seconds, students(name)').eq('event_id', event.id),
+            supa.from('comp_entries').select('id, student_id, kind, do_solo, do_group, do_activity, do_volunteer, volunteer_roles, category, team_id, withdrawn, solo_song_path, solo_song_seconds, students(*)').eq('event_id', event.id),
             supa.from('comp_scores').select('slot_id, judge, criteria, submitted').eq('event_id', event.id)
         ]);
         for (const r of [live, slots, teams, entries, scores]) if (r.error) throw r.error;
@@ -292,11 +309,13 @@ const real = {
         return {
             event, live: live.data || { phase: 'idle', door_cash: 0, door_free: 0 }, scores: sc, submitted: sent, serverOffset: 0,
             teams: teams.data || [],
-            entries: (entries.data || []).map((e) => ({ ...e, name: (e.students || {}).name || '?' })),
+            entries: (entries.data || []).map((e) => { const stu = e.students || {}; const cf = stu.codicefiscale ?? stu.codice_fiscale ?? stu.codiceFiscale; return { ...e, name: stu.name || '?', parent: stu.parentname ?? stu.parent_name ?? stu.parentName ?? '', age: ageFromCf(cf) ?? (stu.age != null ? Number(stu.age) : null) }; }),
             slots: (slots.data || []).map((s) => {
                 const e = entryById[s.entry_id];
                 const t = teamById[s.team_id || (e && e.team_id)];
-                return { ...s, team_id: s.team_id || (e && e.team_id) || null, name: e ? (e.students || {}).name : null,
+                const stu = (e && e.students) || {}, cf = stu.codicefiscale ?? stu.codice_fiscale ?? stu.codiceFiscale;
+                return { ...s, team_id: s.team_id || (e && e.team_id) || null, name: e ? stu.name : null,
+                    parent: stu.parentname ?? stu.parent_name ?? stu.parentName ?? '', age: ageFromCf(cf) ?? (stu.age != null ? Number(stu.age) : null),
                     song_path: s.kind === 'solo' ? e && e.solo_song_path : s.kind === 'group' ? t && t.group_song_path : null,
                     song_seconds: s.kind === 'solo' ? e && e.solo_song_seconds : s.kind === 'group' ? t && t.group_song_seconds : null };
             })
@@ -338,7 +357,7 @@ const real = {
     },
     async buildOrder(st) {
         const entries = st.entries.filter((e) => !e.withdrawn);
-        const order = S.buildRunningOrder({ entries, teams: st.teams });
+        const order = S.buildRunningOrder({ entries, teams: st.teams, guests: giftList('comp_guests') });
         const del = await supa.from('comp_slots').delete().eq('event_id', this.eventId);
         if (del.error) throw del.error;
         const rows = order.map((o) => ({ event_id: this.eventId, position: o.position, code: o.code || null, category: o.category, kind: o.kind,
@@ -388,6 +407,7 @@ function slotSub(s) {
     if (s.kind === 'solo') return `${tr('Solo')} · ${s.team_id ? teamName(s.team_id) + ' · ' : ''}${tr('Category')} ${s.category}`;
     if (s.kind === 'group') return `${tr('Group round')} · ${tr('Category')} ${s.category}`;
     if (s.kind === 'break') return s.minutes ? `${s.minutes} ${tr('minutes')}` : '';
+    if (s.kind === 'kids' && /^Guest performance/.test(s.label || '')) return s.minutes ? `${s.minutes} ${tr('minutes')}` : '';
     return '';
 }
 function nextWaiting(fromPos, n) {
@@ -443,7 +463,7 @@ function render() {
     if (st.status === 'too_many') { clearInterval(pollTimer); savePin(''); pinGate('Too many wrong PINs from this device. Wait 15 minutes, then try again.'); return; }
     if (st.status === 'login') { messageScreen('Log in first', 'Open <a href="admin.html" style="color:var(--saffron);">admin.html</a> on this device, log in, then come back here.'); return; }
     if (st.status === 'none') { messageScreen('No competition', 'There is no open competition.'); return; }
-    document.getElementById('topTitle').textContent = st.event.title;
+    document.getElementById('topTitle').innerHTML = '<b>' + COMP_BRAND + '</b> · <span class="cn-long">' + COMP_NAME + '</span><span class="cn-short">Inter Academy</span>';   // short on a phone
     const views = { control: renderControl, judge1: renderJudge, judge2: renderJudge, judge3: renderJudge, sound: renderSound, anchor: renderAnchor, projector: renderProjector, door: renderDoor };
     (views[ROLE] || renderControl)();
 }
@@ -524,12 +544,36 @@ const C = window.CompControl = {
             await backend.setLive({ current_slot_id: s.id, phase: s.kind === 'break' ? 'break' : 'changeover', phase_started_at: new Date().toISOString() });
         });
     },
-    gap(g) { return act(() => backend.setSettings({ gap: g })); },
+    gap(g) { return act(() => backend.setSettings({ gap: g, gap_chosen: true })); },
     option(o) { return act(() => backend.setSettings({ option: o })); },
     reveal() {
         const snap = revealSnapshot();
         if (!confirm('Show the results on the projector now?')) return;
+        const keep = (st.live || {}).revealed;
+        snap.step = keep && keep.step ? keep.step : 0;      // the coach moves the projector one winner at a time
+        snap.shown = keep && keep.shown != null ? keep.shown : 0;
         return act(() => backend.setLive({ revealed: snap, phase: 'results' }));
+    },
+    // Which results screen the projector shows: 0 B solo, 1 B group, 2 A solo, 3 A group
+    revealStep(n) {
+        const cur = (st.live || {}).revealed;
+        if (!cur) return;
+        return act(() => backend.setLive({ revealed: { ...cur, step: Math.max(0, Math.min(3, n)), shown: 0 } }));
+    },
+    // One click = one more winner on the projector (3rd, then 2nd, then 1st); then the next screen starts empty.
+    nextWinner() {
+        const cur = (st.live || {}).revealed;
+        if (!cur) return;
+        const sc = revealScreen(cur, cur.step);
+        if (sc.shown < sc.positions.length) return act(() => backend.setLive({ revealed: { ...cur, step: sc.step, shown: sc.shown + 1 } }));
+        if (sc.step < 3) return act(() => backend.setLive({ revealed: { ...cur, step: sc.step + 1, shown: 0 } }));
+    },
+    backWinner() {
+        const cur = (st.live || {}).revealed;
+        if (!cur) return;
+        const sc = revealScreen(cur, cur.step);
+        if (sc.shown > 0) return act(() => backend.setLive({ revealed: { ...cur, step: sc.step, shown: sc.shown - 1 } }));
+        if (sc.step > 0) { const prev = revealScreen(cur, sc.step - 1); return act(() => backend.setLive({ revealed: { ...cur, step: sc.step - 1, shown: Math.max(0, prev.positions.length - 1) } })); }
     },
     hide() { return act(() => backend.setLive({ revealed: null })); },
     buildOrder() {
@@ -554,12 +598,16 @@ const C = window.CompControl = {
         });
     },
     demoReset() { if (confirm('Start the practice run again from the beginning?')) return act(() => demo.reset()); },
-    certificates(kind) { makeCertificates(kind); }
+    certificates(kind) { makeCertificates(kind).catch((e) => { console.error(e); alert('Certificates failed: ' + (e.message || e)); }); },
+    trophyList() { makeTrophyListPdf(); }
 };
 
+// The gap of Option 2 is 0 (= exactly like Option 1) until the coach picks another one here.
+// (Events made before this rule have a saved gap of 1: it only counts once it was chosen.)
+function effGap(set) { return set && set.gap_chosen ? Number(set.gap) || 0 : 0; }
 function results() {
     const set = st.event.settings || {};
-    return S.computeResults({ slots: st.slots, scores: st.scores || {}, teams: st.teams, gap: Number(set.gap ?? 1) });
+    return S.computeResults({ slots: st.slots, scores: st.scores || {}, teams: st.teams, gap: effGap(set) });
 }
 function teamPos(t, option) { return option === 2 ? t.opt2 : t.opt1; }
 // What the projector shows: group and solo positions (no scores).
@@ -570,22 +618,36 @@ function revealSnapshot() {
     const cats = {};
     ['B', 'A'].forEach((c) => {
         cats[c] = {
-            teams: r[c].teams.filter((t) => !t.disqualified).map((t) => ({ pos: teamPos(t, option), name: t.name })),
+            teams: r[c].teams.filter((t) => !t.disqualified && t.opt1).map((t) => ({ pos: teamPos(t, option), name: t.name })),
             solos: r[c].solos.filter((x) => x.opt1).map((x) => ({ pos: teamPos(x, option), name: x.name, team: x.teamName }))
         };
     });
     return { option, cats, at: new Date().toISOString() };
 }
 
+// The results screen the projector shows: step 0 B solo, 1 B group, 2 A solo, 3 A group.
+// positions = the podium places of that screen, lowest first (3rd, 2nd, 1st); `shown` of them are revealed.
+// (shown missing = old style: everything at once.)
+const REVEAL_STEPS = ['B solo', 'B group', 'A solo', 'A group'];
+function revealScreen(rev, step) {
+    const stp = Math.max(0, Math.min(3, step || 0));
+    const cat = stp < 2 ? 'B' : 'A', solo = stp % 2 === 0;
+    const c = (rev.cats || {})[cat] || {};
+    const rows = (solo ? (c.solos || []) : (c.teams || [])).filter((t) => t.pos <= 3);
+    const positions = [...new Set(rows.map((t) => t.pos))].sort((a, b) => b - a);
+    const shown = rev.shown == null ? positions.length : Math.max(0, Math.min(positions.length, rev.shown));
+    return { step: stp, cat, solo, rows, positions, shown };
+}
 function renderControl() {
     const live = st.live || {};
     const cur = current();
     const set = st.event.settings || {};
     const tabs = `<div class="seg" style="margin-bottom:14px;">${[['live', 'Live'], ['order', 'Running order'], ['results', 'Results'], ['certs', 'Certificates']].map(([k, l]) =>
         `<button class="${ctrlTab === k ? 'on' : ''}" onclick="CompControl.tab('${k}')">${l}</button>`).join('')}</div>`;
-    const key = JSON.stringify([ctrlTab, resCat, live, st.slots.map((s) => [s.id, s.status, s.position]), set, Object.keys(st.scores || {}).length, cur && st.scores && st.scores[cur.id], busy, ctrlTab === 'live' ? leadersNow() : 0]);
+    const key = JSON.stringify([ctrlTab, resCat, live, st.slots.map((s) => [s.id, s.status, s.position]), { ...set, lists: 0 }, Object.keys(st.scores || {}).length, cur && st.scores && st.scores[cur.id], busy, ctrlTab === 'live' ? leadersNow() : 0]);
     let body = '';
-    if (!st.slots.length) {
+    // The lists (volunteers, judges, sponsors, guests) can be filled in before the running order exists
+    if (!st.slots.length && ctrlTab !== 'certs') {
         body = `<div class="card"><h3 style="margin-top:0;">Running order</h3>
             <p class="muted">No running order yet. When the teams are locked and the songs are in, make it here: a lottery inside each category, B first, never two dancers of the same team one after the other, a judges break every 11 solos.</p>
             ${st.event.status === 'registration'
@@ -649,6 +711,7 @@ function controlLive(cur, live) {
             </div>
             <div class="huge" style="margin:8px 0 4px;">${esc(slotTitle(cur))}</div>
             <div class="muted">${esc(slotSub(cur))}${cur.song_seconds ? ` · song ${mmss(cur.song_seconds)}` : ''}</div>
+            ${cur.kind === 'solo' && parentOf(cur) ? `<div class="muted">Parent: <b>${esc(parentOf(cur))}</b></div>` : ''}
             <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">${judgeDots(cur)}</div>
             <div class="grid" style="grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); margin-top:14px;">
                 ${live.phase === 'performing'
@@ -705,7 +768,7 @@ function controlOrder(cur) {
 function controlResults(set) {
     const r = results()[resCat];
     const option = Number(set.option || 1);
-    const gap = Number(set.gap ?? 1);
+    const gap = effGap(set);
     const incomplete = r.solos.filter((s) => !s.complete && !s.disqualified).length + r.teams.filter((t) => !t.complete).length;
     return `<div class="card" style="margin-bottom:14px; display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
             <div class="seg">${['B', 'A'].map((c) => `<button class="${resCat === c ? 'on' : ''}" onclick="CompControl.cat('${c}')">Category ${c}</button>`).join('')}</div>
@@ -715,11 +778,23 @@ function controlResults(set) {
                 ${(st.live || {}).revealed ? `<button class="btn small" onclick="CompControl.hide()">Hide from projector</button>` : ''}
                 <button class="btn primary" onclick="CompControl.reveal()">Reveal on projector</button></div>
         </div>
+        ${(st.live || {}).revealed ? (() => {
+            const rev = st.live.revealed, sc = revealScreen(rev, rev.step);
+            const place = (p) => ({ 1: '1st', 2: '2nd', 3: '3rd' }[p]);
+            const more = sc.shown < sc.positions.length;
+            const label = more ? 'Show ' + place(sc.positions[sc.shown]) + ' place' : sc.step < 3 ? 'Next: ' + REVEAL_STEPS[sc.step + 1] + ' ▶' : 'All shown ✓';
+            const names = sc.rows.filter((t) => t.pos === sc.positions[sc.shown]).map((t) => t.name).join(', ');
+            return `<div class="card" style="margin-bottom:14px;"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;"><b>Projector shows</b>
+                <div class="seg">${REVEAL_STEPS.map((l, i) => `<button class="${sc.step === i ? 'on' : ''}" onclick="CompControl.revealStep(${i})">${l}</button>`).join('')}</div>
+                <button class="btn" onclick="CompControl.backWinner()">◀ Back</button>
+                <button class="btn primary" style="font-size:1.05em;" ${!more && sc.step >= 3 ? 'disabled' : ''} onclick="CompControl.nextWinner()">${label}</button></div>
+                <div class="faint" style="font-size:.85em; margin-top:8px;">${REVEAL_STEPS[sc.step]}: ${sc.shown} of ${sc.positions.length} places shown. ${more && names ? 'Next on the screen: <b>' + esc(names) + '</b>.' : ''} No timer: the projector only changes when you click.</div></div>`;
+        })() : ''}
         ${incomplete ? `<div class="card" style="border-color:var(--red); margin-bottom:14px; color:#ffb3b1;">${incomplete} performance(s) do not have all 3 judges' scores yet.</div>` : ''}
         <div class="grid two" style="grid-template-columns:1fr 1fr;">
             <div class="card"><h3 style="margin-top:0;">Teams · Category ${resCat}</h3>
                 <table><tr><th>Pos</th><th>Team</th><th>Group /50</th><th>Score %</th></tr>
-                ${r.teams.map((t) => `<tr><td style="font-weight:900; color:var(--gold); font-size:1.15em;">${t.disqualified ? 'DQ' : ordinal(teamPos(t, option))}</td><td style="font-weight:800;">${esc(t.name)}</td><td>${t.group}</td><td style="font-weight:800;">${t.score}</td></tr>`).join('')}</table>
+                ${r.teams.map((t) => `<tr><td style="font-weight:900; color:var(--gold); font-size:1.15em;">${t.disqualified ? 'DQ' : (t.opt1 ? ordinal(teamPos(t, option)) : '-')}</td><td style="font-weight:800;">${esc(t.name)}</td><td>${t.group}</td><td style="font-weight:800;">${t.score}</td></tr>`).join('')}</table>
                 <p class="faint" style="font-size:.8em; margin-bottom:0;">Team = group round only (solo is separate). Option 1: exact order, equal scores share. Option 2: within ${gap} point(s) of the top share the position.</p></div>
         </div>
         <div class="card" style="margin-top:14px;"><h3 style="margin-top:0;">Solos · Category ${resCat}</h3>
@@ -733,46 +808,111 @@ function trophyData() {
     const set = st.event.settings || {};
     const option = Number(set.option || 1);
     const entries = (st.entries || []).filter((e) => !e.withdrawn);
-    const people = entries.filter((e) => e.do_solo || e.do_group || e.do_activity).map((e) => ({ id: e.id, name: entryName(e) }));   // volunteers alone are not participants
+    const people = entries.filter((e) => e.do_solo || e.do_group || e.do_activity).map((e) => ({ id: e.id, name: entryName(e), activity: !!e.do_activity, compete: !!(e.do_solo || e.do_group) }));   // volunteers alone are not participants
     const groupMembers = {};
     entries.filter((e) => e.do_group && e.team_id).forEach((e) => (groupMembers[e.team_id] = groupMembers[e.team_id] || []).push(e.id));
     const soloPerson = {};
     st.slots.filter((x) => x.kind === 'solo').forEach((x) => { soloPerson[x.id] = x.entry_id; });
-    return { ...S.computeTrophies({ results: results(), option, people, groupMembers, soloPerson }), entries };
+    return { ...S.computeTrophies({ results: results(), option, people, groupMembers, soloPerson }), entries, extraOnly: entries.filter((e) => e.do_activity && !e.do_solo && !e.do_group).length };
+}
+// End of the show: what was used against what the coach bought (numbers typed in admin → Shopping list).
+// bought = null when nothing was typed. left = bought − used (negative = short).
+function trophyCheck(td) {
+    const sh = (st.event.settings || {}).shopping || {};
+    const bought = (k) => (sh[k + '_bought'] !== undefined && sh[k + '_bought'] !== null && sh[k + '_bought'] !== '' ? Number(sh[k + '_bought']) : null);
+    const g = giftCounts();
+    const rows = [
+        { label: 'Largest trophies (1st)', used: td.tiers.largest, bought: bought('tier1') },
+        { label: 'Medium trophies (2nd)', used: td.tiers.medium, bought: bought('tier2') },
+        { label: 'Small trophies (3rd)', used: td.tiers.small, bought: bought('tier3') },
+        { label: 'Participant trophies', used: td.participant.length, bought: bought('participant') },
+        { label: 'Extra activity trophies', used: td.extra.length, bought: bought('extra') },
+        { label: 'Volunteer gifts', used: g.v, bought: bought('volunteers') },
+        { label: 'Judge gifts', used: g.j, bought: bought('judges') },
+        { label: 'Sponsor gifts', used: g.s, bought: bought('sponsors') },
+        { label: 'Guest performer gifts', used: g.g, bought: bought('guests') }
+    ].filter((r) => r.used > 0 || r.bought);
+    rows.forEach((r) => { r.left = r.bought === null ? null : r.bought - r.used; });
+    // everybody who takes part has exactly one kind of trophy: a podium trophy (one per win) or a participant one
+    const got = new Set(td.big.map((b) => b.person).concat(td.participant.map((p) => p.id), td.extra.map((p) => p.id)));
+    const missing = td.entries.filter((e) => (e.do_solo || e.do_group || e.do_activity) && !got.has(e.id)).map(entryName);
+    const unscored = st.slots.filter((x) => (x.kind === 'solo' || x.kind === 'group') && x.status !== 'disqualified' && (() => { const sc = (st.scores || {})[x.id] || {}; return Object.keys(sc).length < 3; })()).length;
+    return { rows, missing, unscored, people: td.people };
+}
+function trophyCheckHtml(td) {
+    const c = trophyCheck(td);
+    const cell = 'padding:4px 10px; border-top:1px solid var(--line);';
+    const body = c.rows.map((r) => {
+        const st2 = r.left === null ? '<span class="faint">bought: not typed in admin</span>'
+            : r.left === 0 ? '<b style="color:var(--green, #4ade80);">exactly enough ✓</b>'
+                : r.left > 0 ? `<b style="color:var(--green, #4ade80);">${r.left} left over</b>`
+                    : `<b style="color:#ff8a87;">SHORT by ${-r.left}</b>`;
+        return `<tr><td style="${cell} font-weight:700;">${r.label}</td><td style="${cell} text-align:center;">${r.used}</td><td style="${cell} text-align:center;">${r.bought === null ? '-' : r.bought}</td><td style="${cell}">${st2}</td></tr>`;
+    }).join('');
+    return `<div style="margin:10px 0; padding:10px 12px; border-radius:12px; border:1px solid var(--line);">
+        <div style="font-weight:800; margin-bottom:6px;">Trophy check: used and bought</div>
+        <table style="width:100%; border-collapse:collapse; font-size:.9em;"><thead><tr class="faint" style="text-align:left; font-size:.8em;"><th style="padding:3px 10px;">What</th><th style="padding:3px 10px; text-align:center;">Used</th><th style="padding:3px 10px; text-align:center;">Bought</th><th style="padding:3px 10px;"></th></tr></thead><tbody>${body}</tbody></table>
+        <div style="margin-top:8px; font-size:.9em;">${c.missing.length ? `<b style="color:#ff8a87;">Without a trophy: ${c.missing.map(esc).join(', ')}</b>` : `<b style="color:var(--green, #4ade80);">Nobody is left without a trophy ✓</b> (all ${c.people} people have one)`}${c.unscored ? ` <span class="faint">· ${c.unscored} performance${c.unscored === 1 ? '' : 's'} not fully scored yet, so the numbers can still change.</span>` : ''}</div>
+    </div>`;
 }
 function trophyPanelHtml() {
     const td = trophyData();
     const nameOf = (id) => (td.entries.find((e) => e.id === id) || {}).name || '?';
     return `<div class="card" style="margin-bottom:14px;"><h3 style="margin-top:0;">Trophies to hand out</h3>
         <div style="display:flex; gap:22px; flex-wrap:wrap; margin-bottom:8px;">
-            <div><div style="font-size:2.2em; font-weight:900; color:var(--gold);">${td.big.length}</div><div class="faint" style="font-size:.82em; font-weight:700;">BIG (winners)</div></div>
-            <div><div style="font-size:2.2em; font-weight:900;">${td.small.length}</div><div class="faint" style="font-size:.82em; font-weight:700;">SMALL (everybody else)</div></div>
+            <div><div style="font-size:2.2em; font-weight:900; color:var(--gold);">${td.tiers.largest}</div><div class="faint" style="font-size:.82em; font-weight:700;">LARGEST (1st)</div></div>
+            <div><div style="font-size:2.2em; font-weight:900;">${td.tiers.medium}</div><div class="faint" style="font-size:.82em; font-weight:700;">MEDIUM (2nd)</div></div>
+            <div><div style="font-size:2.2em; font-weight:900;">${td.tiers.small}</div><div class="faint" style="font-size:.82em; font-weight:700;">SMALL (3rd)</div></div>
+            <div><div style="font-size:2.2em; font-weight:900;">${td.participant.length}</div><div class="faint" style="font-size:.82em; font-weight:700;">PARTICIPANT (everybody else)</div></div>
+            <div><div style="font-size:2.2em; font-weight:900; color:#b69cff;">${td.extra.length}</div><div class="faint" style="font-size:.82em; font-weight:700;">EXTRA ACTIVITY (their own trophy)</div></div>
             <div><div style="font-size:2.2em; font-weight:900;">${td.people}</div><div class="faint" style="font-size:.82em; font-weight:700;">PEOPLE TAKING PART</div></div></div>
-        <p class="muted" style="font-size:.85em; margin:0 0 8px;">One trophy per person. A win is a big trophy (solo podium, or each member of a podium team), so someone who wins both solo and group gets two big ones. A winner does not also get a small one.</p>
-        ${td.big.length ? `<div class="faint" style="font-size:.8em; font-weight:700;">BIG</div><div style="font-size:.88em; margin-bottom:8px; display:flex; flex-wrap:wrap;">${td.big.map((b) => `<span class="badge" style="margin:2px;">${esc(nameOf(b.person))} · ${esc(b.why)}</span>`).join('')}</div>` : '<div class="muted" style="font-size:.88em;">No results yet: the big trophies appear once the judges have scored.</div>'}
-        <div style="margin:8px 0; padding:8px 10px; border-radius:10px; background:var(--saffron-soft); font-size:.88em;">🎁 <span id="giftSummary">${giftSummaryHtml()}</span><div class="faint" style="font-size:.8em; margin-top:2px;">Volunteers, judges and sponsors each get a thank-you gift (like a trophy). Lists are in the Certificates card below.</div></div>
-        ${td.small.length ? `<div class="faint" style="font-size:.8em; font-weight:700;">SMALL</div><div style="font-size:.88em; display:flex; flex-wrap:wrap;">${td.small.map((p) => `<span class="badge" style="margin:2px;">${esc(p.name)}</span>`).join('')}</div>` : ''}
+        ${trophyCheckHtml(td)}
+        <p class="muted" style="font-size:.85em; margin:0 0 8px;">Podium: 1st place = largest, 2nd = medium, 3rd = small. Every solo winner and every member of a podium team gets his own trophy, so someone who wins both solo and group gets two. Everybody who won nothing gets one participant trophy.</p>
+        ${td.big.length ? `<div class="faint" style="font-size:.8em; font-weight:700;">WINNERS</div><div style="font-size:.88em; margin-bottom:8px; display:flex; flex-wrap:wrap;">${td.big.map((b) => `<span class="badge" style="margin:2px;">${esc(nameOf(b.person))} · ${esc(b.why)}</span>`).join('')}</div>` : '<div class="muted" style="font-size:.88em;">No results yet: the winner trophies appear once the judges have scored.</div>'}
+        <div style="margin:8px 0; padding:8px 10px; border-radius:10px; background:var(--saffron-soft); font-size:.88em;">🎁 <span id="giftSummary">${giftSummaryHtml()}</span><div class="faint" style="font-size:.8em; margin-top:2px;">Volunteers, judges and sponsors each get a thank-you gift (like a trophy). Lists are in the Certificates card below, saved in the database.</div></div>
+        ${td.participant.length ? `<div class="faint" style="font-size:.8em; font-weight:700;">PARTICIPANT</div><div style="font-size:.88em; display:flex; flex-wrap:wrap;">${td.participant.map((p) => `<span class="badge" style="margin:2px;">${esc(p.name)}</span>`).join('')}</div>` : ''}
     </div>`;
 }
-// Thank-you gifts (like a trophy) for the volunteers, the judges and the sponsors.
-// The three lists are typed here (one per line) and kept on this device; the volunteers
-// who registered are filled in. Judges start with Judge 1-3.
-function giftList(key) {
-    try { return (localStorage.getItem(key) || '').split('\n').map((x) => x.trim()).filter(Boolean); } catch (e) { return []; }
+// Thank-you gifts (like a trophy) for the volunteers, the judges, the sponsors and the guest performers.
+// The four lists (one name per line) are saved in the DATABASE (comp_events.settings.lists), so every
+// device sees the same names. The volunteers who registered are filled in. Judges start with Judge 1-3.
+const LIST_KEYS = { comp_volunteers: 'volunteers', comp_judges: 'judges', comp_sponsors: 'sponsors', comp_guests: 'guests' };
+let pendingLists = {};       // typed but not saved yet (survives the 1 s refresh)
+let listsSaveTimer = null;
+function giftText(key) {
+    const lk = LIST_KEYS[key];
+    if (pendingLists[lk] !== undefined) return pendingLists[lk];
+    const saved = (((st && st.event && st.event.settings) || {}).lists || {})[lk];
+    if (saved !== undefined) return saved;
+    try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }   // lists typed before they moved to the database
 }
+function giftList(key) { return giftText(key).split('\n').map((x) => x.trim()).filter(Boolean); }
 function giftCounts() {
-    const vol = giftList('comp_volunteers'), jud = giftList('comp_judges'), spo = giftList('comp_sponsors');
+    const vol = giftList('comp_volunteers'), jud = giftList('comp_judges'), spo = giftList('comp_sponsors'), gue = giftList('comp_guests');
     const v = vol.length || (st.entries || []).filter((e) => !e.withdrawn && e.do_volunteer).length;
-    const j = jud.length || 3;
-    return { v, j, s: spo.length };
+    return { v, j: jud.length || 3, s: spo.length, g: gue.length };
 }
 function giftSummaryHtml() {
     const g = giftCounts();
-    return `<b>${g.v + g.j + g.s}</b> thank-you gifts: volunteers <b>${g.v}</b> · judges <b>${g.j}</b> · sponsors <b>${g.s}</b>`;
+    return `<b>${g.v + g.j + g.s + g.g}</b> thank-you gifts: volunteers <b>${g.v}</b> · judges <b>${g.j}</b> · sponsors <b>${g.s}</b> · guest performers <b>${g.g}</b>`;
 }
 window.giftChanged = (key, el) => {
-    try { localStorage.setItem(key, el.value); } catch (e) { /* ignore */ }
+    pendingLists[LIST_KEYS[key]] = el.value;
     const sum = document.getElementById('giftSummary'); if (sum) sum.innerHTML = giftSummaryHtml();
+    const tag = document.getElementById('listSaved'); if (tag) tag.textContent = 'saving…';
+    clearTimeout(listsSaveTimer);
+    listsSaveTimer = setTimeout(async () => {
+        const lists = { ...(((st && st.event && st.event.settings) || {}).lists || {}), ...pendingLists };
+        try {
+            await backend.setSettings({ lists });
+            if (st && st.event) st.event.settings = { ...(st.event.settings || {}), lists };
+            pendingLists = {};
+            const t2 = document.getElementById('listSaved'); if (t2) t2.textContent = 'saved ✓';
+        } catch (e) {
+            console.error('lists not saved', e);
+            const t2 = document.getElementById('listSaved'); if (t2) t2.textContent = 'NOT saved, check the internet';
+        }
+    }, 700);
 };
 const JOB_LABEL = { backstage: 'Backstage', music: 'Music', stage: 'On stage', mic: 'On the mic' };
 function registeredVolunteerLines() {
@@ -780,84 +920,467 @@ function registeredVolunteerLines() {
         .map((e) => `${entryName(e)} | ${(e.volunteer_roles || []).map((r) => JOB_LABEL[r] || r).join(', ')}`).sort().join('\n');
 }
 function controlCerts() {
-    return `${trophyPanelHtml()}<div class="card"><h3 style="margin-top:0;">Certificates (PDF, A4, ready to print)</h3>
+    return `${trophyPanelHtml()}<div class="card"><h3 style="margin-top:0;">Certificates (PDF, A4, ready to print) <span id="listSaved" class="faint" style="font-size:.6em; font-weight:700;"></span></h3>
         <p class="muted">One certificate per trophy: a winner gets one per win, everybody else one participation certificate (only once). Reveal the results first.</p>
+        ${sponsorLogosHtml()}
         <div class="grid" style="grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));">
+            <button class="btn" onclick="CompControl.trophyList()" title="How the trophies work, plus every student with the score and the trophy">Trophy list (scores + who gets what)</button>
             <button class="btn primary" onclick="CompControl.certificates('dancers')">Solo / group (winners + participation)</button>
             <button class="btn" onclick="CompControl.certificates('kids')">Extra activities only</button>
             <button class="btn" onclick="CompControl.certificates('volunteers')">Volunteers</button>
             <button class="btn" onclick="CompControl.certificates('judges')">Judges</button>
             <button class="btn" onclick="CompControl.certificates('sponsors')">Sponsors</button>
+            <button class="btn" onclick="CompControl.certificates('guests')">Guest performers</button>
         </div>
         <div style="margin-top:14px;"><label class="faint" style="font-size:.82em; font-weight:700;">VOLUNTEERS (one per line: name | jobs)</label>
-            <textarea id="volNames" rows="5" oninput="giftChanged('comp_volunteers', this)" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc((() => { try { const v = localStorage.getItem('comp_volunteers'); return v !== null && v !== '' ? v : registeredVolunteerLines(); } catch (e) { return registeredVolunteerLines(); } })())}</textarea>
+            <textarea id="volNames" rows="5" oninput="giftChanged('comp_volunteers', this)" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc(giftText('comp_volunteers') !== '' ? giftText('comp_volunteers') : registeredVolunteerLines())}</textarea>
             <div class="faint" style="font-size:.78em; margin-top:4px;">The volunteers who registered are filled in (name | jobs). Add or remove lines as you like.</div></div>
         <div style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
             <div><label class="faint" style="font-size:.82em; font-weight:700;">JUDGES (one name per line)</label>
-                <textarea rows="4" oninput="giftChanged('comp_judges', this)" placeholder="Judge 1&#10;Judge 2&#10;Judge 3" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc((() => { try { return localStorage.getItem('comp_judges') || ''; } catch (e) { return ''; } })())}</textarea></div>
+                <textarea rows="4" oninput="giftChanged('comp_judges', this)" placeholder="Judge 1&#10;Judge 2&#10;Judge 3" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc(giftText('comp_judges'))}</textarea></div>
+            <div><label class="faint" style="font-size:.82em; font-weight:700;">GUEST PERFORMERS (one per line: name | minutes)</label>
+                <textarea rows="4" oninput="giftChanged('comp_guests', this)" placeholder="Group name | 8" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc(giftText('comp_guests'))}</textarea></div>
             <div><label class="faint" style="font-size:.82em; font-weight:700;">SPONSORS (one name per line)</label>
-                <textarea rows="4" oninput="giftChanged('comp_sponsors', this)" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc((() => { try { return localStorage.getItem('comp_sponsors') || ''; } catch (e) { return ''; } })())}</textarea></div>
+                <textarea rows="4" oninput="giftChanged('comp_sponsors', this)" style="width:100%; margin-top:6px; border-radius:10px; background:var(--bg2); color:var(--ink); border:1px solid var(--line); padding:10px; font:inherit;">${esc(giftText('comp_sponsors'))}</textarea></div>
         </div>
     </div>`;
 }
 
+// ---------------- trophy list PDF: how the trophies work + every student, score and trophy ----------------
+// For the coach (Roman Punjabi with English words). Needs the judges' scores, so it is made in Control.
+function makeTrophyListPdf() {
+    if (!window.jspdf) { alert('The PDF tool did not load. Reload the page and try again.'); return; }
+    const { jsPDF } = window.jspdf;
+    const set = st.event.settings || {};
+    const option = Number(set.option || 1);
+    const r = results();
+    const td = trophyData();
+    const posOf = (x) => (x ? (option === 2 ? x.opt2 : x.opt1) : null);
+    const SIZE = { 1: 'LARGEST', 2: 'MEDIUM', 3: 'SMALL' };
+    const SIZE_COLOR = { 1: [212, 160, 23], 2: [120, 134, 160], 3: [205, 127, 50], 0: [0, 150, 136], 4: [124, 77, 255] };
+    const NAVY = [20, 26, 58], SAFFRON = [240, 138, 36];
+    const tint = (c, k) => c.map((v) => Math.round(v + (255 - v) * k));
+    const fmt = (n) => (Math.round(n * 10) / 10).toString();
+
+    // one row per person
+    const rows = td.entries.filter((e) => e.do_solo || e.do_group || e.do_activity).map((e) => {
+        const slot = st.slots.find((x) => x.kind === 'solo' && x.entry_id === e.id);
+        const sRes = slot ? ((r[e.category] || {}).solos || []).find((x) => x.slotId === slot.id) : null;
+        const tRes = e.do_group && e.team_id ? ((r[e.category] || {}).teams || []).find((x) => x.teamId === e.team_id) : null;
+        const soloTxt = !e.do_solo ? '' : (sRes && sRes.judges ? `${fmt(sRes.soloTotal)}/40` + (posOf(sRes) ? ` · ${ordinal(posOf(sRes))}` : '') : 'no score');
+        const groupTxt = !e.do_group ? (!e.do_solo && e.do_activity ? 'Extra activity' : '') : (tRes ? `${teamName(e.team_id)} · ${tRes.complete || tRes.group ? fmt(tRes.group) + '/50' : 'no score'}` + (posOf(tRes) && tRes.group ? ` · ${ordinal(posOf(tRes))}` : '') : 'no team');
+        const wins = td.big.filter((b) => b.person === e.id).map((b) => ({ place: b.place, text: `${SIZE[b.place]} (${b.why.replace(/ \(.*\)$/, '')})` }));
+        const trophies = wins.length ? wins.slice() : ((e.do_solo || e.do_group) ? [{ place: 0, text: 'PARTICIPANT' }] : []);
+        if (e.do_activity) trophies.push({ place: 4, text: 'EXTRA ACTIVITY' });
+        return { name: entryName(e), cat: e.category || '', soloTxt, groupTxt, trophies };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    if (!rows.length) { alert('Nobody is registered yet.'); return; }
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, H = 297, M = 14;
+    let y = 0;
+    const title = COMP_BRAND + ' · ' + COMP_NAME;
+    const fit = (txt, w, size, bold) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); let s = size; while (s > 6.5 && doc.getTextWidth(txt) > w) { s -= 0.5; doc.setFontSize(s); } };
+    const bar = (text, color) => {
+        if (y + 14 > H - M) { doc.addPage(); y = M; }
+        doc.setFillColor(...color); doc.roundedRect(M, y, W - 2 * M, 9, 2.5, 2.5, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(text, M + 4, y + 6.2);
+        y += 13;
+    };
+    const para = (text, size, color, gap) => {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(size); doc.setTextColor(...color);
+        const lines = doc.splitTextToSize(text, W - 2 * M - 4);
+        if (y + lines.length * (size * 0.43) > H - M) { doc.addPage(); y = M; }
+        doc.text(lines, M + 2, y + 3.5);
+        y += lines.length * (size * 0.43) + (gap == null ? 2.5 : gap);
+    };
+
+    // ---- header ----
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 34, 'F');
+    doc.setFillColor(...SAFFRON); doc.rect(0, 34, W, 2.5, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.text('Trophies: who gets what', M, 17);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(255, 210, 150); doc.text(title, M, 27);
+    y = 46;
+
+    // ---- the rules ----
+    bar('KIVE KAMM KARDA HAI', NAVY);
+    para('1.  Trophy de 3 size ne podium layi: 1st place = LARGEST, 2nd place = MEDIUM, 3rd place = SMALL.', 10.5, NAVY);
+    para('2.  SOLO: har category (A te B) ch top 3 dancers nu ik-ik trophy.', 10.5, NAVY);
+    para('3.  GROUP: har category ch top 3 teams. Jitan wali team da HAR member apni alag trophy lainda hai (team ch 8 hon taan 8 trophies).', 10.5, NAVY);
+    para('4.  Je koi solo vi jitte te group vi jitte, ohnu 2 trophies milde ne.', 10.5, NAVY);
+    para('5.  Jo kuj nahi jitda, ohnu ik PARTICIPANT trophy. Solo + group karan wale nu vi sirf ik. Jitan wale nu participant vakhri nahi.', 10.5, NAVY);
+    para('6.  Har jitan wale nu place da certificate vi milda hai. Tie hove taan dovein nu same place te same size di trophy.', 10.5, NAVY);
+    para('7.  EXTRA ACTIVITY: jo vi extra activity ch hissa lainda hai, ohnu apni vakhri EXTRA trophy milde, bhaven oh solo ya group vi karda hove (oh upar wali trophy ton alag, extra). Sirf extra activity wale nu participant trophy nahi, bas ehi ik.', 10.5, NAVY, 4);
+
+    // ---- the numbers ----
+    bar('KINNIYAN TROPHIES', NAVY);
+    const items = [['LARGEST', '1st place', td.tiers.largest, 1], ['MEDIUM', '2nd place', td.tiers.medium, 2], ['SMALL', '3rd place', td.tiers.small, 3], ['PARTICIPANT', 'kuj nahi jitya', td.participant.length, 0], ['EXTRA', 'extra activity', td.extra.length, 4]];
+    const cw = (W - 2 * M - 4 * 4) / 5;
+    if (y + 34 > H - M) { doc.addPage(); y = M; }
+    items.forEach((it, i) => {
+        const px = M + i * (cw + 4), c = SIZE_COLOR[it[3]];
+        doc.setFillColor(...tint(c, 0.86)); doc.roundedRect(px, y, cw, 30, 3, 3, 'F');
+        doc.setFillColor(...c); doc.roundedRect(px, y, cw, 8, 3, 3, 'F'); doc.rect(px, y + 4, cw, 4, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(it[0], px + cw / 2, y + 5.6, { align: 'center' });
+        doc.setTextColor(...NAVY); doc.setFontSize(24); doc.text(String(it[2]), px + cw / 2, y + 21, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(110, 116, 150); doc.text(it[1], px + cw / 2, y + 27, { align: 'center' });
+    });
+    y += 36;
+    para(`Total ${td.tiers.largest + td.tiers.medium + td.tiers.small + td.participant.length + td.extra.length} trophies (extra activity vi gine), ${td.people} bande. Neeche order wahi hai jo stage te chalega: har screen ch 3rd, 2nd, 1st, fer participant.`, 9.5, [110, 116, 150], 5);
+
+    // ---- used against bought ----
+    const chk = trophyCheck(td);
+    bar('KITNIYAN VARTIYAN, KITNIYAN BACHIYAN', NAVY);
+    const colsX = [M + 2, M + 80, M + 105, M + 130];
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(110, 116, 150);
+    if (y + 8 + chk.rows.length * 6.5 + 14 > H - M) { doc.addPage(); y = M; }
+    ['WHAT', 'USED', 'BOUGHT', ''].forEach((h, i) => doc.text(h, colsX[i], y + 3));
+    y += 6;
+    chk.rows.forEach((rw, i) => {
+        if (i % 2 === 0) { doc.setFillColor(244, 246, 252); doc.rect(M, y - 1.2, W - 2 * M, 6.4, 'F'); }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...NAVY);
+        doc.text(rw.label, colsX[0], y + 3); doc.text(String(rw.used), colsX[1], y + 3); doc.text(rw.bought === null ? '-' : String(rw.bought), colsX[2], y + 3);
+        const t = rw.left === null ? 'bought not typed' : rw.left === 0 ? 'exactly enough' : rw.left > 0 ? rw.left + ' left over' : 'SHORT by ' + (-rw.left);
+        doc.setTextColor(...(rw.left !== null && rw.left < 0 ? [200, 40, 40] : [30, 130, 70])); doc.text(t, colsX[3], y + 3);
+        y += 6.4;
+    });
+    y += 3;
+    para(chk.missing.length ? 'Bina trophy: ' + chk.missing.join(', ') : 'Koi vi bina trophy nahi reha: sab ' + chk.people + ' bande nu trophy hai.', 10, chk.missing.length ? [200, 40, 40] : [30, 130, 70], 2);
+    if (chk.unscored) para(chk.unscored + ' performance nu abhi poore score nahi mile, isliye sankhya badal sakdi hai.', 9, [110, 116, 150], 5);
+    y += 2;
+
+    // ---- handing-out order, as decided: for each screen (B solo, B group, A solo, A group) 3rd, 2nd, 1st; then the participants ----
+    const ROW_H = 6.6, RIGHT = W - M;
+    const placeWord = (p) => ({ 1: '1st', 2: '2nd', 3: '3rd' }[p]);
+    const need = (h) => { if (y + h > H - M - 4) { doc.addPage(); y = M; } };
+    const chip = (place, x, yy) => { doc.setFillColor(...SIZE_COLOR[place]); doc.circle(x, yy - 1.2, 1.7, 'F'); };
+    const memberNames = (teamId) => td.entries.filter((e) => e.do_group && e.team_id === teamId).map(entryName).sort((p, q) => p.localeCompare(q));
+    [['B', true], ['B', false], ['A', true], ['A', false]].forEach(([cat, solo]) => {
+        const list = solo
+            ? ((r[cat] || {}).solos || []).filter((x) => x.opt1 && posOf(x) <= 3)
+            : ((r[cat] || {}).teams || []).filter((x) => !x.disqualified && x.opt1 && posOf(x) <= 3);
+        bar('CATEGORY ' + cat + ' · ' + (solo ? 'SOLO' : 'GROUP') + (list.length ? '' : ' · nobody ranked yet'), cat === 'B' ? [0, 150, 136] : [229, 57, 112]);
+        [3, 2, 1].forEach((place) => {
+            list.filter((x) => posOf(x) === place).forEach((x) => {
+                const size = SIZE[place];
+                if (solo) {
+                    need(ROW_H + 1);
+                    doc.setFillColor(...tint(SIZE_COLOR[place], 0.9)); doc.roundedRect(M, y - 4.2, W - 2 * M, ROW_H, 1.5, 1.5, 'F');
+                    chip(place, M + 4, y);
+                    doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text(placeWord(place), M + 8, y);
+                    fit(x.name, 62, 10.5, true); doc.text(x.name, M + 22, y);
+                    doc.setTextColor(60, 66, 100); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(x.teamName || '', M + 88, y);
+                    doc.text(fmt(x.soloTotal) + '/40', M + 130, y);
+                    doc.setFont('helvetica', 'bold'); doc.setTextColor(...NAVY); doc.text(size + ' trophy', RIGHT - 2, y, { align: 'right' });
+                    y += ROW_H + 1;
+                } else {
+                    const names = memberNames(x.teamId);
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+                    const lines = doc.splitTextToSize(names.join(', '), W - 2 * M - 30);
+                    const h = ROW_H + 1 + lines.length * 4.4 + 1.5;
+                    need(h);
+                    doc.setFillColor(...tint(SIZE_COLOR[place], 0.9)); doc.roundedRect(M, y - 4.2, W - 2 * M, h - 1, 1.5, 1.5, 'F');
+                    chip(place, M + 4, y);
+                    doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text(placeWord(place), M + 8, y);
+                    fit(x.name, 70, 10.5, true); doc.text(x.name, M + 22, y);
+                    doc.setTextColor(60, 66, 100); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(fmt(x.group) + '/50', M + 130, y);
+                    doc.setFont('helvetica', 'bold'); doc.setTextColor(...NAVY); doc.text(names.length + ' x ' + size + ' trophy', RIGHT - 2, y, { align: 'right' });
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(60, 66, 100); doc.text(lines, M + 22, y + 5);
+                    y += h;
+                }
+            });
+        });
+        y += 3;
+    });
+
+    // ---- participants: nobody who won a place; one participant trophy each ----
+    const X = { name: M + 2, solo: M + 50, group: M + 100 };
+    const peopleTable = (list, headText, color, emptyText) => {
+        bar(headText + ' · ' + list.length + ' people', color);
+        if (!list.length) { para(emptyText, 10, [110, 116, 150]); return; }
+        const head = () => {
+            doc.setFillColor(...NAVY); doc.roundedRect(M, y, W - 2 * M, 7, 1.5, 1.5, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+            doc.text('NAME', X.name, y + 4.8); doc.text('SOLO (score · place)', X.solo, y + 4.8); doc.text('GROUP (team · score · place)', X.group, y + 4.8);
+            y += 9;
+        };
+        head();
+        list.forEach((p, i) => {
+            if (y + 7 > H - M - 4) { doc.addPage(); y = M; head(); }
+            if (i % 2 === 0) { doc.setFillColor(244, 246, 252); doc.rect(M, y - 1, W - 2 * M, 7, 'F'); }
+            doc.setTextColor(...NAVY); fit(p.name, X.solo - X.name - 4, 10, true); doc.text(p.name, X.name, y + 3.6);
+            doc.setTextColor(60, 66, 100); fit(p.soloTxt || '-', X.group - X.solo - 3, 9); doc.text(p.soloTxt || '-', X.solo, y + 3.6);
+            fit(p.groupTxt || '-', RIGHT - X.group, 9); doc.text(p.groupTxt || '-', X.group, y + 3.6);
+            y += 7;
+        });
+        y += 4;
+    };
+    // participants: nobody who won a place, one participant trophy each (solo/group people)
+    peopleTable(rows.filter((p) => p.trophies.some((t) => t.place === 0)), 'PARTICIPANT TROPHY', SIZE_COLOR[0], 'Nobody yet.');
+    // extra activity: everybody who did it has their own trophy, also if they dance solo/group too
+    peopleTable(rows.filter((p) => p.trophies.some((t) => t.place === 4)), 'EXTRA ACTIVITY TROPHY (their own, on top of the others)', SIZE_COLOR[4], 'Nobody did the extra activity.');
+
+    const pages = doc.getNumberOfPages();
+    for (let p = 1; p <= pages; p++) {
+        doc.setPage(p);
+        doc.setFillColor(...SAFFRON); doc.rect(0, H - 8, W, 1, 'F');
+        doc.setTextColor(120, 126, 150); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+        doc.text(title + ' · trophies', M, H - 3.5); doc.text('Page ' + p + ' of ' + pages, W - M, H - 3.5, { align: 'right' });
+    }
+    doc.save('trophies-who-gets-what.pdf');
+}
+
 // ---------------- certificates (jsPDF) ----------------
-function makeCertificates(kind) {
+// Look: ivory page, navy + gold (the colours of the Bhangra Sway logo), a big logo in front at the top and as a
+// faint watermark, a seal (rosette with the place, or a star), and the sponsors' logos small at the bottom right.
+const CERT_NAVY = [20, 26, 58], CERT_GOLD = [201, 151, 28], CERT_GOLD_DARK = [140, 100, 10], CERT_GRAY = [110, 116, 150];
+const CERT_PLACE_COLOR = { 1: [212, 160, 23], 2: [150, 158, 175], 3: [176, 112, 64] };
+const imgFormat = (data) => (/^data:image\/jpe?g/i.test(data) ? 'JPEG' : 'PNG');
+
+// Pictures needed for the PDF: our logo (from the site) and the sponsor logos (from the database).
+async function certAssets() {
+    const toData = async (url) => {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('image ' + r.status);
+        const b = await r.blob();
+        return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
+    };
+    const dims = (d) => new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 1, h: im.naturalHeight || 1 }); im.onerror = () => res({ w: 1, h: 1 }); im.src = d; });
+    // the logo is cut to its circle and put on the ivory page colour (the icon has black corners, and a transparent PNG can show a black box in the PDF)
+    const flatten = (d, w, h) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = '#fdfbf5'; x.fillRect(0, 0, w, h); x.save(); x.beginPath(); x.arc(w / 2, h / 2, w * 0.482, 0, Math.PI * 2); x.clip(); x.drawImage(im, 0, 0, w, h); x.restore(); res(c.toDataURL('image/jpeg', 0.95)); }; im.onerror = () => res(d); im.src = d; });
+    let logo = null;
+    try { logo = await flatten(await toData('icons/icon-512.png'), 512, 512); } catch (e) { console.warn('logo not loaded', e); }
+    const sponsors = [];
+    for (const l of sponsorLogoList()) {
+        try {
+            const data = l.data || await toData(songUrl(l.path));
+            sponsors.push({ data, ...(await dims(data)) });
+        } catch (e) { console.warn('sponsor logo not loaded', l, e); }
+    }
+    return { logo, sponsors };
+}
+
+// Letter-spaced text, centred (or right-aligned) by hand: jsPDF centres it wrongly when charSpace is used
+function certSpaced(doc, text, x, y, cs, align) {
+    const w = doc.getTextWidth(text) + cs * (text.length - 1);
+    doc.text(text, align === 'right' ? x - w : x - w / 2, y, { charSpace: cs });
+}
+function certStar(doc, cx, cy, R, r, color) {
+    const pts = [];
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? r : R; pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]); }
+    const rel = pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]);
+    doc.setFillColor(...color); doc.lines(rel, pts[0][0], pts[0][1], [1, 1], 'F', true);
+}
+function certDiamond(doc, x, y, r, color) {
+    doc.setFillColor(...color); doc.lines([[r, r], [-r, r], [-r, -r], [r, -r]], x, y - r, [1, 1], 'F', true);
+}
+
+// One certificate page. title: '1st Place' kinds / 'Certificate of Participation' / 'Thank You'.
+function certPage(doc, A, W, H, title, name, line1, line2, date, first, parent) {
+    if (!first) doc.addPage();
+    const place = Number((title.match(/(\d)(?:st|nd|rd)/) || [])[1]) || 0;
+    const kind = place ? 'ACHIEVEMENT' : /Participation/i.test(title) ? 'PARTICIPATION' : 'APPRECIATION';
+    const accent = place ? CERT_PLACE_COLOR[place] || CERT_GOLD : CERT_GOLD;
+    const cx = W / 2;
+    // page + frame
+    doc.setFillColor(253, 251, 245); doc.rect(0, 0, W, H, 'F');
+    doc.setDrawColor(...CERT_NAVY); doc.setLineWidth(0.5); doc.rect(7, 7, W - 14, H - 14);
+    doc.setDrawColor(...CERT_GOLD); doc.setLineWidth(1.8); doc.rect(10, 10, W - 20, H - 20);
+    doc.setDrawColor(...CERT_NAVY); doc.setLineWidth(0.3); doc.rect(13, 13, W - 26, H - 26);
+    doc.setDrawColor(...CERT_GOLD); doc.setLineWidth(0.25); doc.rect(15.5, 15.5, W - 31, H - 31);
+    // corner roundels
+    [[13, 13], [W - 13, 13], [13, H - 13], [W - 13, H - 13]].forEach(([x, y]) => {
+        doc.setFillColor(...CERT_GOLD); doc.circle(x, y, 5.2, 'F');
+        doc.setFillColor(253, 251, 245); doc.circle(x, y, 3.3, 'F');
+        doc.setFillColor(...CERT_NAVY); doc.circle(x, y, 1.3, 'F');
+    });
+    // faint watermark logo
+    if (A.logo) {
+        try {
+            doc.saveGraphicsState();
+            doc.setGState(new doc.GState({ opacity: 0.055 }));
+            doc.addImage(A.logo, imgFormat(A.logo), cx - 72, 44, 144, 144);
+            doc.restoreGraphicsState();
+        } catch (e) { doc.setGState(new doc.GState({ opacity: 1 })); }
+    }
+    // big logo in front, over the top of the frame
+    doc.setFillColor(253, 251, 245); doc.circle(cx, 33, 24.5, 'F');
+    doc.setDrawColor(...CERT_GOLD); doc.setLineWidth(1.1); doc.circle(cx, 33, 24.5, 'S');
+    if (A.logo) {   // clipped to its circle, so the square corners do not cover the frame
+        doc.saveGraphicsState(); doc.circle(cx, 33, 20.6, null); doc.clip(); doc.discardPath();
+        doc.addImage(A.logo, imgFormat(A.logo), cx - 21, 12, 42, 42);
+        doc.restoreGraphicsState();
+    }
+    // headings
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...CERT_GOLD_DARK);
+    doc.setFontSize(13); certSpaced(doc, COMP_BRAND.toUpperCase(), cx, 61.5, 4);
+    doc.setFontSize(8.5); doc.setTextColor(...CERT_GRAY); certSpaced(doc, COMP_NAME.toUpperCase(), cx, 67.5, 2.2);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(31); doc.setTextColor(...CERT_NAVY);
+    certSpaced(doc, 'CERTIFICATE', cx, 81, 3.5);
+    doc.setFontSize(11.5); doc.setTextColor(...CERT_GOLD_DARK);
+    certSpaced(doc, 'OF ' + kind, cx, 89.5, 3.2);
+    doc.setDrawColor(...CERT_GOLD); doc.setLineWidth(0.5);
+    doc.line(cx - 80, 88, cx - 54, 88); doc.line(cx + 54, 88, cx + 80, 88);
+    certDiamond(doc, cx - 52, 88, 1.3, CERT_GOLD); certDiamond(doc, cx + 52, 88, 1.3, CERT_GOLD);
+    // presented to + name
+    doc.setFont('times', 'italic'); doc.setFontSize(14); doc.setTextColor(...CERT_GRAY);
+    doc.text('This certificate is proudly presented to', cx, 100, { align: 'center' });
+    doc.setFont('times', 'bolditalic'); doc.setTextColor(...CERT_NAVY);
+    let fs = 42; doc.setFontSize(fs);
+    while (fs > 22 && doc.getTextWidth(name) > W - 80) { fs -= 2; doc.setFontSize(fs); }
+    doc.text(name, cx, 115.5, { align: 'center' });
+    doc.setDrawColor(...CERT_GOLD); doc.setLineWidth(0.6); doc.line(cx - 75, 121, cx + 75, 121);
+    certDiamond(doc, cx, 121, 1.8, CERT_GOLD);
+    // what for
+    let y = 132;
+    if (parent) {
+        doc.setFont('times', 'italic'); doc.setFontSize(12); doc.setTextColor(...CERT_GRAY);
+        doc.text('child of ' + parent, cx, 128, { align: 'center' }); y = 139;
+    }
+    if (place) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(...CERT_GOLD_DARK);
+        certSpaced(doc, title.replace(/ Place$/, ' PLACE').toUpperCase(), cx, y, 1.2); y += 8.5;
+    }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(13.5); doc.setTextColor(40, 46, 80);
+    if (line1) { doc.text(line1, cx, y, { align: 'center' }); y += 8; }
+    if (line2) { doc.setFontSize(11.5); doc.setTextColor(...CERT_GRAY); doc.text(line2, cx, y, { align: 'center' }); }
+    // signature lines
+    doc.setDrawColor(...CERT_NAVY); doc.setLineWidth(0.35);
+    doc.line(34, 172, 94, 172); doc.line(W - 94, 172, W - 34, 172);
+    doc.setFont('times', 'italic'); doc.setFontSize(12); doc.setTextColor(...CERT_NAVY);
+    doc.text(date, 64, 169.5, { align: 'center' });
+    doc.text(COMP_BRAND, W - 64, 169.5, { align: 'center' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...CERT_GRAY);
+    certSpaced(doc, 'DATE', 64, 176.5, 1.5); certSpaced(doc, 'ORGANISER', W - 64, 176.5, 1.5);
+    // seal: rosette with the place, or a star
+    doc.setFillColor(...accent); doc.triangle(cx - 6, 178, cx - 12, 192, cx - 3, 188, 'F'); doc.triangle(cx + 6, 178, cx + 12, 192, cx + 3, 188, 'F');
+    doc.circle(cx, 170, 12.5, 'F');
+    doc.setDrawColor(253, 251, 245); doc.setLineWidth(0.7); doc.circle(cx, 170, 10.2, 'S');
+    doc.setDrawColor(...CERT_NAVY); doc.setLineWidth(0.3); doc.circle(cx, 170, 12.5, 'S');
+    if (place) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor(...CERT_NAVY);
+        doc.text(String(place), cx - 1.2, 172.4, { align: 'center' });
+        doc.setFontSize(8); doc.text(['st', 'nd', 'rd'][place - 1], cx + 3.6, 169.4, { align: 'left' });
+    } else certStar(doc, cx, 170.6, 7.5, 3.1, CERT_NAVY);
+    // sponsors: small, bottom right
+    if (A.sponsors.length) {
+        const h = 8.5, maxW = 26, gap = 5;
+        const items = A.sponsors.map((s) => { let w = h * s.w / s.h, hh = h; if (w > maxW) { w = maxW; hh = w * s.h / s.w; } return { s, w, hh }; });
+        let x = W - 22 - items.reduce((t, it) => t + it.w, 0) - gap * (items.length - 1);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...CERT_GRAY);
+        certSpaced(doc, 'SUPPORTED BY', W - 22, 183, 1, 'right');
+        items.forEach((it) => { try { doc.addImage(it.s.data, imgFormat(it.s.data), x, 185 + (h - it.hh) / 2, it.w, it.hh); } catch (e) { /* skip a broken logo */ } x += it.w + gap; });
+    }
+}
+
+async function makeCertificates(kind) {
     const snap = (st.live || {}).revealed;
     if (kind === 'dancers' && !snap) { alert('Reveal the results first, so the certificates match what everyone saw.'); return; }
+    if (!window.jspdf) { alert('The PDF tool did not load. Reload the page and try again.'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const W = 297, H = 210;
     const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const A = await certAssets();
     let first = true;
-    const page = (title, name, line1, line2) => {
-        if (!first) doc.addPage(); first = false;
-        // white page (cheap to print), saffron frame, navy text
-        doc.setDrawColor(240, 138, 36); doc.setLineWidth(2.2); doc.rect(10, 10, W - 20, H - 20);
-        doc.setLineWidth(0.6); doc.rect(14, 14, W - 28, H - 28);
-        doc.setTextColor(240, 138, 36); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
-        doc.text('BHANGRA COMPETITION 2027', W / 2, 40, { align: 'center' });
-        doc.setTextColor(20, 26, 58); doc.setFontSize(34); doc.text(title, W / 2, 66, { align: 'center' });
-        doc.setTextColor(110, 116, 150); doc.setFont('helvetica', 'normal'); doc.setFontSize(13); doc.text('This certificate is presented to', W / 2, 88, { align: 'center' });
-        doc.setTextColor(20, 26, 58); doc.setFont('helvetica', 'bold'); doc.setFontSize(40); doc.text(name, W / 2, 112, { align: 'center' });
-        doc.setDrawColor(240, 138, 36); doc.setLineWidth(0.8); doc.line(W / 2 - 70, 120, W / 2 + 70, 120);
-        doc.setTextColor(40, 46, 80); doc.setFont('helvetica', 'normal'); doc.setFontSize(15);
-        if (line1) doc.text(line1, W / 2, 136, { align: 'center' });
-        if (line2) { doc.setTextColor(110, 116, 150); doc.setFontSize(12); doc.text(line2, W / 2, 147, { align: 'center' }); }
-        doc.setTextColor(110, 116, 150); doc.setFontSize(11);
-        doc.text(date, 40, 180); doc.text('Bhangra Sway', W - 40, 180, { align: 'right' });
-    };
+    const page = (title, name, line1, line2, parent) => { certPage(doc, A, W, H, title, name, line1, line2, date, first, parent); first = false; };
     if (kind === 'dancers') {
         const td = trophyData();
         const wins = {};
-        td.big.forEach((b) => (wins[b.person] = wins[b.person] || []).push(b.why));
+        td.certs.forEach((b) => (wins[b.person] = wins[b.person] || []).push(b.why));
         td.entries.filter((e) => e.do_solo || e.do_group).sort((a, b) => entryName(a).localeCompare(entryName(b))).forEach((e) => {
             const did = [e.do_solo && 'Solo', e.do_group && `Group · ${teamName(e.team_id)}`].filter(Boolean).join(' + ');
             const w = wins[e.id] || [];
             if (w.length) w.forEach((why) => {
                 const m = why.match(/^(.*?) \((.*)\)$/) || [why, why, ''];
-                page(`${m[1]} Place`, entryName(e), m[1].startsWith('Solo') ? `Solo · Category ${m[2]}` : `Group · Team ${m[2]}`, 'Congratulations, a big win!');
+                page(`${m[1]} Place`, entryName(e), m[1].startsWith('Solo') ? `Solo · Category ${m[2]}` : `Group · Team ${m[2]}`, 'Congratulations, a big win!', parentOf(e));
             });
-            else page('Certificate of Participation', entryName(e), did + (e.category ? ` · Category ${e.category}` : ''), 'Thank you for your energy, dedication and bhangra spirit.');
+            else page('Certificate of Participation', entryName(e), did + (e.category ? ` · Category ${e.category}` : ''), 'Thank you for your energy, dedication and bhangra spirit.', parentOf(e));
         });
     } else if (kind === 'kids') {
         // only people who do the extra activity and nothing else (the rest already get a certificate above)
         (st.entries || []).filter((e) => !e.withdrawn && e.do_activity && !e.do_solo && !e.do_group).sort((a, b) => entryName(a).localeCompare(entryName(b)))
-            .forEach((e) => page('Certificate of Participation', entryName(e), 'Extra activities', 'Thank you for taking part. Well done!'));
+            .forEach((e) => page('Certificate of Participation', entryName(e), 'Extra activities', 'Thank you for taking part. Well done!', parentOf(e)));
+    } else if (kind === 'guests') {
+        const lines = giftList('comp_guests');
+        if (!lines.length) { alert('Type the guest performers first (one per line), in the box below the buttons.'); return; }
+        lines.forEach((line) => { const n = line.split('|')[0].trim(); page('Thank You', n, 'for performing at the ' + COMP_NAME, 'Guest performer'); });
     } else if (kind === 'judges' || kind === 'sponsors') {
         const key = kind === 'judges' ? 'comp_judges' : 'comp_sponsors';
         const names = giftList(key);
         if (!names.length) { alert('Type the ' + kind + ' names first (one per line), in the box below the buttons.'); return; }
-        names.forEach((n) => page('Thank You', n, kind === 'judges' ? 'for judging the Bhangra Competition 2027' : 'for supporting the Bhangra Competition 2027', kind === 'judges' ? 'Judge' : 'Sponsor'));
+        names.forEach((n) => page('Thank You', n, kind === 'judges' ? 'for judging the ' + COMP_NAME : 'for supporting the ' + COMP_NAME, kind === 'judges' ? 'Judge' : 'Sponsor'));
     } else {
         const names = (document.getElementById('volNames').value || '').split('\n').map((x) => x.trim()).filter(Boolean);
-        try { localStorage.setItem('comp_volunteers', names.join('\n')); } catch (e) { /* ignore */ }
         if (!names.length) { alert('Type the volunteers\' names first (one per line).'); return; }
-        names.forEach((line) => { const [n, jobs] = line.split('|').map((x) => x.trim()); page('Thank You', n, 'for making the Bhangra Competition 2027 happen', jobs ? 'Volunteer · ' + jobs : 'Volunteer'); });
+        names.forEach((line) => { const [n, jobs] = line.split('|').map((x) => x.trim()); page('Thank You', n, 'for making the ' + COMP_NAME + ' happen', jobs ? 'Volunteer · ' + jobs : 'Volunteer'); });
     }
     if (first) { alert('Nothing to print yet.'); return; }
     doc.save(`certificates-${kind}.pdf`);
 }
+
+// ---- sponsor logos: stored in the comp-songs storage bucket (logos/…), listed in comp_events.settings.sponsor_logos ----
+function sponsorLogoList() { return ((((st && st.event && st.event.settings) || {}).sponsor_logos) || []); }
+function sponsorLogoSrc(l) { return l.data || songUrl(l.path); }
+function sponsorLogosHtml() {
+    const list = sponsorLogoList();
+    return `<div style="margin:10px 0 14px; padding:10px 12px; border-radius:12px; border:1px solid var(--line);">
+        <div style="font-weight:800; margin-bottom:4px;">Sponsor logos <span class="faint" style="font-weight:600; font-size:.85em;">(small, bottom right of every certificate · up to 6)</span></div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            ${list.map((l, i) => `<div style="position:relative; background:#fff; border-radius:8px; padding:6px; height:54px; display:flex; align-items:center;"><img src="${esc(sponsorLogoSrc(l))}" alt="" style="max-height:42px; max-width:110px;"><span title="Remove" onclick="sponsorLogoRemove(${i})" style="position:absolute; top:-7px; right:-7px; background:#ff6b68; color:#fff; border-radius:50%; width:20px; height:20px; text-align:center; line-height:20px; cursor:pointer; font-weight:900;">×</span></div>`).join('')}
+            ${list.length < 6 ? `<label class="btn small" style="cursor:pointer;">+ Add logos<input type="file" accept="image/*" multiple style="display:none;" onchange="sponsorLogoAdd(this)"></label>` : ''}
+            <span id="logoMsg" class="faint" style="font-size:.85em;"></span></div></div>`;
+}
+// Shrinks a picture to at most 420 px (keeps transparency) so it stays small.
+function shrinkImage(file, max) {
+    return new Promise((res, rej) => {
+        const url = URL.createObjectURL(file);
+        const im = new Image();
+        im.onload = () => {
+            const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+            c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+            URL.revokeObjectURL(url);
+            c.toBlob((b) => (b ? res({ blob: b, data: c.toDataURL('image/png') }) : rej(new Error('image'))), 'image/png');
+        };
+        im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('This file is not a picture')); };
+        im.src = url;
+    });
+}
+async function saveSponsorLogos(list) {
+    await backend.setSettings({ sponsor_logos: list });
+    if (st && st.event) st.event.settings = { ...(st.event.settings || {}), sponsor_logos: list };
+}
+window.sponsorLogoAdd = async (input) => {
+    const msg = document.getElementById('logoMsg');
+    try {
+        const files = [...input.files].slice(0, Math.max(0, 6 - sponsorLogoList().length));
+        const list = sponsorLogoList().slice();
+        for (const f of files) {
+            if (msg) msg.textContent = 'Saving ' + f.name + '…';
+            const img = await shrinkImage(f, 420);
+            if (DEMO || !supa) { list.push({ name: f.name, data: img.data }); continue; }
+            const path = `logos/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`;
+            const up = await supa.storage.from('comp-songs').upload(path, img.blob, { contentType: 'image/png' });
+            if (up.error) throw up.error;
+            list.push({ name: f.name, path });
+        }
+        await saveSponsorLogos(list);
+        if (msg) msg.textContent = 'saved ✓';
+        render();
+    } catch (e) { console.error(e); if (msg) msg.textContent = 'Not saved: ' + (e.message || e); }
+    input.value = '';
+};
+window.sponsorLogoRemove = async (i) => {
+    const list = sponsorLogoList().slice();
+    const gone = list.splice(i, 1)[0];
+    try {
+        await saveSponsorLogos(list);
+        if (gone && gone.path && supa) supa.storage.from('comp-songs').remove([gone.path]).catch(() => {});
+        render();
+    } catch (e) { alert('Not removed: ' + (e.message || e)); }
+};
 
 // ---------------- JUDGE ----------------
 const draft = {};     // slotId -> criteria being edited (survives polls)
@@ -1207,29 +1730,29 @@ function renderAnchor() {
         <div class="card" style="border-color:var(--saffron);"><div class="faint" style="font-weight:800; font-size:.85em;">NOW ON STAGE</div>
             <div style="display:flex; justify-content:space-between; align-items:center;"><span class="code" style="font-size:1.4em;">${esc(cur ? cur.code || '' : '')}</span><span style="font-size:2em;">${clock()}</span></div>
             <div class="huge" style="font-size:clamp(34px,8vw,64px);">${cur ? esc(slotTitle(cur)) : live.phase === 'results' ? 'Results time!' : 'Welcome'}</div>
-            <div class="muted" style="font-size:1.2em;">${esc(slotSub(cur))}</div></div>
-        ${up[0] ? `<div class="card" style="margin-top:14px;"><div class="faint" style="font-weight:800; font-size:.85em;">NEXT · CALL THEM NOW</div><div style="font-size:2em; font-weight:900;">${esc(up[0].code || '')} ${esc(slotTitle(up[0]))}</div><div class="muted">${esc(slotSub(up[0]))}</div></div>` : ''}
+            <div class="muted" style="font-size:1.2em;">${esc(slotSub(cur))}</div>
+            ${cur && cur.kind === 'solo' && parentOf(cur) ? `<div style="font-size:1.15em; margin-top:4px;">Parent: <b>${esc(parentOf(cur))}</b></div>` : ''}</div>
+        ${up[0] ? `<div class="card" style="margin-top:14px;"><div class="faint" style="font-weight:800; font-size:.85em;">NEXT · CALL THEM NOW</div><div style="font-size:2em; font-weight:900;">${esc(up[0].code || '')} ${esc(slotTitle(up[0]))}</div><div class="muted">${esc(slotSub(up[0]))}</div>${up[0].kind === 'solo' && parentOf(up[0]) ? `<div class="muted">Parent: <b>${esc(parentOf(up[0]))}</b></div>` : ''}</div>` : ''}
         ${up[1] ? `<div class="card" style="margin-top:14px;"><div class="faint" style="font-weight:800; font-size:.85em;">GET READY</div><div style="font-size:1.4em; font-weight:800;">${esc(up[1].code || '')} ${esc(slotTitle(up[1]))}</div></div>` : ''}
     </div>`);
 }
 
 // ---------------- PROJECTOR ----------------
-// Results rotate every 20 s: B teams, B solos, A teams, A solos.
-let projStep = params.get('cat') === 'A' ? 2 : 0;
-setInterval(() => { if (ROLE === 'projector' && st && st.live && st.live.revealed) { projStep = (projStep + 1) % 4; lastRenderKey = ''; render(); } }, 20000);
+// Results are shown one screen at a time, the coach moves on from Control (live.revealed.step):
+// 0 = B solo, 1 = B group, 2 = A solo, 3 = A group. Inside a screen 3rd, 2nd, 1st appear by themselves.
 function renderProjector() {
     const live = st.live || {};
     const cur = current();
-    const title = `<div class="proj-title">${esc(st.event.title)}</div>`;
+    const title = `<div class="proj-title">${esc(COMP_BRAND)} · ${esc(COMP_NAME)}</div>`;
     if (live.revealed) {
-        const projCat = projStep < 2 ? 'B' : 'A';
-        const solo = projStep % 2 === 1;
-        const c = live.revealed.cats[projCat];
-        const key = JSON.stringify(['rev', projStep, live.revealed.at]);
-        const rows = (solo ? (c.solos || []) : c.teams).filter((t) => t.pos <= 3).sort((x, y) => x.pos - y.pos);
+        const sc = revealScreen(live.revealed, live.revealed.step != null ? live.revealed.step : (params.get('cat') === 'A' ? 2 : 0));
+        const visible = new Set(sc.positions.slice(0, sc.shown));
+        const newest = sc.shown ? sc.positions[sc.shown - 1] : null;
+        const rows = sc.rows.filter((t) => visible.has(t.pos)).sort((x, y) => y.pos - x.pos);   // 3rd first, 1st last
+        const key = JSON.stringify(['rev', sc.step, sc.shown, live.revealed.at]);
         paint(key, `${title}<div class="proj">
-            <div class="proj-code" style="margin-bottom:3vh;">CATEGORY ${projCat} · ${solo ? 'SOLO' : 'GROUP'} RESULTS</div>
-            <div class="podium">${rows.map((t, i) => `<div class="pod" style="animation-delay:${(rows.length - i) * 0.6}s;"><span class="p">${ordinal(t.pos)}</span><span>${esc(t.name)}</span>${solo && t.team ? `<span class="faint" style="margin-left:auto; font-size:.7em;">${esc(t.team)}</span>` : ''}</div>`).join('')}</div>
+            <div class="proj-code" style="margin-bottom:3vh;">CATEGORY ${sc.cat} · ${sc.solo ? 'SOLO' : 'GROUP'} RESULTS</div>
+            <div class="podium">${rows.map((t) => `<div class="pod" style="${t.pos === newest ? '' : 'animation:none; opacity:1; transform:none;'}"><span class="p">${ordinal(t.pos)}</span><span>${esc(t.name)}</span>${sc.solo && t.team ? `<span class="faint" style="margin-left:auto; font-size:.7em;">${esc(t.team)}</span>` : ''}</div>`).join('')}</div>
         </div>`);
         return;
     }
@@ -1258,10 +1781,10 @@ function renderDoor() {
     const verdict = !cp ? '' : cp.status === 'ok'
         ? `<div style="border:2px solid var(--green); background:var(--green-soft); border-radius:12px; padding:12px; margin-top:10px; text-align:center;">
             <div style="font-size:1.6em; font-weight:900; color:var(--green);">${cp.let_in ? '✓ Let in' : '✓ Valid coupon'}</div>
-            <div style="font-weight:800; font-size:1.15em;">${esc(cp.guest)}</div><div class="muted">invited by ${esc(cp.student)}</div>
+            <div style="font-weight:800; font-size:1.15em;">${esc(cp.guest)}</div><div class="muted">invited by ${esc(cp.student)}${cp.parent ? ` · parent: <b>${esc(cp.parent)}</b>` : ''}</div>
             ${cp.let_in ? '<div class="muted" style="margin-top:4px;">Give a wristband.</div>' : `<button class="btn go" style="width:100%; margin-top:10px;" onclick="CompDoor.letIn()">Let in + wristband</button>`}</div>`
         : cp.status === 'used'
-            ? `<div style="border:2px solid var(--red); background:var(--red-soft); border-radius:12px; padding:12px; margin-top:10px; text-align:center;"><div style="font-size:1.4em; font-weight:900; color:var(--red);">✗ Already used</div><div class="muted">${esc(cp.guest)} · invited by ${esc(cp.student)}</div></div>`
+            ? `<div style="border:2px solid var(--red); background:var(--red-soft); border-radius:12px; padding:12px; margin-top:10px; text-align:center;"><div style="font-size:1.4em; font-weight:900; color:var(--red);">✗ Already used</div><div class="muted">${esc(cp.guest)}${cp.parent ? ' · parent: ' + esc(cp.parent) : ''} · invited by ${esc(cp.student)}</div></div>`
             : `<div style="border:2px solid var(--red); background:var(--red-soft); border-radius:12px; padding:12px; margin-top:10px; text-align:center;"><div style="font-size:1.4em; font-weight:900; color:var(--red);">✗ Code not found</div><div class="muted">Check the letters. Or take €${DOOR_PRICE}.</div></div>`;
     paint(key, `<div class="wrap" style="max-width:560px;">
         <div class="card" style="text-align:center; margin-bottom:14px;"><div class="faint" style="font-weight:800; font-size:.85em;">CASH IN THE BOX</div>
