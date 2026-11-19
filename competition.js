@@ -198,8 +198,8 @@ function renderCompetitionAdmin() {
         const feeTx = entry.fee_tx_id ? (typeof v2CreditTransactions !== 'undefined' ? v2CreditTransactions.find((t) => t.id === entry.fee_tx_id) : null) : null;
         const feeCell = entry.fee_tx_id && feeTx && feeTx.deleted_at ? `<span style="color:var(--ink-faint); font-weight:600;" title="The charge was deleted in the student's account: the money is back">fee deleted (refunded)</span>`
             : entry.fee_tx_id ? `<span style="color:var(--success); font-weight:600;">€${Number(ev.fee)} paid</span>`
-            : compIsActivityOnly(entry)
-                ? `<select onchange="compSetActivityPaid(${entry.id}, this.value)" ${compBusy ? 'disabled' : ''} style="padding:4px 6px; font-size:0.85em;" title="Extra activity only: the app does not charge, you mark it"><option value="">paid? —</option><option value="paid" ${entry.activity_paid === 'paid' ? 'selected' : ''}>Paid student</option><option value="unpaid" ${entry.activity_paid === 'unpaid' ? 'selected' : ''}>Not paid</option></select>`
+            : (entry.do_activity || entry.do_volunteer) && !entry.do_solo && !entry.do_group
+                ? '<span style="color:var(--ink-faint);">free (extra / volunteer)</span>'
                 : (Number.isFinite(age) && age > 0 && age < 9 ? '<span style="color:var(--ink-faint);">free (under 9)</span>' : '');
         const q = [s.name, compLocationName(s.locationId), s.batch ? getBatchDisplayLabel(s.batch) : '', entry.category ? 'category ' + entry.category : '', (compTeams.find((tm) => tm.id === entry.team_id) || {}).name].join(' ').toLowerCase();
         return `<tr data-q="${escapeHtml(q)}" style="${entry.withdrawn ? 'opacity:0.45;' : ''}">
@@ -237,7 +237,7 @@ function renderCompetitionAdmin() {
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
             <div>
                 <h3 style="font-size:1.05em; margin:0;">${escapeHtml(ev.title)}</h3>
-                <div style="color:var(--ink-soft); font-size:0.85em; margin-top:3px;">${compStatusLabel(ev.status)} · group registration closes ${compFmtDate(ev.reg_close)}${(ev.settings || {}).solo_close ? ` · solo and extra until ${compFmtDate(ev.settings.solo_close)}` : ''} · fee €${Number(ev.fee)} once per person</div>
+                <div style="color:var(--ink-soft); font-size:0.85em; margin-top:3px;">${compStatusLabel(ev.status)} · group registration closes ${compFmtDate(ev.reg_close)}${(ev.settings || {}).solo_close ? ` · solo and extra until ${compFmtDate(ev.settings.solo_close)}` : ''} · fee €${Number(ev.fee)} for solo + group together (extra activity and volunteering are free)</div>
             </div>
             <a class="btn btn-outline btn-sm" style="text-decoration:none;" href="comp/manifesto.pdf" target="_blank" rel="noopener">Rules PDF</a>
         </div>
@@ -433,7 +433,7 @@ function compLockTeams() {
     const fee = Number(compEvent.fee);
     const first = compEvent.status === 'registration';
     if (!toCharge.length && !first) { alert('Everyone has already been charged.'); return; }
-    if (!confirm(`${first ? 'Lock the teams (registration closes) and charge' : 'Charge'} €${fee} to ${toCharge.length} ${toCharge.length === 1 ? 'person' : 'people'}?\n(One fee each, even if they do solo + group + extra. Free: under 9, and extra-activity only.)\n\nIt shows in each student's account as "${compEvent.title}".`)) return;
+    if (!confirm(`${first ? 'Lock the teams (registration closes) and charge' : 'Charge'} €${fee} to ${toCharge.length} ${toCharge.length === 1 ? 'person' : 'people'}?\n(One fee for solo + group together. Free: under 9, extra activity and volunteering.)\n\nIt shows in each student's account as "${compEvent.title}".`)) return;
     return compRun(async () => {
         const failed = [];
         for (const e of toCharge) {

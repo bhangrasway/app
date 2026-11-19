@@ -10,7 +10,7 @@
 --      comp_entries.activity_paid  ('paid' | 'unpaid' | null): admin's own note
 --      for people who only do the extra activity (the app does not charge them)
 -- 3. Members register with register_competition_v2_by_phone.
--- 4. Group registration closes on comp_events.reg_close (20 Nov, teams lock 21 Nov).
+-- 4. Group registration closes on comp_events.reg_close (24 Nov, teams lock Tuesday 24 Nov).
 --    Solo and extra activity can still be registered until settings.solo_close
 --    (1 Dec 2026). After the group close, a person's Group tick can no longer change.
 -- ============================================================================

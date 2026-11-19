@@ -210,6 +210,6 @@ grant execute on function public.withdraw_competition_by_phone(bigint, text, tex
 
 -- ===== The 2027 competition itself (only created once) =====================
 insert into public.comp_events (title, status, reg_close, fee, settings)
-select 'Bhangra Competition 2027', 'registration', date '2026-11-20', 20,
+select 'Bhangra Competition 2027', 'registration', date '2026-11-24', 20,
        '{"solo_minutes": {"A": 2, "B": 1.5}, "group_minutes": {"A": 6, "B": 4}, "margin_seconds": 10, "gap": 0, "extras_on": false}'::jsonb
 where not exists (select 1 from public.comp_events where title = 'Bhangra Competition 2027');
